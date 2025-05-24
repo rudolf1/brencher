@@ -11,7 +11,7 @@ plugins {
 kotlin {
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
-        moduleName = "composeApp"
+        outputModuleName = "composeApp"
         browser {
             val rootDirPath = project.rootDir.path
             val projectDirPath = project.projectDir.path
@@ -28,7 +28,11 @@ kotlin {
         }
         binaries.executable()
     }
-    
+    // Ensure production build outputs to a directory for serving
+//    tasks.named("browserProductionWebpack") {
+//        outputs.dir(file("$buildDir/dist/wasmJs/productionExecutable"))
+//    }
+
     sourceSets {
         
         commonMain.dependencies {
@@ -47,5 +51,3 @@ kotlin {
         }
     }
 }
-
-
