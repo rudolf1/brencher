@@ -1,5 +1,7 @@
 Use language kotlin multiplatform.
-Backend server ktor
+Backend server ktor.
+All backend configuration stored in ktor config.
+
 
 Project connecting to git repository and fetching all branches.
 Git repository configured on backend side.

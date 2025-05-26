@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlinJvm)
     alias(libs.plugins.ktor)
+    alias(libs.plugins.kotlinSerialization)
     application
 }
 
@@ -15,7 +16,6 @@ application {
 
 dependencies {
     implementation(projects.shared)
-//    implementation(projects.composeApp) // Ensure dependency on composeApp
     implementation(libs.logback)
     implementation(libs.ktor.serverCore)
     implementation(libs.ktor.serverNetty)
@@ -23,11 +23,9 @@ dependencies {
     implementation(libs.ktor.serializationJson)
     implementation("io.ktor:ktor-server-cors:3.1.3")
     implementation(libs.jgit)
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
     testImplementation(libs.ktor.serverTestHost)
     testImplementation(libs.kotlin.testJunit)
-//    jsApp(project(path = it.path, configuration = "jsApp"))
-//    wasmApp(project(path = it.path, configuration = "wasmApp"))
-//    composeWebApp(project(path = it.path, configuration = "composeWebApp"))
 }
 
 tasks.named<Copy>("processResources") {

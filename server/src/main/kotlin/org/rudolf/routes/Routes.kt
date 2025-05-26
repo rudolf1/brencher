@@ -7,61 +7,67 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.*
 import dto.*
 import org.rudolf.GitService
-
-val releases = mutableListOf<ReleaseDto>()
-val environments = mutableListOf<EnvironmentDto>()
+import org.rudolf.config.JsonValidator
 
 fun Route.gitRoutes() {
-    post("/branches") {
-        val repoUrl = call.receive<String>()
-        val branches = GitService.fetchBranches(repoUrl)
-        call.respond(branches)
+    route("/branches") {
+        get {
+            val branches = GitService.fetchBranches()
+            call.respond(branches)
+        }
+        
+        post {
+            val repoUrl = call.receive<String>()
+            val branches = GitService.fetchBranches(repoUrl)
+            call.respond(branches)
+        }
     }
 }
 
 fun Route.releaseRoutes() {
     route("/releases") {
         get {
+            val releases = StateManager.getReleases()
             call.respond(releases)
         }
         
         post {
             val release = call.receive<ReleaseDto>()
-            releases.add(release)
+            StateManager.addRelease(release)
             call.respond(release)
         }
         
         put("/{name}/branches") {
             val name = call.parameters["name"] ?: return@put call.respondText("Missing name", status = HttpStatusCode.BadRequest)
             val branches = call.receive<List<String>>()
-            val release = releases.find { it.name == name } ?: return@put call.respondText("Release not found", status = HttpStatusCode.NotFound)
-            releases.remove(release)
-            releases.add(release.copy(branches = branches))
-            call.respond(releases)
+            val updated = StateManager.updateRelease(name) { it.copy(branches = branches) }
+                ?: return@put call.respondText("Release not found", status = HttpStatusCode.NotFound)
+            call.respond(updated)
         }
         
         put("/{name}/state") {
             val name = call.parameters["name"] ?: return@put call.respondText("Missing name", status = HttpStatusCode.BadRequest)
             val state = call.receive<ReleaseState>()
-            val release = releases.find { it.name == name } ?: return@put call.respondText("Release not found", status = HttpStatusCode.NotFound)
-            releases.remove(release)
-            releases.add(release.copy(state = state))
-            call.respond(releases)
+            val updated = StateManager.updateRelease(name) { it.copy(state = state) }
+                ?: return@put call.respondText("Release not found", status = HttpStatusCode.NotFound)
+            call.respond(updated)
         }
         
         put("/{name}/environment") {
             val name = call.parameters["name"] ?: return@put call.respondText("Missing name", status = HttpStatusCode.BadRequest)
             val environment = call.receive<String>()
-            val release = releases.find { it.name == name } ?: return@put call.respondText("Release not found", status = HttpStatusCode.NotFound)
-            releases.remove(release)
-            releases.add(release.copy(environment = environment))
-            call.respond(releases)
+            val updated = StateManager.updateRelease(name) { it.copy(environment = environment) }
+                ?: return@put call.respondText("Release not found", status = HttpStatusCode.NotFound)
+            call.respond(updated)
         }
         
         delete("/{name}") {
             val name = call.parameters["name"] ?: return@delete call.respondText("Missing name", status = HttpStatusCode.BadRequest)
-            releases.removeIf { it.name == name }
-            call.respondText("Release removed")
+            if (StateManager.deleteRelease(name)) {
+                call.respond(HttpStatusCode.OK)
+            } else {
+                call.respondText("Release not found", status = HttpStatusCode.NotFound)
+            }
         }
     }
 }
@@ -69,28 +75,46 @@ fun Route.releaseRoutes() {
 fun Route.environmentRoutes() {
     route("/environments") {
         get {
+            val environments = StateManager.getEnvironments()
             call.respond(environments)
         }
         
         post {
             val environment = call.receive<EnvironmentDto>()
-            environments.add(environment)
-            call.respond(environment)
+            if (!JsonValidator.isValidJson(environment.configuration)) {
+                return@post call.respondText("Invalid JSON configuration", status = HttpStatusCode.BadRequest)
+            }
+            environment.copy(configuration = JsonValidator.formatJson(environment.configuration)).let {
+                StateManager.addEnvironment(it)
+                call.respond(it)
+            }
         }
         
         put("/{name}") {
             val name = call.parameters["name"] ?: return@put call.respondText("Missing name", status = HttpStatusCode.BadRequest)
-            val updatedEnvironment = call.receive<EnvironmentDto>()
-            val index = environments.indexOfFirst { it.name == name }
-            if (index == -1) return@put call.respondText("Environment not found", status = HttpStatusCode.NotFound)
-            environments[index] = updatedEnvironment
-            call.respond(updatedEnvironment)
+            val environment = call.receive<EnvironmentDto>()
+            if (environment.name != name) {
+                return@put call.respondText("Environment name mismatch", status = HttpStatusCode.BadRequest)
+            }
+            if (!JsonValidator.isValidJson(environment.configuration)) {
+                return@put call.respondText("Invalid JSON configuration", status = HttpStatusCode.BadRequest)
+            }
+            environment.copy(configuration = JsonValidator.formatJson(environment.configuration)).let {
+                if (StateManager.updateEnvironment(it)) {
+                    call.respond(it)
+                } else {
+                    call.respondText("Environment not found", status = HttpStatusCode.NotFound)
+                }
+            }
         }
         
         delete("/{name}") {
             val name = call.parameters["name"] ?: return@delete call.respondText("Missing name", status = HttpStatusCode.BadRequest)
-            environments.removeIf { it.name == name }
-            call.respondText("Environment removed")
+            if (StateManager.deleteEnvironment(name)) {
+                call.respond(HttpStatusCode.OK)
+            } else {
+                call.respondText("Environment not found", status = HttpStatusCode.NotFound)
+            }
         }
     }
 }

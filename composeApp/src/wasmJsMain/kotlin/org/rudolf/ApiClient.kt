@@ -62,9 +62,8 @@ suspend fun updateReleaseEnvironment(name: String, environment: String) {
     }
 }
 
-suspend fun fetchEnvironments(): List<EnvironmentDto> {
-    return client.get("$API_URL/environments").body()
-}
+suspend fun fetchEnvironments(): List<EnvironmentDto> = 
+    client.get("$API_URL/environments").body()
 
 suspend fun createEnvironment(environment: EnvironmentDto) {
     client.post("$API_URL/environments") {

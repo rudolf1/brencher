@@ -9,6 +9,7 @@ import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.*
 import kotlinx.serialization.json.Json
 import org.rudolf.routes.gitRoutes
 import org.rudolf.routes.releaseRoutes
@@ -21,6 +22,25 @@ fun main() {
 }
 
 fun Application.module() {
+    val config = environment.config
+    var repositoryUrl = config.property("ktor.git.repositoryUrl").getString()
+    var branchRefreshIntervalMinutes = config.property("ktor.git.branchRefreshIntervalMinutes").getString().toInt()
+    GitService.configure(repositoryUrl, branchRefreshIntervalMinutes)
+
+    // Periodically reload config and reconfigure GitService if changed
+    launch {
+        while (true) {
+            delay(60_000) // Check every 60 seconds
+            val newRepositoryUrl = config.property("ktor.git.repositoryUrl").getString()
+            val newBranchRefreshIntervalMinutes = config.property("ktor.git.branchRefreshIntervalMinutes").getString().toInt()
+            if (newRepositoryUrl != repositoryUrl || newBranchRefreshIntervalMinutes != branchRefreshIntervalMinutes) {
+                repositoryUrl = newRepositoryUrl
+                branchRefreshIntervalMinutes = newBranchRefreshIntervalMinutes
+                GitService.configure(repositoryUrl, branchRefreshIntervalMinutes)
+            }
+        }
+    }
+
     install(ContentNegotiation) {
         json(Json {
             prettyPrint = true

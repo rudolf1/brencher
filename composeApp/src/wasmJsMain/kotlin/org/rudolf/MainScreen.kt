@@ -18,9 +18,17 @@ fun MainScreen() {
     var releases by remember { mutableStateOf(listOf<ReleaseDto>()) }
     var environments by remember { mutableStateOf(listOf<EnvironmentDto>()) }
     var newReleaseName by remember { mutableStateOf("") }
+    var newEnvironmentName by remember { mutableStateOf("") }
+    var newEnvironmentConfig by remember { mutableStateOf("{}") }
     var selectedBranches by remember { mutableStateOf(setOf<String>()) }
     var selectedEnvironment by remember { mutableStateOf("") }
     var releaseState by remember { mutableStateOf(ReleaseState.PAUSE) }
+
+    // Load data on component mount
+    LaunchedEffect(Unit) {
+        environments = fetchEnvironments()
+        releases = fetchReleases()
+    }
 
     Column(modifier = Modifier.padding(16.dp)) {
         // Repository Section
@@ -40,6 +48,68 @@ fun MainScreen() {
             modifier = Modifier.padding(vertical = 8.dp)
         ) {
             Text("Fetch Branches")
+        }
+
+        // Environments Section
+        Text("Environments", style = MaterialTheme.typography.headlineMedium)
+        Row(modifier = Modifier.padding(vertical = 8.dp)) {
+            TextField(
+                value = newEnvironmentName,
+                onValueChange = { newEnvironmentName = it },
+                label = { Text("Environment Name") },
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
+            TextField(
+                value = newEnvironmentConfig,
+                onValueChange = { newEnvironmentConfig = it },
+                label = { Text("Configuration (JSON)") },
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
+            Button(
+                onClick = {
+                    CoroutineScope(Dispatchers.Default).launch {
+                        createEnvironment(EnvironmentDto(
+                            name = newEnvironmentName,
+                            configuration = newEnvironmentConfig
+                        ))
+                        environments = fetchEnvironments()
+                        newEnvironmentName = ""
+                        newEnvironmentConfig = "{}"
+                    }
+                },
+                enabled = newEnvironmentName.isNotBlank()
+            ) {
+                Text("Add Environment")
+            }
+        }
+
+        environments.forEach { environment ->
+            Card(
+                modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Name: ${environment.name}")
+                    Text("Configuration:")
+                    Text(environment.configuration)
+                    Row(
+                        modifier = Modifier.padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                CoroutineScope(Dispatchers.Default).launch {
+                                    deleteEnvironment(environment.name)
+                                    environments = fetchEnvironments()
+                                }
+                            }
+                        ) {
+                            Text("Delete")
+                        }
+                    }
+                }
+            }
         }
 
         // Branches Section
@@ -134,20 +204,6 @@ fun MainScreen() {
                             Text(if (release.state == ReleaseState.ACTIVE) "Pause" else "Activate")
                         }
                     }
-                }
-            }
-        }
-
-        // Environments Section
-        Text("Environments", style = MaterialTheme.typography.headlineMedium)
-        environments.forEach { environment ->
-            Card(
-                modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Name: ${environment.name}")
-                    Text("Configuration:")
-                    Text(environment.configuration)
                 }
             }
         }

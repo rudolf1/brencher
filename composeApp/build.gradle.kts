@@ -55,6 +55,10 @@ kotlin {
     }
 }
 
+tasks.matching { it.name.contains("production", ignoreCase = true) }.configureEach {
+    enabled = false
+}
+
 tasks.named("wasmJsBrowserProductionWebpack") {
     dependsOn(
         "wasmJsDevelopmentExecutableCompileSync", 
