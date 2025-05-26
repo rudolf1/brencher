@@ -21,6 +21,7 @@ dependencies {
     implementation(libs.ktor.serverNetty)
     implementation(libs.ktor.contentNegotiation)
     implementation(libs.ktor.serializationJson)
+    implementation("io.ktor:ktor-server-cors:3.1.3")
     implementation(libs.jgit)
     testImplementation(libs.ktor.serverTestHost)
     testImplementation(libs.kotlin.testJunit)

@@ -2,6 +2,8 @@ Use language kotlin multiplatform.
 Backend server ktor
 
 Project connecting to git repository and fetching all branches.
+Git repository configured on backend side.
+Branches fetched on server side on start and refreshing each 5 minutes.
 
 On UI user should see entites:
     Branches - all branches present in git repository
@@ -15,6 +17,8 @@ On UI user should see entites:
     Environment
     - Name of environment
     - Configuration of environment. Editable json object
+
+UI Communicates with server using ktor http client with class based mapping.
 
 Usecases:
 1. User can add or remove branches to Release.

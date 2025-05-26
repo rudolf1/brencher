@@ -45,9 +45,26 @@ kotlin {
             implementation(libs.androidx.lifecycle.viewmodel)
             implementation(libs.androidx.lifecycle.runtimeCompose)
             implementation(projects.shared)
+            implementation("io.ktor:ktor-client-core:3.1.3")
+            implementation("io.ktor:ktor-client-content-negotiation:3.1.3")
+            implementation("io.ktor:ktor-serialization-kotlinx-json:3.1.3")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
     }
+}
+
+tasks.named("wasmJsBrowserProductionWebpack") {
+    dependsOn(
+        "wasmJsDevelopmentExecutableCompileSync", 
+        "wasmJsProductionExecutableCompileSync"
+    )
+}
+
+tasks.named("wasmJsBrowserDevelopmentWebpack") {
+    dependsOn(
+        "wasmJsDevelopmentExecutableCompileSync", 
+        "wasmJsProductionExecutableCompileSync"
+    )
 }
