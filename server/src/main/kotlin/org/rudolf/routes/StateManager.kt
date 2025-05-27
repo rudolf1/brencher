@@ -1,9 +1,12 @@
 package org.rudolf.routes
 
+import dto.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import dto.*
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.minutes
@@ -19,6 +22,12 @@ object StateManager {
     private val stateFile = File("/media/DATA/src/brencher/testState/state.json")
     private val json = Json { prettyPrint = true }
     private val state = AtomicReference(StateData())
+
+    // Channel to broadcast Release state updates
+    val releaseUpdatesChannel = Channel<ReleaseDto>(Channel.BUFFERED)
+    // Optionally, a SharedFlow for coroutine-friendly subscriptions
+    private val _releaseUpdatesFlow = MutableSharedFlow<ReleaseDto>(replay = 0, extraBufferCapacity = 64)
+    val releaseUpdatesFlow = _releaseUpdatesFlow.asSharedFlow()
 
     init {
         loadState()
@@ -54,6 +63,8 @@ object StateManager {
     suspend fun addRelease(release: ReleaseDto) {
         state.updateAndGet { it.copy(releases = it.releases + release) }
         saveState()
+        releaseUpdatesChannel.send(release)
+        _releaseUpdatesFlow.emit(release)
     }
 
     suspend fun updateRelease(name: String, update: (ReleaseDto) -> ReleaseDto): ReleaseDto? {
@@ -67,18 +78,32 @@ object StateManager {
                 current
             }
         }
-        if (updatedRelease != null) saveState()
+        if (updatedRelease != null) {
+            saveState()
+            releaseUpdatesChannel.send(updatedRelease!!)
+            _releaseUpdatesFlow.emit(updatedRelease!!)
+        }
         return updatedRelease
     }
 
     suspend fun deleteRelease(name: String): Boolean {
         var removed = false
+        var deleted: ReleaseDto? = null
         state.updateAndGet { current ->
             val newList = current.releases.filterNot { it.name == name }
             removed = newList.size != current.releases.size
+            if (removed) {
+                deleted = current.releases.find { it.name == name }
+            }
             current.copy(releases = newList)
         }
-        if (removed) saveState()
+        if (removed) {
+            saveState()
+            deleted?.let {
+                releaseUpdatesChannel.send(it)
+                _releaseUpdatesFlow.emit(it)
+            }
+        }
         return removed
     }
 

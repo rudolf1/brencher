@@ -23,6 +23,7 @@ fun MainScreen() {
     var selectedBranches by remember { mutableStateOf(setOf<String>()) }
     var selectedEnvironment by remember { mutableStateOf("") }
     var releaseState by remember { mutableStateOf(ReleaseState.PAUSE) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     // Load data on component mount
     LaunchedEffect(Unit) {
@@ -32,6 +33,16 @@ fun MainScreen() {
     }
 
     Column(modifier = Modifier.padding(16.dp)) {
+        // Error Message Snackbar
+        if (errorMessage != null) {
+            Snackbar(
+                action = {
+                    Button(onClick = { errorMessage = null }) { Text("Dismiss") }
+                },
+                modifier = Modifier.padding(8.dp)
+            ) { Text(errorMessage!!) }
+        }
+
         // Environments Section
         Text("Environments", style = MaterialTheme.typography.headlineMedium)
         Row(modifier = Modifier.padding(vertical = 8.dp)) {
@@ -52,13 +63,17 @@ fun MainScreen() {
             Button(
                 onClick = {
                     CoroutineScope(Dispatchers.Default).launch {
-                        createEnvironment(EnvironmentDto(
-                            name = newEnvironmentName,
-                            configuration = newEnvironmentConfig
-                        ))
-                        environments = fetchEnvironments()
-                        newEnvironmentName = ""
-                        newEnvironmentConfig = "{}"
+                        try {
+                            createEnvironment(EnvironmentDto(
+                                name = newEnvironmentName,
+                                configuration = newEnvironmentConfig
+                            ))
+                            environments = fetchEnvironments()
+                            newEnvironmentName = ""
+                            newEnvironmentConfig = "{}"
+                        } catch (e: Exception) {
+                            errorMessage = e.message ?: "Unknown error"
+                        }
                     }
                 },
                 enabled = newEnvironmentName.isNotBlank()
@@ -86,9 +101,13 @@ fun MainScreen() {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(onClick = {
                                 CoroutineScope(Dispatchers.Default).launch {
-                                    updateEnvironment(environment.name, environment.copy(configuration = editedConfig))
-                                    environments = fetchEnvironments()
-                                    editingConfig = false
+                                    try {
+                                        updateEnvironment(environment.name, environment.copy(configuration = editedConfig))
+                                        environments = fetchEnvironments()
+                                        editingConfig = false
+                                    } catch (e: Exception) {
+                                        errorMessage = e.message ?: "Unknown error"
+                                    }
                                 }
                             }) { Text("Save") }
                             Button(onClick = { 
@@ -106,8 +125,12 @@ fun MainScreen() {
                             Button(
                                 onClick = {
                                     CoroutineScope(Dispatchers.Default).launch {
-                                        deleteEnvironment(environment.name)
-                                        environments = fetchEnvironments()
+                                        try {
+                                            deleteEnvironment(environment.name)
+                                            environments = fetchEnvironments()
+                                        } catch (e: Exception) {
+                                            errorMessage = e.message ?: "Unknown error"
+                                        }
                                     }
                                 }
                             ) {
@@ -154,15 +177,19 @@ fun MainScreen() {
             Button(
                 onClick = {
                     CoroutineScope(Dispatchers.Default).launch {
-                        createRelease(ReleaseDto(
-                            name = newReleaseName,
-                            branches = selectedBranches.toList(),
-                            state = releaseState,
-                            environment = selectedEnvironment
-                        ))
-                        releases = fetchReleases()
-                        newReleaseName = ""
-                        selectedBranches = emptySet()
+                        try {
+                            createRelease(ReleaseDto(
+                                name = newReleaseName,
+                                branches = selectedBranches.toList(),
+                                state = releaseState,
+                                environment = selectedEnvironment
+                            ))
+                            releases = fetchReleases()
+                            newReleaseName = ""
+                            selectedBranches = emptySet()
+                        } catch (e: Exception) {
+                            errorMessage = e.message ?: "Unknown error"
+                        }
                     }
                 },
                 enabled = newReleaseName.isNotBlank() && selectedBranches.isNotEmpty()
@@ -185,26 +212,36 @@ fun MainScreen() {
                     Text("Environment: ${release.environment}")
                     if (editingBranches) {
                         Text("Edit Branches:")
-                        branches.forEach { branch ->
+                        // Compute union of repo branches and release branches
+                        val allBranches = (branches + release.branches).toSet().toList().sorted()
+                        allBranches.forEach { branch ->
+                            val existsInRepo = branches.contains(branch)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(
-                                    checked = selectedBranchesForRelease.contains(branch),
-                                    onCheckedChange = { checked ->
-                                        selectedBranchesForRelease = if (checked) {
-                                            selectedBranchesForRelease + branch
-                                        } else {
-                                            selectedBranchesForRelease - branch
+                                    checked = selectedBranchesForRelease.contains(branch) && existsInRepo,
+                                    onCheckedChange = if (existsInRepo) {
+                                        { checked ->
+                                            selectedBranchesForRelease = if (checked) {
+                                                selectedBranchesForRelease + branch
+                                            } else {
+                                                selectedBranchesForRelease - branch
+                                            }
                                         }
-                                    }
+                                    } else null,
+                                    enabled = existsInRepo
                                 )
                                 Text(branch)
                             }
                         }
                         Button(onClick = {
                             CoroutineScope(Dispatchers.Default).launch {
-                                updateReleaseBranches(release.name, selectedBranchesForRelease.toList())
-                                releases = fetchReleases()
-                                editingBranches = false
+                                try {
+                                    updateReleaseBranches(release.name, selectedBranchesForRelease.intersect(branches).toList())
+                                    releases = fetchReleases()
+                                    editingBranches = false
+                                } catch (e: Exception) {
+                                    errorMessage = e.message ?: "Unknown error"
+                                }
                             }
                         }, enabled = selectedBranchesForRelease.isNotEmpty()) {
                             Text("Save Branches")
@@ -228,9 +265,13 @@ fun MainScreen() {
                                 DropdownMenuItem(onClick = {
                                     selectedEnvForRelease = env.name
                                     CoroutineScope(Dispatchers.Default).launch {
-                                        updateReleaseEnvironment(release.name, env.name)
-                                        releases = fetchReleases()
-                                        editingEnvironment = false
+                                        try {
+                                            updateReleaseEnvironment(release.name, env.name)
+                                            releases = fetchReleases()
+                                            editingEnvironment = false
+                                        } catch (e: Exception) {
+                                            errorMessage = e.message ?: "Unknown error"
+                                        }
                                     }
                                 }, text = {
                                     Text(env.name)
@@ -247,8 +288,12 @@ fun MainScreen() {
                         Button(
                             onClick = {
                                 CoroutineScope(Dispatchers.Default).launch {
-                                    deleteRelease(release.name)
-                                    releases = fetchReleases()
+                                    try {
+                                        deleteRelease(release.name)
+                                        releases = fetchReleases()
+                                    } catch (e: Exception) {
+                                        errorMessage = e.message ?: "Unknown error"
+                                    }
                                 }
                             }
                         ) {
@@ -257,11 +302,15 @@ fun MainScreen() {
                         Button(
                             onClick = {
                                 CoroutineScope(Dispatchers.Default).launch {
-                                    updateReleaseState(
-                                        release.name,
-                                        if (release.state == ReleaseState.ACTIVE) ReleaseState.PAUSE else ReleaseState.ACTIVE
-                                    )
-                                    releases = fetchReleases()
+                                    try {
+                                        updateReleaseState(
+                                            release.name,
+                                            if (release.state == ReleaseState.ACTIVE) ReleaseState.PAUSE else ReleaseState.ACTIVE
+                                        )
+                                        releases = fetchReleases()
+                                    } catch (e: Exception) {
+                                        errorMessage = e.message ?: "Unknown error"
+                                    }
                                 }
                             }
                         ) {
