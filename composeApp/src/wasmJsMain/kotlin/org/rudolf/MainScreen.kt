@@ -51,7 +51,7 @@ fun MainScreen() {
         }
 
         // Environments Section
-        Text("Environments", style = MaterialTheme.typography.headlineMedium)
+        Text("EnvironmentsXXX", style = MaterialTheme.typography.headlineMedium)
         Row(modifier = Modifier.padding(vertical = 8.dp)) {
             TextField(
                 value = newEnvironmentName,

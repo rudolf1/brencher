@@ -15,11 +15,7 @@ import org.rudolf.routes.gitRoutes
 import org.rudolf.routes.releaseRoutes
 import org.rudolf.routes.environmentRoutes
 
-fun main() {
-    embeddedServer(Netty, port = 8080) {
-        this.module()
-    }.start(wait = true)
-}
+fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
 fun Application.module() {
     val config = environment.config
@@ -62,9 +58,6 @@ fun Application.module() {
         releaseRoutes()
         environmentRoutes()
         staticResources("/", "www")
-//            get("/") {
-//                call.respondText("Ktor: ${Greeting().greet()}")
-//            }
     }
 
 }

@@ -18,14 +18,11 @@ private val client = HttpClient {
     }
 }
 
-// private const val API_URL = "http://localhost:8080"
-private const val API_URL = ""
+private const val API_URL = "http://localhost:8080"
+// private const val API_URL = ""
 
 suspend fun fetchBranches(repoUrl: String): List<String> = 
-    client.post("$API_URL/branches") {
-        contentType(ContentType.Application.Json)
-        setBody(repoUrl)
-    }.body()
+    client.get("$API_URL/branches").body()
 
 suspend fun fetchReleases(): List<ReleaseDto> = 
     client.get("$API_URL/releases").body()

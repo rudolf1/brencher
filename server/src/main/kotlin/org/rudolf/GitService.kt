@@ -8,7 +8,7 @@ import kotlin.time.Duration.Companion.minutes
 
 object GitService {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val repoDir = File("git-repo")
+    private val repoDir = File("/media/DATA/src/brencher/testState/git-repo")
     private var git: Git? = null
     private val branches = ConcurrentHashMap<String, List<String>>()
     private var repositoryUrl: String = ""
