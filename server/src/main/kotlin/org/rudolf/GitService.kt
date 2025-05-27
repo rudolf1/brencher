@@ -101,8 +101,9 @@ object GitService {
         val repo = git ?: return@withContext Result.failure(Exception("Git repo not initialized"))
         if (branches.isEmpty()) return@withContext Result.failure(Exception("No branches specified"))
         val sortedBranches = branches.sorted()
-        val commitIds = sortedBranches.mapNotNull { repo.repository.findRef(it)?.objectId?.name }
-        if (commitIds.isEmpty()) return@withContext Result.failure(Exception("Could not find commit ids for branches"))
+                .map { "origin/$it" }
+        val commitIds = sortedBranches
+                .map { repo.repository.findRef(it)?.objectId?.name ?: error("Branch not found") }
         val hash = java.security.MessageDigest.getInstance("SHA-1")
             .digest(commitIds.joinToString(",").toByteArray())
             .joinToString("") { "%02x".format(it) }
@@ -119,9 +120,9 @@ object GitService {
                 repo.branchDelete().setBranchNames(tempBranch).setForce(true).call()
             }
             // Create temp branch from first branch
-            repo.checkout().setName(sortedBranches[0]).call()
-            repo.branchCreate().setName(tempBranch).setForce(true).call()
-            repo.checkout().setName(tempBranch).call()
+            repo.checkout().setStartPoint(commitIds[0])
+                    .setName(tempBranch)
+                    .setCreateBranch(true).call()
             // Merge other branches
             for (branch in sortedBranches.drop(1)) {
                 val mergeResult = repo.merge()
