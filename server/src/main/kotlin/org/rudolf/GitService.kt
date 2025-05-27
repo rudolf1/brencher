@@ -56,6 +56,19 @@ object GitService {
         return branches[repoUrl] ?: emptyList()
     }
 
+    private fun getBranchesCommitHash(branches: List<String>): String {
+        val repo = git ?: return ""
+        val sortedBranches = branches.sorted()
+        val commitIds = sortedBranches.mapNotNull { branch ->
+            repo.repository.findRef(branch)?.objectId?.name
+        }
+        if (commitIds.isEmpty()) return ""
+        val hash = java.security.MessageDigest.getInstance("SHA-1")
+            .digest(commitIds.joinToString(",").toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        return hash
+    }
+
     /**
      * Checks if the auto/<hash> branch is up-to-date with the selected branches.
      * Returns true if up-to-date, false otherwise.
@@ -64,8 +77,10 @@ object GitService {
         val repo = git ?: return false
         if (branches.isEmpty()) return false
         val sortedBranches = branches.sorted()
+        val commitIds = sortedBranches.mapNotNull { repo.repository.findRef(it)?.objectId?.name }
+        if (commitIds.isEmpty()) return false
         val hash = java.security.MessageDigest.getInstance("SHA-1")
-            .digest(sortedBranches.joinToString(",").toByteArray())
+            .digest(commitIds.joinToString(",").toByteArray())
             .joinToString("") { "%02x".format(it) }
         val autoBranch = "auto/$hash"
         val autoRef = repo.repository.findRef(autoBranch) ?: return false
@@ -74,9 +89,8 @@ object GitService {
         val revWalk = org.eclipse.jgit.revwalk.RevWalk(repo.repository)
         val autoCommit = revWalk.parseCommit(autoRef.objectId)
         val parentIds = autoCommit.parents.map { it.name }.sorted()
-        val branchHeads = sortedBranches.mapNotNull { repo.repository.findRef(it)?.objectId?.name }
         revWalk.close()
-        return parentIds == branchHeads
+        return parentIds == commitIds.sorted()
     }
 
     /**
@@ -87,8 +101,10 @@ object GitService {
         val repo = git ?: return@withContext Result.failure(Exception("Git repo not initialized"))
         if (branches.isEmpty()) return@withContext Result.failure(Exception("No branches specified"))
         val sortedBranches = branches.sorted()
+        val commitIds = sortedBranches.mapNotNull { repo.repository.findRef(it)?.objectId?.name }
+        if (commitIds.isEmpty()) return@withContext Result.failure(Exception("Could not find commit ids for branches"))
         val hash = java.security.MessageDigest.getInstance("SHA-1")
-            .digest(sortedBranches.joinToString(",").toByteArray())
+            .digest(commitIds.joinToString(",").toByteArray())
             .joinToString("") { "%02x".format(it) }
         val autoBranch = "auto/$hash"
         val tempBranch = "temp-merge-$hash"
@@ -115,7 +131,7 @@ object GitService {
                     // Clean up temp branch
                     repo.checkout().setName(sortedBranches[0]).call()
                     repo.branchDelete().setBranchNames(tempBranch).setForce(true).call()
-                    return@withContext Result.failure(Exception("Merge conflict on branch $branch: ${mergeResult.toString()}"))
+                    return@withContext Result.failure(Exception("Merge conflict on branch $branch: \\${mergeResult.toString()}"))
                 }
             }
             // Create or update auto/<hash> branch

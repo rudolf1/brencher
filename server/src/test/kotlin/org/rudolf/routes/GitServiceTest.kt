@@ -1,7 +1,7 @@
 package org.rudolf.routes
 
-import org.rudolf.GitService
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import org.rudolf.GitService
 import kotlinx.coroutines.runBlocking
 import kotlin.test.*
 import java.io.File
@@ -11,7 +11,6 @@ import org.eclipse.jgit.api.Git
 Unit test for class GitService.
 
 - Create local git repo as original git repo.
-- Point git service to this repo.
 - Create 2 branches based on same commit and non conflicting for merge.
 - Execute mergeBranchesAndPushAutoBranch for these branches.
 - Result should be successfull
@@ -37,12 +36,12 @@ class GitServiceTest {
         // 3. Make non-conflicting changes in each branch
         git.checkout().setName(branch1).call()
         file.appendText("change one\n")
-        git.add().addFilepattern("file.txt").call()
+        git.add().addFilepattern("file1.txt").call()
         git.commit().setMessage("Change one").call()
 
         git.checkout().setName(branch2).call()
         file.appendText("change two\n")
-        git.add().addFilepattern("file.txt").call()
+        git.add().addFilepattern("file2.txt").call()
         git.commit().setMessage("Change two").call()
 
         // 4. Point GitService to this repo
