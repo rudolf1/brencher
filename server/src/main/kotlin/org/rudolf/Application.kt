@@ -22,7 +22,9 @@ fun Application.module() {
     val config = environment.config
     var repositoryUrl = config.property("ktor.git.repositoryUrl").getString()
     var branchRefreshIntervalMinutes = config.property("ktor.git.branchRefreshIntervalMinutes").getString().toInt()
-    GitService.configure(repositoryUrl, branchRefreshIntervalMinutes)
+    val gitUsername = config.propertyOrNull("ktor.git.username")?.getString() ?: ""
+    val gitPassword = config.propertyOrNull("ktor.git.password")?.getString() ?: ""
+    GitService.configure(repositoryUrl, branchRefreshIntervalMinutes, gitUsername, gitPassword)
 
     // Periodically reload config and reconfigure GitService if changed
     launch {
@@ -30,10 +32,12 @@ fun Application.module() {
             delay(60_000) // Check every 60 seconds
             val newRepositoryUrl = config.property("ktor.git.repositoryUrl").getString()
             val newBranchRefreshIntervalMinutes = config.property("ktor.git.branchRefreshIntervalMinutes").getString().toInt()
-            if (newRepositoryUrl != repositoryUrl || newBranchRefreshIntervalMinutes != branchRefreshIntervalMinutes) {
+            val newGitUsername = config.propertyOrNull("ktor.git.username")?.getString() ?: ""
+            val newGitPassword = config.propertyOrNull("ktor.git.password")?.getString() ?: ""
+            if (newRepositoryUrl != repositoryUrl || newBranchRefreshIntervalMinutes != branchRefreshIntervalMinutes || newGitUsername != gitUsername || newGitPassword != gitPassword) {
                 repositoryUrl = newRepositoryUrl
                 branchRefreshIntervalMinutes = newBranchRefreshIntervalMinutes
-                GitService.configure(repositoryUrl, branchRefreshIntervalMinutes)
+                GitService.configure(repositoryUrl, branchRefreshIntervalMinutes, newGitUsername, newGitPassword)
             }
         }
     }

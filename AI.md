@@ -6,8 +6,8 @@ All backend configuration stored in ktor config.
 Project connecting to git repository and fetching all branches.
 Git repository configured on backend side:
 - url
-- Authentication username
-- Authentication password
+- Authentication username (optional)
+- Authentication password (optional)
 
 
 Branches fetched on server side on start and refreshing each 5 minutes.

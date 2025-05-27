@@ -14,10 +14,14 @@ object GitService {
     private var repositoryUrl: String = ""
     private var branchRefreshIntervalMinutes: Int = 5
     private var refreshJob: Job? = null
+    private var gitUsername: String = ""
+    private var gitPassword: String = ""
 
-    fun configure(repositoryUrl: String, branchRefreshIntervalMinutes: Int) {
+    fun configure(repositoryUrl: String, branchRefreshIntervalMinutes: Int, username: String, password: String) {
         this.repositoryUrl = repositoryUrl
         this.branchRefreshIntervalMinutes = branchRefreshIntervalMinutes
+        this.gitUsername = username
+        this.gitPassword = password
         initializeRepo()
         startPeriodicRefresh()
     }
@@ -25,10 +29,14 @@ object GitService {
     private fun initializeRepo() {
         if (repoDir.exists()) repoDir.deleteRecursively()
         val repoUrl = repositoryUrl.takeIf { it.isNotBlank() } ?: throw IllegalStateException("Git repository not configured")
-        git = Git.cloneRepository()
+        val cloneCommand = Git.cloneRepository()
             .setURI(repoUrl)
             .setDirectory(repoDir)
-            .call()
+        if (gitUsername.isNotBlank() && gitPassword.isNotBlank()) {
+            val credentialsProvider = org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider(gitUsername, gitPassword)
+            cloneCommand.setCredentialsProvider(credentialsProvider)
+        }
+        git = cloneCommand.call()
         refreshBranches()
     }
 
@@ -44,7 +52,12 @@ object GitService {
 
     private fun refreshBranches() {
         git?.let { repo ->
-            repo.fetch().call()
+            val fetchCommand = repo.fetch()
+            if (gitUsername.isNotBlank() && gitPassword.isNotBlank()) {
+                val credentialsProvider = org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider(gitUsername, gitPassword)
+                fetchCommand.setCredentialsProvider(credentialsProvider)
+            }
+            fetchCommand.call()
             val branchList = repo.branchList().setListMode(org.eclipse.jgit.api.ListBranchCommand.ListMode.REMOTE).call()
             branches[repositoryUrl] = branchList.map { ref ->
                 ref.name.removePrefix("refs/remotes/origin/")
@@ -111,7 +124,12 @@ object GitService {
         val tempBranch = "temp-merge-$hash"
         try {
             // Fetch latest
-            repo.fetch().call()
+            val fetchCommand = repo.fetch()
+            if (gitUsername.isNotBlank() && gitPassword.isNotBlank()) {
+                val credentialsProvider = org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider(gitUsername, gitPassword)
+                fetchCommand.setCredentialsProvider(credentialsProvider)
+            }
+            fetchCommand.call()
             if (isAutoBranchUpToDate(branches)) {
                 return@withContext Result.success(autoBranch) // Already up-to-date, do nothing
             }
@@ -139,7 +157,12 @@ object GitService {
             repo.branchCreate().setName(autoBranch).setForce(true).call()
             repo.checkout().setName(autoBranch).call()
             // Push auto branch
-            repo.push().setRemote("origin").add(autoBranch).setForce(true).call()
+            val pushCommand = repo.push().setRemote("origin").add(autoBranch).setForce(true)
+            if (gitUsername.isNotBlank() && gitPassword.isNotBlank()) {
+                val credentialsProvider = org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider(gitUsername, gitPassword)
+                pushCommand.setCredentialsProvider(credentialsProvider)
+            }
+            pushCommand.call()
             // Clean up temp branch
             repo.checkout().setName(sortedBranches[0]).call()
             repo.branchDelete().setBranchNames(tempBranch).setForce(true).call()
