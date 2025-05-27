@@ -27,8 +27,8 @@ Usecases:
 When user clicks on "Create Release" button, this DTO should be sent to server.
 2. User can select branches and click "Remove Release" button.
 When user clicks on "Remove Release" button, this DTO should be sent to server.
-3. User can change branches of Release.
-When user clicks checkbox next to branch name, this DTO should be sent to server.
+3. User can change branches of each specific Release.
+When user changes checkbox next to branch name, Release DTO should be sent to server.
 4. User can change state of Release.
 When user clicks on "Change State" button, this DTO should be sent to server.
 5. User can change environment of Release.

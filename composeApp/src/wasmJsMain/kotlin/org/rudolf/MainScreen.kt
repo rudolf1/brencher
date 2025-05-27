@@ -28,30 +28,12 @@ fun MainScreen() {
     LaunchedEffect(Unit) {
         environments = fetchEnvironments()
         releases = fetchReleases()
+        branches = fetchBranches(repoUrl)
     }
 
     Column(modifier = Modifier.padding(16.dp)) {
-        // Repository Section
-        Text("Git Repository", style = MaterialTheme.typography.headlineMedium)
-        TextField(
-            value = repoUrl,
-            onValueChange = { repoUrl = it },
-            label = { Text("Repository URL") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Button(
-            onClick = {
-                CoroutineScope(Dispatchers.Default).launch {
-                    branches = fetchBranches(repoUrl)
-                }
-            },
-            modifier = Modifier.padding(vertical = 8.dp)
-        ) {
-            Text("Fetch Branches")
-        }
-
         // Environments Section
-        Text("EnvironmentsXXX", style = MaterialTheme.typography.headlineMedium)
+        Text("Environments", style = MaterialTheme.typography.headlineMedium)
         Row(modifier = Modifier.padding(vertical = 8.dp)) {
             TextField(
                 value = newEnvironmentName,
@@ -86,26 +68,51 @@ fun MainScreen() {
         }
 
         environments.forEach { environment ->
+            var editingConfig by remember { mutableStateOf(false) }
+            var editedConfig by remember { mutableStateOf(environment.configuration) }
             Card(
                 modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Name: ${environment.name}")
                     Text("Configuration:")
-                    Text(environment.configuration)
-                    Row(
-                        modifier = Modifier.padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
+                    if (editingConfig) {
+                        TextField(
+                            value = editedConfig,
+                            onValueChange = { editedConfig = it },
+                            label = { Text("Edit JSON") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = {
                                 CoroutineScope(Dispatchers.Default).launch {
-                                    deleteEnvironment(environment.name)
+                                    updateEnvironment(environment.name, environment.copy(configuration = editedConfig))
                                     environments = fetchEnvironments()
+                                    editingConfig = false
                                 }
-                            }
+                            }) { Text("Save") }
+                            Button(onClick = { 
+                                editedConfig = environment.configuration
+                                editingConfig = false 
+                            }) { Text("Cancel") }
+                        }
+                    } else {
+                        Text(environment.configuration)
+                        Row(
+                            modifier = Modifier.padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text("Delete")
+                            Button(onClick = { editingConfig = true }) { Text("Edit") }
+                            Button(
+                                onClick = {
+                                    CoroutineScope(Dispatchers.Default).launch {
+                                        deleteEnvironment(environment.name)
+                                        environments = fetchEnvironments()
+                                    }
+                                }
+                            ) {
+                                Text("Delete")
+                            }
                         }
                     }
                 }
@@ -168,13 +175,70 @@ fun MainScreen() {
             Card(
                 modifier = Modifier.padding(vertical = 8.dp).fillMaxWidth()
             ) {
+                var editingBranches by remember { mutableStateOf(false) }
+                var editingEnvironment by remember { mutableStateOf(false) }
+                var selectedBranchesForRelease by remember { mutableStateOf(release.branches.toSet()) }
+                var selectedEnvForRelease by remember { mutableStateOf(release.environment) }
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Release: ${release.name}")
                     Text("State: ${release.state}")
                     Text("Environment: ${release.environment}")
-                    Text("Branches:")
-                    release.branches.forEach { branch ->
-                        Text("• $branch")
+                    if (editingBranches) {
+                        Text("Edit Branches:")
+                        branches.forEach { branch ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = selectedBranchesForRelease.contains(branch),
+                                    onCheckedChange = { checked ->
+                                        selectedBranchesForRelease = if (checked) {
+                                            selectedBranchesForRelease + branch
+                                        } else {
+                                            selectedBranchesForRelease - branch
+                                        }
+                                    }
+                                )
+                                Text(branch)
+                            }
+                        }
+                        Button(onClick = {
+                            CoroutineScope(Dispatchers.Default).launch {
+                                updateReleaseBranches(release.name, selectedBranchesForRelease.toList())
+                                releases = fetchReleases()
+                                editingBranches = false
+                            }
+                        }, enabled = selectedBranchesForRelease.isNotEmpty()) {
+                            Text("Save Branches")
+                        }
+                        Button(onClick = { editingBranches = false }) { Text("Cancel") }
+                    } else {
+                        Text("Branches:")
+                        release.branches.forEach { branch ->
+                            Text("• $branch")
+                        }
+                        Button(onClick = { editingBranches = true }) { Text("Edit Branches") }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    if (editingEnvironment) {
+                        Text("Change Environment:")
+                        DropdownMenu(
+                            expanded = true,
+                            onDismissRequest = { editingEnvironment = false }
+                        ) {
+                            environments.forEach { env ->
+                                DropdownMenuItem(onClick = {
+                                    selectedEnvForRelease = env.name
+                                    CoroutineScope(Dispatchers.Default).launch {
+                                        updateReleaseEnvironment(release.name, env.name)
+                                        releases = fetchReleases()
+                                        editingEnvironment = false
+                                    }
+                                }, text = {
+                                    Text(env.name)
+                                })
+                            }
+                        }
+                    } else {
+                        Button(onClick = { editingEnvironment = true }) { Text("Change Environment") }
                     }
                     Row(
                         modifier = Modifier.padding(top = 8.dp),
