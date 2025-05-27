@@ -1,51 +1,56 @@
 package org.rudolf.routes
 
+import org.rudolf.GitService
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
-import org.eclipse.jgit.api.Git
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.*
 import java.io.File
-import kotlin.io.path.createTempDirectory
+import org.eclipse.jgit.api.Git
 
 /**
- * Unit test for class GitService.
- *
- * - Create local git repo.
- * - Create 2 branches based on same commit and non conflicting for merge.
- * - Execute mergeBranchesAndPushAutoBranch for these branches.
- * - Result should be successfull
+Unit test for class GitService.
+
+- Create local git repo as original git repo.
+- Point git service to this repo.
+- Create 2 branches based on same commit and non conflicting for merge.
+- Execute mergeBranchesAndPushAutoBranch for these branches.
+- Result should be successfull
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class GitServiceTest {
     @Test
-    fun `mergeBranchesAndPushAutoBranch merges non-conflicting branches successfully`() = runBlocking {
-        // Create a temp directory for the test repo
-        val tempDir = createTempDirectory("test-git-repo").toFile()
-        val git = Git.init().setDirectory(tempDir).call()
-        // Create initial file and commit
-        val file = File(tempDir, "file.txt")
+    fun mergeBranchesAndPushAutoBranch_mergesNonConflictingBranchesSuccessfully() = runBlocking {
+        // 1. Create a local git repo as the original repo
+        val repoDir = File.createTempFile("test-git-repo", "").apply { delete(); mkdir() }
+        val git = Git.init().setDirectory(repoDir).call()
+        val file = File(repoDir, "file.txt")
         file.writeText("base\n")
         git.add().addFilepattern("file.txt").call()
-        git.commit().setMessage("initial commit").call()
-        // Create branch1 and add a line
-        git.branchCreate().setName("branch1").call()
-        git.checkout().setName("branch1").call()
-        file.appendText("branch1\n")
+        git.commit().setMessage("Initial commit").call()
+
+        // 2. Create two branches from the same commit
+        val branch1 = "feature/one"
+        val branch2 = "feature/two"
+        git.branchCreate().setName(branch1).call()
+        git.branchCreate().setName(branch2).call()
+
+        // 3. Make non-conflicting changes in each branch
+        git.checkout().setName(branch1).call()
+        file.appendText("change one\n")
         git.add().addFilepattern("file.txt").call()
-        git.commit().setMessage("branch1 commit").call()
-        // Create branch2 from master and add a line
-        git.checkout().setName("master").call()
-        git.branchCreate().setName("branch2").call()
-        git.checkout().setName("branch2").call()
-        file.appendText("branch2\n")
+        git.commit().setMessage("Change one").call()
+
+        git.checkout().setName(branch2).call()
+        file.appendText("change two\n")
         git.add().addFilepattern("file.txt").call()
-        git.commit().setMessage("branch2 commit").call()
-        // Now test mergeBranchesAndPushAutoBranch
-        // Simulate GitService configured to use this repo
-        org.rudolf.GitService.configure(tempDir.absolutePath, 5)
-        val result = org.rudolf.GitService.mergeBranchesAndPushAutoBranch(listOf("branch1", "branch2"))
-        assertTrue(result.isSuccess)
-        result.onFailure { println(it.message) }
-        val autoBranch = result.getOrNull()
-        assertTrue(autoBranch != null && autoBranch.startsWith("auto/"))
+        git.commit().setMessage("Change two").call()
+
+        // 4. Point GitService to this repo
+        GitService.configure(repoDir.toURI().toString(), 5)
+
+        // 5. Execute mergeBranchesAndPushAutoBranch for these branches
+        val result = GitService.mergeBranchesAndPushAutoBranch(listOf(branch1, branch2))
+        assertTrue(result.isSuccess, "Merge should be successful: ${result.exceptionOrNull()?.message}")
+        assertTrue(result.getOrNull()?.startsWith("auto/") == true, "Auto branch should be created")
     }
 }
