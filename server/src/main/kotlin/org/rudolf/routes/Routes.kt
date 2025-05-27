@@ -41,45 +41,27 @@ fun Route.releaseRoutes() {
             val name = call.parameters["name"] ?: return@put call.respondText("Missing name", status = HttpStatusCode.BadRequest)
             val branches = call.receive<List<String>>()
             // Merge and push auto branch
-            val mergeResult = GitService.mergeBranchesAndPushAutoBranch(branches)
-            if (mergeResult.isFailure) {
-                return@put call.respondText("Merge failed: ${mergeResult.exceptionOrNull()?.message}", status = HttpStatusCode.Conflict)
-            }
             val updated = StateManager.updateRelease(name) { it.copy(branches = branches) }
                 ?: return@put call.respondText("Release not found", status = HttpStatusCode.NotFound)
-            call.respond(mapOf("release" to updated, "autoBranch" to mergeResult.getOrNull()))
+            call.respond(mapOf("release" to updated))
         }
         
         put("/{name}/state") {
             val name = call.parameters["name"] ?: return@put call.respondText("Missing name", status = HttpStatusCode.BadRequest)
             val state = call.receive<ReleaseState>()
-            // Get branches for this release
-            val release = StateManager.getReleases().find { it.name == name }
-                ?: return@put call.respondText("Release not found", status = HttpStatusCode.NotFound)
-            // Merge and push auto branch
-            val mergeResult = GitService.mergeBranchesAndPushAutoBranch(release.branches)
-            if (mergeResult.isFailure) {
-                return@put call.respondText("Merge failed: ${mergeResult.exceptionOrNull()?.message}", status = HttpStatusCode.Conflict)
-            }
+
             val updated = StateManager.updateRelease(name) { it.copy(state = state) }
                 ?: return@put call.respondText("Release not found", status = HttpStatusCode.NotFound)
-            call.respond(mapOf("release" to updated, "autoBranch" to mergeResult.getOrNull()))
+            call.respond(mapOf("release" to updated))
         }
         
         put("/{name}/environment") {
             val name = call.parameters["name"] ?: return@put call.respondText("Missing name", status = HttpStatusCode.BadRequest)
             val environment = call.receive<String>()
-            // Get branches for this release
-            val release = StateManager.getReleases().find { it.name == name }
-                ?: return@put call.respondText("Release not found", status = HttpStatusCode.NotFound)
-            // Merge and push auto branch
-            val mergeResult = GitService.mergeBranchesAndPushAutoBranch(release.branches)
-            if (mergeResult.isFailure) {
-                return@put call.respondText("Merge failed: ${mergeResult.exceptionOrNull()?.message}", status = HttpStatusCode.Conflict)
-            }
+
             val updated = StateManager.updateRelease(name) { it.copy(environment = environment) }
                 ?: return@put call.respondText("Release not found", status = HttpStatusCode.NotFound)
-            call.respond(mapOf("release" to updated, "autoBranch" to mergeResult.getOrNull()))
+            call.respond(mapOf("release" to updated))
         }
         
         delete("/{name}") {

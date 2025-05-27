@@ -24,6 +24,7 @@ dependencies {
     implementation("io.ktor:ktor-server-cors:3.1.3")
     implementation(libs.jgit)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+    implementation("io.ktor:ktor-server-websockets:2.3.2")
     testImplementation(libs.ktor.serverTestHost)
     testImplementation(libs.kotlin.testJunit)
 }

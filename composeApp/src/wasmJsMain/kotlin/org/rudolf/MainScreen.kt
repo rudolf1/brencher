@@ -32,6 +32,17 @@ fun MainScreen() {
         branches = fetchBranches(repoUrl)
     }
 
+    // WebSocket: live release updates
+    useReleaseWebSocket(
+        onReleaseUpdate = { updatedRelease ->
+            releases = releases.toMutableList().apply {
+                val idx = indexOfFirst { it.name == updatedRelease.name }
+                if (idx != -1) set(idx, updatedRelease) else add(updatedRelease)
+            }
+        },
+        onError = { errorMessage = it }
+    )
+
     Column(modifier = Modifier.padding(16.dp)) {
         // Error Message Snackbar
         if (errorMessage != null) {
