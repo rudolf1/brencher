@@ -46,9 +46,14 @@ fun Application.module() {
     launch {
         val channel = org.rudolf.routes.StateManager.releaseUpdatesChannel
         for (release in channel) {
-            // Check if auto/<hash> is up-to-date, else merge and push
-            val result = org.rudolf.GitService.mergeBranchesAndPushAutoBranch(release.branches)
-            // Optionally: log or notify if needed (UI is notified via API responses)
+            val result = org.rudolf.CreateOrGetBranchJob.mergeBranchesAndPushAutoBranch(
+                git = org.rudolf.GitService.javaClass.getDeclaredField("git").apply { isAccessible = true }.get(org.rudolf.GitService) as? org.eclipse.jgit.api.Git,
+                branches = release.branches,
+                gitUsername = org.rudolf.GitService.javaClass.getDeclaredField("gitUsername").apply { isAccessible = true }.get(org.rudolf.GitService) as String,
+                gitPassword = org.rudolf.GitService.javaClass.getDeclaredField("gitPassword").apply { isAccessible = true }.get(org.rudolf.GitService) as String
+            )
+            val simpleResult = dto.SimpleResult.fromResult(result)
+            org.rudolf.routes.StateManager.updateRelease(release.name) { it.copy(mergedBranch = simpleResult) }
             if (result.isFailure) {
                 println("[Release Merge] Failed for ${release.name}: ${result.exceptionOrNull()?.message}")
             } else {

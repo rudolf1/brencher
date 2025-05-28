@@ -6,8 +6,8 @@ All backend configuration stored in ktor config.
 Project connecting to git repository and fetching all branches.
 Git repository configured on backend side:
 - url
-- Authentication username (optional)
-- Authentication password (optional)
+- Authentication username (optional, stored in local.conf)
+- Authentication password (optional, stored in local.conf)
 
 
 Branches fetched on server side on start and refreshing each 5 minutes.
@@ -45,26 +45,28 @@ When user clicks on "Change Environment" button, this DTO should be sent to serv
 
 # Backend processing:
 
+Hold releases state im kotlin flow.
+Jobs subscibed to this flow. 
+For each ReleaseDto update it takes field <input>.
+Result saved to field of ReleaseDto and decalred in <Output> section. 
+After processing new ReleaseDto save it to state via compareAndSet.
 
-Create kotlin channel which subscribes to Release state.
 
-Create separate job, which subscribes to this channel. 
-For each update to a Release and its corresponding environment, the backend performs the following steps:
+## CreateOrGetBranchJob
+### Kotlin class 
+    CreateOrGetBranchJob
+### Input
+    release.branches
+### Output
+    release.mergedBranch
+    Result type: <branch name> and <commit name>
+### Logic
 
-- If `auto/<hash>` branch reflects the latest merged state of the selected branches for that Release, do nothing
-- **Receive DTO**: The backend receives a DTO representing the updated Release, including the list of selected branches and the target environment.
-
-- **Merge Branches**:
-    - The backend checks out the latest versions of the selected branches from the configured git repository.
-    - It creates a new temporary branch for merging.
+    Find any branch `auto/<hash>`:
+    - It is merged state of commits pointed by <release.branches>
+    - If found, set branch name and commit to <output>, and finish.
+    - Creates a new temporary branch for merging.
     - All selected branches are merged into this temporary branch. If merge conflicts occur, the backend should handle them according to predefined rules (e.g., fail the operation and notify the user, or attempt an automatic merge if possible).
-
-- **Create Auto Branch**:
     - After a successful merge, the backend creates or updates a branch named `auto/<hash>`, where `<hash>` is a deterministic hash generated from the commit names of the branches (e.g., using SHA-1 or MD5 on the sorted branch names).
-
-- **Push to Repository**:
     - The merged result in the `auto/<hash>` branch is pushed to the remote git repository.
-
-- **Notify UI**:
-    - The backend sends a response or notification to the UI via websockets indicating the operation's success or failure, including any relevant details (e.g., new branch name, errors).
-
+    - If failed, save result to <output>
