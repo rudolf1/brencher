@@ -32,10 +32,27 @@ object CreateOrGetBranchJob {
                 fetchCommand.setCredentialsProvider(credentialsProvider)
             }
             fetchCommand.call()
-            if (isAutoBranchUpToDate(git, branches)) {
-                val commit = repo.repository.findRef(autoBranch)?.objectId?.name
-                if (commit != null) return@withContext Result.success(Pair(autoBranch, commit))
-                return@withContext Result.failure(Exception("auto branch exists but commit not found"))
+            // Inline isAutoBranchUpToDate logic
+            run {
+                val repo = git ?: return@run false
+                if (branches.isEmpty()) return@run false
+                val sortedBranches = branches.sorted()
+                val commitIds = sortedBranches.mapNotNull { repo.repository.findRef(it)?.objectId?.name }
+                if (commitIds.isEmpty()) return@run false
+                val hash = java.security.MessageDigest.getInstance("SHA-1")
+                    .digest(commitIds.joinToString(",").toByteArray())
+                    .joinToString("") { "%02x".format(it) }
+                val autoBranch = "auto/$hash"
+                val autoRef = repo.repository.findRef(autoBranch) ?: return@run false
+                val revWalk = org.eclipse.jgit.revwalk.RevWalk(repo.repository)
+                val autoCommit = revWalk.parseCommit(autoRef.objectId)
+                val parentIds = autoCommit.parents.map { it.name }.sorted()
+                revWalk.close()
+                if (parentIds == commitIds.sorted()) {
+                    val commit = repo.repository.findRef(autoBranch)?.objectId?.name
+                    if (commit != null) return@withContext Result.success(Pair(autoBranch, commit))
+                    return@withContext Result.failure(Exception("auto branch exists but commit not found"))
+                }
             }
             // Delete temp branch if exists
             repo.repository.findRef(tempBranch)?.let {
@@ -76,36 +93,5 @@ object CreateOrGetBranchJob {
         } catch (e: Exception) {
             return@withContext Result.failure(e)
         }
-    }
-
-    fun getBranchesCommitHash(git: Git?, branches: List<String>): String {
-        val repo = git ?: return ""
-        val sortedBranches = branches.sorted()
-        val commitIds = sortedBranches.mapNotNull { branch ->
-            repo.repository.findRef(branch)?.objectId?.name
-        }
-        if (commitIds.isEmpty()) return ""
-        val hash = java.security.MessageDigest.getInstance("SHA-1")
-            .digest(commitIds.joinToString(",").toByteArray())
-            .joinToString("") { "%02x".format(it) }
-        return hash
-    }
-
-    fun isAutoBranchUpToDate(git: Git?, branches: List<String>): Boolean {
-        val repo = git ?: return false
-        if (branches.isEmpty()) return false
-        val sortedBranches = branches.sorted()
-        val commitIds = sortedBranches.mapNotNull { repo.repository.findRef(it)?.objectId?.name }
-        if (commitIds.isEmpty()) return false
-        val hash = java.security.MessageDigest.getInstance("SHA-1")
-            .digest(commitIds.joinToString(",").toByteArray())
-            .joinToString("") { "%02x".format(it) }
-        val autoBranch = "auto/$hash"
-        val autoRef = repo.repository.findRef(autoBranch) ?: return false
-        val revWalk = org.eclipse.jgit.revwalk.RevWalk(repo.repository)
-        val autoCommit = revWalk.parseCommit(autoRef.objectId)
-        val parentIds = autoCommit.parents.map { it.name }.sorted()
-        revWalk.close()
-        return parentIds == commitIds.sorted()
     }
 }
