@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.ktor)
     alias(libs.plugins.kotlinSerialization)
     application
+    id("com.google.cloud.tools.jib") version "3.4.0"
+    id("org.ajoberstar.grgit") version "5.3.0"
 }
 
 group = "org.rudolf"
@@ -34,6 +36,31 @@ tasks.named<Copy>("processResources") {
     dependsOn(jsBrowserDistribution)
     from(jsBrowserDistribution) {
         into("www")
+    }
+}
+
+jib {
+    from {
+        image = "bellsoft/liberica-openjdk-alpine:22.0.2"
+        platforms {
+            platform {
+                os = "linux"
+                architecture = "amd64"
+            }
+            platform {
+                os = "linux"
+                architecture = "arm64"
+            }
+        }
+    }
+    to {
+        image = "registry.rudolf.keenetic.link/brencher"
+        tags = setOf(grgit.head().abbreviatedId, "latest")
+    }
+    container {
+        creationTime.set(grgit.head().dateTime.toInstant().toString())
+        mainClass = "org.rudolf.ApplicationKt"
+        ports = listOf("8080")
     }
 }
 

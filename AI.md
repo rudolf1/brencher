@@ -45,9 +45,9 @@ When user clicks on "Change Environment" button, this DTO should be sent to serv
 
 # Backend processing:
 
-Hold releases state im kotlin flow.
-Jobs subscibed to this flow. 
-For each ReleaseDto update it takes field <input>.
+Hold releases state in kotlin flow.
+Each job process each ReleaseDto event in flow.
+As input it takes field <input>.
 Result saved to field of ReleaseDto and decalred in <Output> section. 
 After processing new ReleaseDto save it to state via compareAndSet.
 
@@ -70,3 +70,21 @@ After processing new ReleaseDto save it to state via compareAndSet.
     - After a successful merge, the backend creates or updates a branch named `auto/<hash>`, where `<hash>` is a deterministic hash generated from the commit names of the branches (e.g., using SHA-1 or MD5 on the sorted branch names).
     - The merged result in the `auto/<hash>` branch is pushed to the remote git repository.
     - If failed, save result to <output>
+
+## GradleJobBuild
+### Kotlin class 
+    GradleBuild
+### Input
+    release.mergedBranch
+### Output
+    release.buildVersion, release.artifactUrls
+### Logic
+
+    - Checkout <release.mergedBranch> to temporary folder.
+    - Use <release.merged> name to calculate <release.buildVersion>. Use first 5 characters.
+    - Set version to gradle project to <release.buildVersion>.
+    - Extract docker image names from gradle modules. It will be <release.artifactUrls>.
+    - Check images with versions exists in registry.
+    - If images not exists, execute `gradle jib`.
+    - If failed, save result to <output>
+

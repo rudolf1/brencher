@@ -29,5 +29,7 @@ data class ReleaseDto(
     val state: ReleaseState,
     val environment: String,
     val branches: List<String>,
-    val mergedBranch: SimpleResult<Pair<String, String>>? = null
+    val mergedBranch: SimpleResult<Pair<String, String>>? = null,
+    val buildVersion: SimpleResult<String>? = null,
+    val artifactUrls: SimpleResult<List<String>>? = null
 )

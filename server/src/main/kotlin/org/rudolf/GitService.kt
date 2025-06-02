@@ -11,7 +11,7 @@ object GitService {
     private val repoDir = File("/media/DATA/src/brencher/testState/git-repo")
     var git: Git? = null
     private val branches = ConcurrentHashMap<String, List<String>>()
-    private var repositoryUrl: String = ""
+    var repositoryUrl: String = ""
     private var branchRefreshIntervalMinutes: Int = 5
     private var refreshJob: Job? = null
     private var gitUsername: String = ""

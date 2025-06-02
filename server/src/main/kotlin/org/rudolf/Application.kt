@@ -47,7 +47,7 @@ fun Application.module() {
         val channel = org.rudolf.routes.StateManager.releaseUpdatesChannel
         for (release in channel) {
             val result = org.rudolf.CreateOrGetBranchJob.mergeBranchesAndPushAutoBranch(
-                git = org.rudolf.GitService.javaClass.getDeclaredField("git").apply { isAccessible = true }.get(org.rudolf.GitService) as? org.eclipse.jgit.api.Git,
+                git = org.rudolf.GitService.git,
                 branches = release.branches,
                 gitUsername = org.rudolf.GitService.javaClass.getDeclaredField("gitUsername").apply { isAccessible = true }.get(org.rudolf.GitService) as String,
                 gitPassword = org.rudolf.GitService.javaClass.getDeclaredField("gitPassword").apply { isAccessible = true }.get(org.rudolf.GitService) as String
@@ -58,6 +58,25 @@ fun Application.module() {
                 println("[Release Merge] Failed for ${release.name}: ${result.exceptionOrNull()?.message}")
             } else {
                 println("[Release Merge] Success for ${release.name}: ${result.getOrNull()}")
+            }
+        }
+    }
+
+    // Background job: subscribe to Release updates and process Gradle builds
+    launch {
+        val channel = org.rudolf.routes.StateManager.releaseUpdatesChannel
+        for (release in channel) {
+            // Gradle build job
+            val updatedRelease = org.rudolf.GradleBuild.buildRelease(
+                GitService.repositoryUrl,
+                release = release,
+            )
+            org.rudolf.routes.StateManager.updateRelease(updatedRelease.name) { updatedRelease }
+            // Optionally log result
+            if (updatedRelease.buildVersion is dto.SimpleResult.Failure) {
+                println("[Gradle Build] Failed for ${updatedRelease.name}: ${(updatedRelease.buildVersion as dto.SimpleResult.Failure).error}")
+            } else {
+                println("[Gradle Build] Success for ${updatedRelease.name}: ${(updatedRelease.buildVersion as? dto.SimpleResult.Success)?.value}")
             }
         }
     }
