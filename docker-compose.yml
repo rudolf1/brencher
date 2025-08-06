@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  brencher-backend:
+    build: .
+    image: registry.rudolf.keenetic.link/brencher:latest
+    ports:
+      - "5000:5000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    networks:
+      - brencher-net
+
+networks:
+  brencher-net:
+    driver: overlay

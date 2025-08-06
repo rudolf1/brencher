@@ -1,0 +1,131 @@
+import os
+import json
+import time
+import threading
+import hashlib
+from flask import Flask, request, jsonify, send_from_directory
+from flask_socketio import SocketIO, emit
+from dotenv import load_dotenv
+import git
+import tempfile
+import logging
+from dataclasses import dataclass, asdict, field
+from typing import List, Dict, Any, Optional
+import shutil
+import subprocess
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Load environment variables from .env file
+load_dotenv("local.env")
+app = Flask(__name__, static_folder='frontend')
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+import configs.brencher
+environments = [configs.brencher.brencher]
+
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
+
+# In-memory state
+branches = {}
+state_lock = threading.Lock()
+
+def fetch_branches():
+    global branches, environments
+
+    for e in environments:
+        url = e.repo
+        protocol, rest = url.split('://')
+        # Get environment variables
+        GIT_USERNAME = os.getenv('GIT_USERNAME', '')
+        GIT_PASSWORD = os.getenv('GIT_PASSWORD', '')
+        url = f"{protocol}://{GIT_USERNAME}:{GIT_PASSWORD}@{rest}"
+
+        try:
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                repo = git.Repo.clone_from(url, tmp_dir, bare=True)
+                # Specify refspec to fetch all branches
+                fetch_info = repo.remotes.origin.fetch(refspec='+refs/heads/*:refs/remotes/origin/*')
+                
+                # Extract branch names
+                new_branches = []
+                for ref in repo.refs:
+                    if ref.name.startswith('origin/') and not ref.name.startswith('origin/HEAD'):
+                        branch_name = ref.name[len('origin/'):]
+                        if not branch_name.startswith('auto/'):  # Skip auto branches
+                            new_branches.append(branch_name)
+                
+                branches[e.id] = new_branches
+                socketio.emit('branches_updated', {'branches': branches})
+                logger.info(f"Fetched {e.id}:{len(new_branches)} branches")
+                
+        except Exception as e:
+            error_msg = f"Failed to fetch branches: {str(e)}"
+            logger.error(error_msg)
+            socketio.emit('error', {'message': error_msg}, namespace='/ws/errors')
+
+# API Routes
+@app.route('/')
+def serve_index():
+    return send_from_directory(FRONTEND_DIR, 'index.html')
+
+@app.route('/<path:path>')
+def serve_static(path):
+    return send_from_directory(FRONTEND_DIR, path)
+
+# Socket.IO events
+@socketio.on('connect')
+def on_connect():
+    emit('branches_updated', {'branches': branches})
+    # emit('releases_updated', {'releases': [asdict(r) for r in releases.values()]})
+
+# --- WebSocket Endpoints ---
+from flask import copy_current_request_context
+from flask_socketio import Namespace
+
+class BranchesNamespace(Namespace):
+    def on_connect(self):
+        emit('branches', branches)
+    def on_update(self, data):
+        emit('branches', branches)
+
+class EnvironmentNamespace(Namespace):
+    def on_connect(self):
+        env_dtos = [asdict(e) for e in environments]
+        emit('environments', env_dtos)
+    def on_update(self, data):
+        # Accept environment update from UI
+        # Update environments and broadcast
+        for e in environments:
+            if e.id == data.get('id'):
+                e.state = data.get('state', e.state)
+                e.branches = data.get('branches', e.branches)
+        env_dtos = [asdict(e) for e in environments]
+        emit('environments', env_dtos, broadcast=True)
+
+class ErrorsNamespace(Namespace):
+    def on_connect(self):
+        pass
+    def on_error(self, data):
+        emit('error', data)
+
+socketio.on_namespace(BranchesNamespace('/ws/branches'))
+socketio.on_namespace(EnvironmentNamespace('/ws/environment'))
+socketio.on_namespace(ErrorsNamespace('/ws/errors'))
+
+if __name__ == '__main__':
+    # Background thread to refresh branches every 5 minutes
+    def branch_refresh_thread():
+        while True:
+            fetch_branches()
+            time.sleep(300)  # 5 minutes
+
+    # Start branch refresh thread
+    refresh_thread = threading.Thread(target=branch_refresh_thread)
+    refresh_thread.daemon = True
+    refresh_thread.start()
+
+    # Run the server
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True)

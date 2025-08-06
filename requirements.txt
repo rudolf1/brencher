@@ -1,0 +1,6 @@
+flask
+flask-socketio
+gitpython
+python-dotenv
+docker
+PyYAML

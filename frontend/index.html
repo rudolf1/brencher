@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brencher - Branch Merger</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Brencher - Branch Merger</h1>
+            <div id="status-bar" class="status-bar hidden">
+                <span id="status-message"></span>
+                <button id="close-status">×</button>
+            </div>
+        </header>
+        
+        <main>
+            <div class="branches-section">
+                <h2>Git Branches</h2>
+                <div class="control-bar">
+                    <button id="refresh-branches">Refresh Branches</button>
+                    <div class="state-selector">
+                        <label>Default state:</label>
+                        <select id="state-selector">
+                            <option value="Active">Active</option>
+                            <option value="Pause">Pause</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="branches-list" id="branches-list">
+                    <p class="loading">Loading branches...</p>
+                </div>
+                <div class="actions">
+                    <button id="create-release" class="primary-button">Create Release</button>
+                </div>
+            </div>
+            
+            <div class="releases-section">
+                <h2>Releases</h2>
+                <div id="releases-list" class="releases-list">
+                    <p class="loading">Loading releases...</p>
+                </div>
+            </div>
+            
+            <div class="jobs-section">
+                <h2>Jobs</h2>
+                <div id="jobs-list" class="jobs-list">
+                    <p class="loading">Loading jobs...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
