@@ -5,7 +5,7 @@ from steps.step import AbstractStep
 @dataclass
 class Environment:
     id: str
-    branches: List[Tuple[str, str]]
+    branches: List[str]
     state: str  # 'Active' or 'Pause'
     repo: str # git repo
-    pipeline: Callable[[Any], List[AbstractStep]]
+    # pipeline: List[AbstractStep]

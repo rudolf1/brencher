@@ -4,7 +4,6 @@ console.log('app.js loaded');
 
 const socket = io();
 
-const ENVIRONMENT_API = '/environment';
 const WS_BRANCHES = '/ws/branches';
 const WS_ENVIRONMENT = '/ws/environment';
 const WS_ERRORS = '/ws/errors';
@@ -36,27 +35,6 @@ function showStatus(message, isError = false) {
     statusMessage.style.color = isError ? '#721c24' : '#333';
 }
 closeStatus.onclick = () => statusBar.classList.add('hidden');
-
-function fetchEnvironment() {
-    fetch(ENVIRONMENT_API)
-        .then(res => res.ok ? res.json() : Promise.reject(res))
-        .then(data => {
-            environment = data;
-            branchStates = {};
-            if (Array.isArray(environment)) {
-                environment.forEach(env => {
-                    env.branches.forEach(([envName, branchName]) => {
-                        branchStates[branchName] = env.state;
-                    });
-                });
-            }
-            renderBranches();
-            renderJobs();
-        })
-        .catch(err => {
-            showStatus('Failed to load environment', true);
-        });
-}
 
 function renderBranches() {
     if (!branches.length) {
@@ -132,25 +110,29 @@ refreshBranchesBtn.onclick = () => {
 
 // Socket.IO setup
 function setupSocketIO() {
-    socket.on('branches_updated', (data) => {
-        branches = Object.entries(data.branches).flatMap(([env, branchList]) => branchList.map(branch => ({ env, branch })));
+    wsBranches = io(WS_BRANCHES);
+    wsEnv = io(WS_ENVIRONMENT);
+    wsErr = io(WS_ERRORS);
+
+    wsBranches.on('branches', (data) => {
+        branches = Object.entries(data).flatMap(([env, branchList]) => branchList.map(branch => ({ env, branch })));
         renderBranches();
         showStatus('Branches updated via Socket.IO.');
     });
 
-    socket.on('environments', (data) => {
+    wsEnv.on('environments', (data) => {
         environment = data;
         renderBranches();
         showStatus('Environment updated via Socket.IO.');
     });
 
-    socket.on('error', (data) => {
+    wsErr.on('error', (data) => {
         showStatus(data.message || 'Unknown error', true);
     });
 }
 
 function sendEnvironmentUpdate(envUpdate) {
-    socket.emit('update', envUpdate);
+    wsEnv.emit('update', envUpdate);
 }
 
 function updateEnvironment() {

@@ -35,7 +35,7 @@ state_lock = threading.Lock()
 def fetch_branches():
     global branches, environments
 
-    for e in environments:
+    for e, _ in environments:
         url = e.repo
         protocol, rest = url.split('://')
         # Get environment variables
@@ -58,7 +58,6 @@ def fetch_branches():
                             new_branches.append(branch_name)
                 
                 branches[e.id] = new_branches
-                socketio.emit('branches_updated', {'branches': branches})
                 logger.info(f"Fetched {e.id}:{len(new_branches)} branches")
                 
         except Exception as e:
@@ -75,38 +74,32 @@ def serve_index():
 def serve_static(path):
     return send_from_directory(FRONTEND_DIR, path)
 
-# Socket.IO events
-@socketio.on('connect')
-def on_connect():
-    emit('branches_updated', {'branches': branches})
-    # emit('releases_updated', {'releases': [asdict(r) for r in releases.values()]})
-
 # --- WebSocket Endpoints ---
 from flask import copy_current_request_context
 from flask_socketio import Namespace
 
 class BranchesNamespace(Namespace):
-    def on_connect(self):
+    def on_connect(self, auth=None):
         emit('branches', branches)
     def on_update(self, data):
         emit('branches', branches)
 
 class EnvironmentNamespace(Namespace):
-    def on_connect(self):
-        env_dtos = [asdict(e) for e in environments]
+    def on_connect(self, auth=None):
+        env_dtos = [asdict(e) for e, _ in environments]
         emit('environments', env_dtos)
     def on_update(self, data):
         # Accept environment update from UI
         # Update environments and broadcast
-        for e in environments:
+        for e, _ in environments:
             if e.id == data.get('id'):
                 e.state = data.get('state', e.state)
                 e.branches = data.get('branches', e.branches)
-        env_dtos = [asdict(e) for e in environments]
+        env_dtos = [asdict(e) for e, _ in environments]
         emit('environments', env_dtos, broadcast=True)
 
 class ErrorsNamespace(Namespace):
-    def on_connect(self):
+    def on_connect(self, auth=None):
         pass
     def on_error(self, data):
         emit('error', data)
@@ -120,12 +113,24 @@ if __name__ == '__main__':
     def branch_refresh_thread():
         while True:
             fetch_branches()
+            socketio.emit('branches', branches)
             time.sleep(300)  # 5 minutes
 
     # Start branch refresh thread
     refresh_thread = threading.Thread(target=branch_refresh_thread)
     refresh_thread.daemon = True
     refresh_thread.start()
+
+    def processing_thread():
+        while True:
+            import processing
+            processing.do_job(environments, lambda e: socketio.emit('error', e))
+            env_dtos = [asdict(e) for e, _ in environments]
+            socketio.emit('environments', env_dtos)
+            time.sleep(10)
+    processing = threading.Thread(target=processing_thread)
+    processing.daemon = True
+    processing.start()
 
     # Run the server
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)

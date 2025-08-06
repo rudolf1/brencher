@@ -2,86 +2,57 @@ import tempfile
 import git
 import logging
 from dataclasses import dataclass, asdict, field
-from typing import List, Optional
+from typing import List, Optional, Union, Tuple
 from steps.step import AbstractStep
+import tempfile
+from enironment import Environment
 
 logger = logging.getLogger(__name__)
 
 @dataclass
-class GitCloneResult:
-    repo_path: str
-    success: bool
-    error_message: Optional[str] = None
-
 class GitClone(AbstractStep):
+    env: Environment = field(metadata={"ignore_json":True})
+    result: Union[str, BaseException] = BaseException("No result yet")
+
     def progress(self) -> None:
-        """
-        Clone the Git repository to a temporary folder.
-        
-        Args:
-            git_url: URL of the Git repository to clone
-            
-        Returns:
-            GitCloneResult: Object containing the path to the cloned repo and status
-        """
         try:
             # Create temporary directory for the clone
-            temp_dir = tempfile.mkdtemp(prefix="brencher_")
+
+            temp_dir = tempfile.mkdtemp(prefix=f"{self.env.id}_")
             
             # Clone the repository
-            logger.info(f"Cloning repository {git_url} to {temp_dir}")
-            git.Repo.clone_from(git_url, temp_dir)
+            logger.info(f"Cloning repository {self.env.repo} to {temp_dir}")
+            git.Repo.clone_from(self.env.repo, temp_dir)
             
-            return GitCloneResult(
-                repo_path=temp_dir,
-                success=True
-            )
+            self.result = temp_dir
             
         except Exception as e:
-            error_message = f"Failed to clone repository: {str(e)}"
-            logger.error(error_message)
-            
-            return GitCloneResult(
-                repo_path="",
-                success=False,
-                error_message=error_message
-            )
+            self.result = e
 
-
+import hashlib
 
 @dataclass
-class CheckoutMergedResult:
-    branch_name: Optional[str] = None
-    commit_hash: Optional[str] = None
-    success: bool = True
-    error_message: Optional[str] = None
-
 class CheckoutMerged(AbstractStep):
+    wd: GitClone
+    branches: List[str]
+    result: Union[Tuple[str, str], BaseException] = BaseException("No result yet")
+
     def progress(self) -> None:
-        """
-        Find or create an auto branch that represents the merged state of selected branches.
-        
-        Args:
-            clone_result: Result from GitClone step containing repo path
-            branches: List of branches to merge
-            
-        Returns:
-            CheckoutMergedResult: Object with merged branch details
-        """
-        if not clone_result.success:
-            return CheckoutMergedResult(
-                success=False,
-                error_message="Cannot checkout merged branches: Git clone failed"
-            )
-        
-        repo_path = clone_result.repo_path
+        if self.wd.result is BaseException:
+            self.result = self.wd.result
+            return
+
+        repo_path = self.wd.result
+        if not isinstance(repo_path, str):
+            self.result = repo_path  # propagate the error (likely an exception)
+            return
         
         try:
             # Open the repository
             repo = git.Repo(repo_path)
             
             # Generate hash from branch names
-            sorted_branches = sorted(branches)
+            sorted_branches = sorted(self.branches)
             branch_hash = hashlib.sha1(''.join(sorted_branches).encode()).hexdigest()
             auto_branch_name = f"auto/{branch_hash}"
             
@@ -95,17 +66,14 @@ class CheckoutMerged(AbstractStep):
                     repo.git.checkout(auto_branch_name)
                     commit_hash = repo.head.commit.hexsha
                     
-                    return CheckoutMergedResult(
-                        branch_name=auto_branch_name,
-                        commit_hash=commit_hash,
-                        success=True
-                    )
-            
+                    self.result = (auto_branch_name, commit_hash)
+                    return 
+
             # Auto branch doesn't exist, create it
             logger.info(f"Creating new auto branch: {auto_branch_name}")
             
             # Start with the first branch
-            base_branch = branches[0]
+            base_branch = self.branches[0]
             repo.git.checkout(base_branch)
             
             # Create temporary branch for merging
@@ -113,7 +81,7 @@ class CheckoutMerged(AbstractStep):
             repo.git.checkout('-b', temp_branch)
             
             # Merge the rest of the branches
-            for branch in branches[1:]:
+            for branch in self.branches[1:]:
                 try:
                     logger.info(f"Merging branch: {branch}")
                     repo.git.merge(branch, '--no-ff')
@@ -124,10 +92,8 @@ class CheckoutMerged(AbstractStep):
                     error_message = f"Merge conflict when merging {branch}: {str(e)}"
                     logger.error(error_message)
                     
-                    return CheckoutMergedResult(
-                        success=False,
-                        error_message=error_message
-                    )
+                    self.result = BaseException(error_message)
+                    return
             
             # Create and push the auto branch
             repo.git.branch('-f', auto_branch_name)
@@ -135,17 +101,10 @@ class CheckoutMerged(AbstractStep):
             commit_hash = repo.head.commit.hexsha
             repo.git.push('-f', 'origin', auto_branch_name)
             
-            return CheckoutMergedResult(
-                branch_name=auto_branch_name,
-                commit_hash=commit_hash,
-                success=True
-            )
+            self.result = (auto_branch_name,commit_hash)
             
         except Exception as e:
             error_message = f"Failed to create merged branch: {str(e)}"
             logger.error(error_message)
-            
-            return CheckoutMergedResult(
-                success=False,
-                error_message=error_message
-            )
+            self.result = BaseException(error_message)
+            return
