@@ -75,3 +75,7 @@ All steps must inherit from BaseStep and implement idempotent behavior. This mea
     - Ensures idempotency by checking if the image with the same tag already exists in the repository before building/pushing
     - If all images exist and match, skips build and push
     - If failed, save result to <output>
+
+## DockerSwarmDeploy
+### Logic
+    Deploys to swarm service described in specified docker-compose.yaml

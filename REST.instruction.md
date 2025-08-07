@@ -15,4 +15,5 @@
     id: str
     branches: List[Tuple[str, str]]
     state: str  # 'Active' or 'Pause'
+    pipeline: Dict[str, Any]
 

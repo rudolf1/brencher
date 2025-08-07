@@ -84,10 +84,30 @@ class BranchesNamespace(Namespace):
     def on_update(self, data):
         emit('branches', branches)
 
+def get_envs_to_emit():
+        env_dtos = []
+        for e, p in environments:
+            env = asdict(e)
+            res = []
+            for r in p:
+                if isinstance(r.result_obj, BaseException): 
+                    res.append({
+                        "name":r.name, 
+                        "status": str(r.result_obj)
+                    })
+                else:
+                    res.append({
+                        "name":r.name, 
+                        "status": r.result_obj
+                    })
+            env_dtos.append((env, res))
+        return env_dtos
+
 class EnvironmentNamespace(Namespace):
+
     def on_connect(self, auth=None):
-        env_dtos = [asdict(e) for e, _ in environments]
-        emit('environments', env_dtos)
+        emit('environments', get_envs_to_emit())
+
     def on_update(self, data):
         # Accept environment update from UI
         # Update environments and broadcast
@@ -95,8 +115,7 @@ class EnvironmentNamespace(Namespace):
             if e.id == data.get('id'):
                 e.state = data.get('state', e.state)
                 e.branches = data.get('branches', e.branches)
-        env_dtos = [asdict(e) for e, _ in environments]
-        emit('environments', env_dtos, broadcast=True)
+        emit('environments', get_envs_to_emit(), broadcast=True)
 
 class ErrorsNamespace(Namespace):
     def on_connect(self, auth=None):
@@ -124,9 +143,7 @@ if __name__ == '__main__':
     def processing_thread():
         while True:
             import processing
-            processing.do_job(environments, lambda e: socketio.emit('error', e))
-            env_dtos = [asdict(e) for e, _ in environments]
-            socketio.emit('environments', env_dtos)
+            processing.do_job(environments, lambda: socketio.emit('environments', get_envs_to_emit()))
             time.sleep(10)
     processing = threading.Thread(target=processing_thread)
     processing.daemon = True

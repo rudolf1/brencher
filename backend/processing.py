@@ -5,18 +5,21 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def do_job(environemnts: List[Tuple[Environment, List[AbstractStep]]], onerror: Callable[[str], None]):
+def do_job(
+        environemnts: List[Tuple[Environment, List[AbstractStep]]], 
+        onupdate: Callable[[], None]
+    ):
     for env, pipe in environemnts:
         try:
             if env.state != 'Active':
                 continue
             for step in pipe:
                 if isinstance(step, AbstractStep):
-                    step.progress()
-    
+                    step.do_job()
+                    onupdate()
         
         except Exception as e:
             error_msg = f"Error processing release {env.id}: {str(e)}"
             logger.error(error_msg)
-            onerror(error_msg)
+            onupdate()
 

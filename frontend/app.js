@@ -24,6 +24,7 @@ let defaultState = 'Active';
 let environment = null;
 let jobs = [];
 let branchStates = {};
+
 let wsBranches = null;
 let wsEnv = null;
 let wsErr = null;
@@ -88,15 +89,17 @@ function renderReleases() {
 function renderJobs() {
     const jobsList = document.getElementById('jobs-list');
     if (!jobsList) return;
-    if (!jobs.length) {
+    if (!environment) return;
+    if (!environment.length) {
         jobsList.innerHTML = '<p class="loading">No jobs found.</p>';
         return;
     }
-    jobsList.innerHTML = jobs.map(job => `
-        <div class="job-item">
+
+    jobsList.innerHTML = environment[0][1].map(job => {
+        return `<div class="job-item">
             <strong>${job.name}</strong> - ${job.status}
-        </div>
-    `).join('');
+        </div>`
+    }).join('');
 }
 
 stateSelector.onchange = (e) => {
@@ -123,6 +126,7 @@ function setupSocketIO() {
     wsEnv.on('environments', (data) => {
         environment = data;
         renderBranches();
+        renderJobs()
         showStatus('Environment updated via Socket.IO.');
     });
 

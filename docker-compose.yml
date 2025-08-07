@@ -2,7 +2,7 @@ version: '3.8'
 services:
   brencher-backend:
     build: .
-    image: registry.rudolf.keenetic.link/brencher:latest
+    image: registry.rudolf.keenetic.link/brencher:${version}
     ports:
       - "5000:5000"
     environment:

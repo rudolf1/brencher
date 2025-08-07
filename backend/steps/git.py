@@ -9,12 +9,11 @@ from enironment import Environment
 
 logger = logging.getLogger(__name__)
 
-@dataclass
-class GitClone(AbstractStep):
-    env: Environment = field(metadata={"ignore_json":True})
-    result: Union[str, BaseException] = BaseException("No result yet")
+class GitClone(AbstractStep[str]):
+    def __init__(self, env: Environment, **kwargs):
+        super().__init__(env, **kwargs)
 
-    def progress(self) -> None:
+    def progress(self) -> str | BaseException:
         try:
             # Create temporary directory for the clone
 
@@ -24,29 +23,34 @@ class GitClone(AbstractStep):
             logger.info(f"Cloning repository {self.env.repo} to {temp_dir}")
             git.Repo.clone_from(self.env.repo, temp_dir)
             
-            self.result = temp_dir
+            return temp_dir
             
         except Exception as e:
-            self.result = e
+            return e
 
 import hashlib
 
-@dataclass
-class CheckoutMerged(AbstractStep):
+class CheckoutMerged(AbstractStep[Tuple[str, str]]):
     wd: GitClone
     branches: List[str]
-    result: Union[Tuple[str, str], BaseException] = BaseException("No result yet")
 
-    def progress(self) -> None:
-        if self.wd.result is BaseException:
-            self.result = self.wd.result
-            return
+    def __init__(self, wd: GitClone, branches: List[str], **kwargs):
+        super().__init__(**kwargs)
+        self.wd = wd
+        self.branches = branches
 
-        repo_path = self.wd.result
+
+    def progress(self) -> Tuple[str, str] | BaseException:
+        if self.wd.result_obj is BaseException:
+            return self.wd.result_obj
+
+        repo_path = self.wd.result_obj
         if not isinstance(repo_path, str):
-            self.result = repo_path  # propagate the error (likely an exception)
-            return
+            return BaseException(f"Unknown repo path {repo_path}")
         
+        if len(self.branches) == 0:
+            return BaseException(f"Empty branches set")
+
         try:
             # Open the repository
             repo = git.Repo(repo_path)
@@ -66,8 +70,7 @@ class CheckoutMerged(AbstractStep):
                     repo.git.checkout(auto_branch_name)
                     commit_hash = repo.head.commit.hexsha
                     
-                    self.result = (auto_branch_name, commit_hash)
-                    return 
+                    return (auto_branch_name, commit_hash)
 
             # Auto branch doesn't exist, create it
             logger.info(f"Creating new auto branch: {auto_branch_name}")
@@ -92,8 +95,7 @@ class CheckoutMerged(AbstractStep):
                     error_message = f"Merge conflict when merging {branch}: {str(e)}"
                     logger.error(error_message)
                     
-                    self.result = BaseException(error_message)
-                    return
+                    return BaseException(error_message)
             
             # Create and push the auto branch
             repo.git.branch('-f', auto_branch_name)
@@ -101,10 +103,9 @@ class CheckoutMerged(AbstractStep):
             commit_hash = repo.head.commit.hexsha
             repo.git.push('-f', 'origin', auto_branch_name)
             
-            self.result = (auto_branch_name,commit_hash)
+            return (auto_branch_name,commit_hash)
             
         except Exception as e:
             error_message = f"Failed to create merged branch: {str(e)}"
             logger.error(error_message)
-            self.result = BaseException(error_message)
-            return
+            return BaseException(error_message)

@@ -1,6 +1,5 @@
 from dataclasses import dataclass, asdict, field
 from typing import List, Dict, Any, Optional, Tuple, Callable
-from steps.step import AbstractStep
 
 @dataclass
 class Environment:
