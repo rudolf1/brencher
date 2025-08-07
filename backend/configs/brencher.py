@@ -22,6 +22,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         docker_repo_password = "", 
                         docker_compose_path = "docker-compose.yml", 
                         docker_repo_url="https://registry.rudolf.keenetic.link", 
+                        publish=False,
                         envs = lambda: { "version": "auto-" + checkoutMerged.result[1][0:5] },
                         env=env
                     )

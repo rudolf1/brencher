@@ -18,6 +18,7 @@ class DockerComposeBuild(AbstractStep[List[str]]):
                  docker_repo_password:str, 
                  docker_compose_path:str, 
                  docker_repo_url: str,
+                 publish: bool,
                  envs: Callable[[], Dict[str, str]], **kwargs):
         super().__init__(**kwargs)
         self.wd = wd
@@ -26,6 +27,7 @@ class DockerComposeBuild(AbstractStep[List[str]]):
         self.docker_repo_password = docker_repo_password
         self.docker_compose_path = docker_compose_path
         self.docker_repo_url = docker_repo_url
+        self.publish = publish
 
     def progress(self) -> List[str]:    
     # def process(self, docker_compose_path: str, docker_repo_url: str, docker_repo_username: str, docker_repo_password: str) -> DockerBuildResult:
@@ -36,7 +38,8 @@ class DockerComposeBuild(AbstractStep[List[str]]):
         try:
             # Authenticate to docker repo
             client = docker.from_env()
-            client.login(username=self.docker_repo_username, password=self.docker_repo_password, registry=self.docker_repo_url)
+            if self.publish:
+                client.login(username=self.docker_repo_username, password=self.docker_repo_password, registry=self.docker_repo_url)
             env = self.envs()
             # Parse docker-compose file
             with open(self.docker_compose_path, 'r') as f:
@@ -50,20 +53,30 @@ class DockerComposeBuild(AbstractStep[List[str]]):
                 image = svc.get('image')
                 if not build_ctx or not image:
                     continue
+                if self.publish:
                 # Check if image exists in remote repo
-                try:
-                    client.images.pull(image)
-                    logger.info(f"Image {image} already exists in repo, skipping build.")
-                    continue
-                except Exception:
-                    pass
-                # Build image
+                    try:
+                        client.images.pull(image)
+                        logger.info(f"Image {image} already exists in repo, skipping build.")
+                        continue
+                    except Exception:
+                        pass
+                else:
+                    # Check if image exists locally
+                    try:
+                        client.images.get(image)
+                        logger.info(f"Image {image} already exists locally, skipping build.")
+                        continue
+                    except docker.errors.ImageNotFound:
+                        pass
+
                 logger.info(f"Building image {image} from {build_ctx}")
                 client.images.build(path=build_ctx, tag=image)
-                # Push image
-                logger.info(f"Pushing image {image}")
-                for line in client.images.push(image, stream=True, decode=True):
-                    logger.debug(line)
+
+                if self.publish:
+                    logger.info(f"Pushing image {image}")
+                    for line in client.images.push(image, stream=True, decode=True):
+                        logger.debug(line)
                 images_built.append(image)
             return images_built
         except Exception as e:
@@ -79,7 +92,7 @@ class DockerSwarmDeploy(AbstractStep):
         super().__init__(**kwargs)
         self.wd = wd
         self.envs = envs
-        self.docker_compose_path = docker_compose_path
+        self.docker_compose_path = os.path.join(self.wd.result, self.docker_compose_path)
         self.stack_name = stack_name
 
     def progress(self) -> None:
@@ -92,6 +105,12 @@ class DockerSwarmDeploy(AbstractStep):
             with open(self.docker_compose_path, 'r') as f:
                 content = f.read()
                 content = re.sub(r'\$\{([^}]+)\}', lambda m: env.get(m.group(1), ""), content)
+                compose = yaml.safe_load(content)
+                if "services" in compose:
+                    for svc in compose["services"].values():
+                        if "build" in svc:
+                            del svc["build"]
+                content = yaml.safe_dump(compose)
             tmp_compose_path = self.docker_compose_path + ".tmp"
             with open(tmp_compose_path, 'w') as f:
                 f.write(content)

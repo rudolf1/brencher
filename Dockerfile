@@ -24,4 +24,4 @@ ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Start the Flask app
-CMD ["uv", "pip", "run", "python", "backend/app.py"]
+CMD ["python3", "backend/app.py"]
