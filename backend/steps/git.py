@@ -81,6 +81,9 @@ class CheckoutMerged(AbstractStep[Tuple[str, str]]):
         
         # Create temporary branch for merging
         temp_branch = f"temp-merge-{branch_hash}"
+        # Remove temp_branch if it exists
+        if temp_branch in repo.heads:
+            repo.git.branch('-D', temp_branch)
         repo.git.checkout('-b', temp_branch)
         
         # Merge the rest of the branches
