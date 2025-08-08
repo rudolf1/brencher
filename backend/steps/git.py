@@ -58,7 +58,7 @@ class CheckoutMerged(AbstractStep[Tuple[str, str]]):
         # Extract commit ids for the selected branches
         commit_ids = []
         for branch in self.branches:
-            commit = repo.commit(branch)
+            commit = repo.commit(f'origin/{branch}')
             commit_ids.append(commit.hexsha)
 
         # Calculate hash by commits (sorted for determinism)
