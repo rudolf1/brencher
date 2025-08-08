@@ -17,7 +17,7 @@ def do_job(
                 step.do_job()
                 onupdate()
         
-        except Exception as e:
+        except BaseException as e:
             error_msg = f"Error processing release {env.id}: {str(e)}"
             logger.error(error_msg)
             onupdate()

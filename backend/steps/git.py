@@ -14,11 +14,11 @@ class GitClone(AbstractStep[str]):
     def __init__(self, env: Environment, **kwargs):
         super().__init__(env, **kwargs)
         self.temp_dir = os.path.join(tempfile.gettempdir(), f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
-        os.makedirs(self.temp_dir, exist_ok=True)
 
     def progress(self) -> str:
 
         logger.info(f"Cloning repository {self.env.repo} to {self.temp_dir}")
+        os.makedirs(self.temp_dir, exist_ok=True)
         if os.path.exists(os.path.join(self.temp_dir, ".git")):
             logger.info(f"Repository already cloned at {self.temp_dir}, fetching updates.")
             repo = git.Repo(self.temp_dir)
@@ -55,10 +55,21 @@ class CheckoutMerged(AbstractStep[Tuple[str, str]]):
         repo = git.Repo(repo_path)
 
         logger.info(f"Selected branches: {self.branches}")
+        # Extract commit ids for the selected branches
+        commit_ids = []
+        for branch in self.branches:
+            commit = repo.commit(branch)
+            commit_ids.append(commit.hexsha)
+
+        # Calculate hash by commits (sorted for determinism)
+        sorted_commits = sorted(commit_ids)
+        commit_hash = hashlib.sha1(''.join(sorted_commits).encode()).hexdigest()
+        logger.info(f"Commit ids for branches: {dict(zip(self.branches, commit_ids))}")
+        logger.info(f"Hash by commits: {commit_hash}")
         # Generate hash from branch names
-        sorted_branches = sorted(self.branches)
-        branch_hash = hashlib.sha1(''.join(sorted_branches).encode()).hexdigest()
-        auto_branch_name = f"auto/{branch_hash}"
+        # sorted_branches = sorted(self.branches)
+        # branch_hash = hashlib.sha1(''.join(sorted_branches).encode()).hexdigest()
+        auto_branch_name = f"auto/{commit_hash}"
         
         logger.info(f"Looking for existing auto branch: {auto_branch_name}")
         
@@ -80,7 +91,7 @@ class CheckoutMerged(AbstractStep[Tuple[str, str]]):
         repo.git.checkout(base_branch)
         
         # Create temporary branch for merging
-        temp_branch = f"temp-merge-{branch_hash}"
+        temp_branch = f"temp-merge-{commit_hash}"
         # Remove temp_branch if it exists
         if temp_branch in repo.heads:
             repo.git.branch('-D', temp_branch)
