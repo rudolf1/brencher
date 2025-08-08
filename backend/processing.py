@@ -14,9 +14,8 @@ def do_job(
             if env.state != 'Active':
                 continue
             for step in pipe:
-                if isinstance(step, AbstractStep):
-                    step.do_job()
-                    onupdate()
+                step.do_job()
+                onupdate()
         
         except Exception as e:
             error_msg = f"Error processing release {env.id}: {str(e)}"

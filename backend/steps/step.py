@@ -38,5 +38,5 @@ class AbstractStep(ABC, Generic[T]):
             self._result = e
 
     @abstractmethod
-    def progress(self) -> T | BaseException:
+    def progress(self) -> T:
         pass

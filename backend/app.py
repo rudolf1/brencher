@@ -133,7 +133,7 @@ if __name__ == '__main__':
     def branch_refresh_thread():
         while True:
             fetch_branches()
-            socketio.emit('branches', branches)
+            socketio.emit('branches', branches, namespace='/ws/branches')
             time.sleep(300)  # 5 minutes
 
     # Start branch refresh thread
@@ -144,7 +144,7 @@ if __name__ == '__main__':
     def processing_thread():
         while True:
             import processing
-            processing.do_job(environments, lambda: socketio.emit('environments', get_envs_to_emit()))
+            processing.do_job(environments, lambda: socketio.emit('environments', get_envs_to_emit(), namespace='/ws/environment'))
             time.sleep(10)
     processing = threading.Thread(target=processing_thread)
     processing.daemon = True

@@ -92,17 +92,20 @@ class DockerSwarmDeploy(AbstractStep):
         super().__init__(**kwargs)
         self.wd = wd
         self.envs = envs
-        self.docker_compose_path = os.path.join(self.wd.result, self.docker_compose_path)
+        self.docker_compose_path = docker_compose_path
         self.stack_name = stack_name
 
     def progress(self) -> None:
         """
         Deploys to Docker Swarm using the specified docker-compose.yaml.
         """
+        if isinstance(self.wd.result, BaseException):
+            raise self.wd.result
         try:
             env = self.envs()
             # Prepare docker-compose file with env substitution
-            with open(self.docker_compose_path, 'r') as f:
+            docker_compose_absolute_path = os.path.join(self.wd.result, self.docker_compose_path)
+            with open(docker_compose_absolute_path, 'r') as f:
                 content = f.read()
                 content = re.sub(r'\$\{([^}]+)\}', lambda m: env.get(m.group(1), ""), content)
                 compose = yaml.safe_load(content)
@@ -111,7 +114,7 @@ class DockerSwarmDeploy(AbstractStep):
                         if "build" in svc:
                             del svc["build"]
                 content = yaml.safe_dump(compose)
-            tmp_compose_path = self.docker_compose_path + ".tmp"
+            tmp_compose_path = docker_compose_absolute_path + ".tmp"
             with open(tmp_compose_path, 'w') as f:
                 f.write(content)
 
