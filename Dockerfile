@@ -4,7 +4,7 @@ FROM python:3.11-slim
 # Install uv (if not present)
 RUN pip install uv
 # Install git
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git docker.io && rm -rf /var/lib/apt/lists/*
 # Set workdir
 WORKDIR /app
 
