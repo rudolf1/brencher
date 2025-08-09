@@ -34,7 +34,7 @@ class AbstractStep(ABC, Generic[T]):
         try:
             self._result = self.progress()
         except Exception as e:
-            logger.error(f"Job failed: {e}")
+            logger.error(f"Job failed",exc_info=e)
             self._result = e
 
     @abstractmethod
