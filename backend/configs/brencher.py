@@ -32,7 +32,10 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         docker_compose_path = "docker-compose.yml", 
                         docker_repo_url="https://registry.rudolf.keenetic.link", 
                         publish=False,
-                        envs = lambda: { "version": "auto-" + checkoutMerged.result.version },
+                        envs = lambda: { 
+                            "version": "auto-" + checkoutMerged.result.version,
+                            "user_group" : "1000:137" 
+                        },
                         env=env
                     )
     deployDocker = DockerSwarmDeploy(

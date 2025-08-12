@@ -34,6 +34,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         publish=False,
                         envs = lambda: { 
                             "version": "auto-" + checkoutMerged.result.version,
+                            "user_group" : "1000:998" 
                         },
                         env=env
                     )
