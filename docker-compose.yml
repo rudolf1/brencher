@@ -13,7 +13,7 @@ services:
       - PYTHONUNBUFFERED=1
       - VIRTUAL_HOST=brencher.rudolf.keenetic.link
       - LETSENCRYPT_HOST=brencher.rudolf.keenetic.link
-      - PROFILES=brencher_local
+      - PROFILES=brencher
     deploy:
       replicas: 1
       restart_policy:
