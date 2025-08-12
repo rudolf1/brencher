@@ -64,7 +64,6 @@ branches = {}
 state_lock = threading.Lock()
 
 def fetch_branches():
-    global branches, environments
 
     for e, _ in environments:
         url = e.repo
