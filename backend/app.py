@@ -180,7 +180,12 @@ if __name__ == '__main__':
     def processing_thread():
         while True:
             import processing
-            processing.do_job(environments, lambda: socketio.emit('environments', get_envs_to_emit(), namespace='/ws/environment'))
+            def emit_envs():
+                try:
+                    socketio.emit('environments', get_envs_to_emit(), namespace='/ws/environment')
+                except Exception as e:
+                    logger.error(f"Error emitting environments: {str(e)}")
+            processing.do_job(environments, lambda: emit_envs())
             environment_update_event.wait(timeout=1000)
             environment_update_event.clear()
 
