@@ -81,6 +81,11 @@ All steps must inherit from BaseStep and implement idempotent behavior. This mea
     Deploys to swarm service described in specified docker-compose.yaml
 
 # TODOs
+    - brancher testing:
+        dev stage
+        dev stage deploys something 2 times
+        promote to prod stage
+
     - pipeline: add reverse flow. We need to understand what is deployed
 
     - pipeline: add health check.
