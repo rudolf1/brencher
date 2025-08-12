@@ -3,7 +3,7 @@ services:
   brencher-backend:
     build: .
     image: registry.rudolf.keenetic.link/brencher:${version}
-    user: 1000:998
+    user: 1000:137
     ports:
       - "5001:5001"
     container_name: brencher-backend
