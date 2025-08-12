@@ -79,3 +79,24 @@ All steps must inherit from BaseStep and implement idempotent behavior. This mea
 ## DockerSwarmDeploy
 ### Logic
     Deploys to swarm service described in specified docker-compose.yaml
+
+# TODOs
+    - pipeline: add reverse flow. We need to understand what is deployed
+
+    - pipeline: add health check.
+    - pipeline: add teamcity support
+    - pipeline: add udploy support
+    - pipeline: fetch more frequently
+    - pipeline: fetch Git steps, not in separate method
+    - pipeline: Trigger next step only if result of previous changed.
+
+    - version: leave only root commits. It will prevent redeploy in case already merged branch selected
+    + git: No sense to generate branch name from hash. Used concatenation of root commits.
+
+    - docker: skip if correct stack already deployed. Only image tags compared. Need more.
+    - docker: I guess label for container should be added.
+    - docker: Or find keys for docker swarm to skip deploy if no changes.
+
+    - Write test to cover usecases.
+    - Blocker!!! Not able to push in docker.
+    - Blocker!!! Not able to push in git. Do not lookup local branches.

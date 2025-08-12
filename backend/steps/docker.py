@@ -127,11 +127,6 @@ class DockerSwarmDeploy(AbstractStep[str]):
         if isinstance(self.buildDocker.result, BaseException):
             raise self.buildDocker.result
 
-        # TODO skip if correct stack already deployed
-            # Only image tags compared. Need more.
-        # TODO I guess label for container should be added.
-        # TODO Or find keys for docker swarm to skip deploy if no changes.
-
         env = self.envs()
         # Prepare docker-compose file with env substitution
         docker_compose_absolute_path = os.path.join(self.wd.result, self.docker_compose_path)

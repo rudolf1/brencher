@@ -22,10 +22,6 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         git_user_name="brencher_bot"
             )
     
-# git config --global user.email "rudolfss13@gmail.com"
-# git config --global user.name "brencher_bot"
-
-
     buildDocker = DockerComposeBuild(clone,
                         docker_repo_username = "", 
                         docker_repo_password = "", 
@@ -54,11 +50,6 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         checkoutMerged,
         buildDocker,
         deployDocker,
-        # TODO add health check.
-        # TODO add reverse flow. We need to understand what is deployed
-        # TODO add teamcity support
-        # TODO add udploy support
-
     ]
 
 brencher: Tuple[Environment, List[AbstractStep]] = (env, create_pipeline(env))
