@@ -23,11 +23,39 @@ logger = logging.getLogger(__name__)
 load_dotenv("local.env")
 load_dotenv('/run/secrets/brencher-secrets')
 
+class DataclassJSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if hasattr(o, '__dataclass_fields__'):
+            return asdict(o)
+        if isinstance(o, BaseException):
+            return str(o)
+        try:
+            return super().default(o)
+        except TypeError:
+            return str(o)
+
+import types
+custom_json = types.SimpleNamespace()
+custom_json.dumps = lambda obj, **kwargs: json.dumps(obj, cls=DataclassJSONEncoder, **kwargs)
+custom_json.loads = json.loads
+
+from flask.json.provider import DefaultJSONProvider
+
+class DataclassJSONProvider(DefaultJSONProvider):
+    def dumps(self, obj, **kwargs):
+        return json.dumps(obj, cls=DataclassJSONEncoder, **kwargs)
+    def loads(self, s, **kwargs):
+        return json.loads(s, **kwargs)
+
 app = Flask(__name__, static_folder='frontend')
-socketio = SocketIO(app, cors_allowed_origins="*")
+app.json = DataclassJSONProvider(app)
+socketio = SocketIO(app, cors_allowed_origins="*", json=custom_json)
 
 import configs.brencher
-environments = [configs.brencher.brencher]
+import configs.brencher_local
+environments = [configs.brencher.brencher, configs.brencher_local.brencher_local]
+profiles = os.getenv('PROFILES', 'brencher_local').split(',')
+environments = [e for e in environments if e[0].id in profiles]
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
 
@@ -106,19 +134,25 @@ def get_envs_to_emit():
             env_dtos.append((env, res))
         return env_dtos
 
+environment_update_event = threading.Event()
+
 class EnvironmentNamespace(Namespace):
 
     def on_connect(self, auth=None):
         emit('environments', get_envs_to_emit())
 
     def on_update(self, data):
-        # Accept environment update from UI
-        # Update environments and broadcast
+        global environments
+
+        logger.info(f"Received environment update: {data}")
+
         for e, _ in environments:
             if e.id == data.get('id'):
                 e.state = data.get('state', e.state)
                 e.branches = data.get('branches', e.branches)
-        emit('environments', get_envs_to_emit(), broadcast=True)
+                logger.info(f"Updated environment {e.id} state to {e.state} and branches to {e.branches}")
+        environment_update_event.set()
+        emit('environments', get_envs_to_emit(), namespace='/ws/environment')
 
 class ErrorsNamespace(Namespace):
     def on_connect(self, auth=None):
@@ -147,7 +181,9 @@ if __name__ == '__main__':
         while True:
             import processing
             processing.do_job(environments, lambda: socketio.emit('environments', get_envs_to_emit(), namespace='/ws/environment'))
-            time.sleep(10)
+            environment_update_event.wait(timeout=1000)
+            environment_update_event.clear()
+
     processing = threading.Thread(target=processing_thread)
     processing.daemon = True
     processing.start()

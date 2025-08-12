@@ -6,9 +6,9 @@ from enironment import Environment
 from typing import List, Dict, Any, Optional, Tuple
 from steps.step import AbstractStep
 
-env = Environment(
-    id="brencher",
-    branches=["main"],
+env_local = Environment(
+    id="brencher_local",
+    branches=["main", "main_local"],
     state="Active",
     repo="https://github.com/rudolf1/brencher.git",
 )
@@ -32,17 +32,19 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         docker_compose_path = "docker-compose.yml", 
                         docker_repo_url="https://registry.rudolf.keenetic.link", 
                         publish=False,
-                        envs = lambda: { "version": "auto-" + checkoutMerged.result.version },
+                        envs = lambda: { 
+                            "version": "auto-" + checkoutMerged.result.version,
+                        },
                         env=env
                     )
     deployDocker = DockerSwarmDeploy(
         wd=clone,
         buildDocker=buildDocker,
         envs = lambda: { 
-            "version": "auto-" + checkoutMerged.result.version,
-            "user_group" : "1000:137"
-       },
-        stack_name = "brencher",
+                "version": "auto-" + checkoutMerged.result.version,
+                "user_group" : "1000:998" 
+                },
+        stack_name = "brencher_local",
         docker_compose_path = "docker-compose.yml", 
         env=env, 
     )
@@ -50,7 +52,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         clone,
         checkoutMerged,
         buildDocker,
-        deployDocker,
+        # deployDocker,
         # TODO add health check.
         # TODO add reverse flow. We need to understand what is deployed
         # TODO add teamcity support
@@ -58,5 +60,5 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
 
     ]
 
-brencher: Tuple[Environment, List[AbstractStep]] = (env, create_pipeline(env))
+brencher_local: Tuple[Environment, List[AbstractStep]] = (env_local, create_pipeline(env_local))
 

@@ -168,7 +168,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
 
         # Deploy stack to Docker Swarm
         cmd = [
-            "docker", "stack", "deploy",
+            "docker", "stack", "deploy", "--detach=true"
             "-c", tmp_compose_path,
             self.stack_name
         ]

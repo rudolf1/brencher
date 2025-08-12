@@ -62,11 +62,13 @@ function renderBranches() {
             } else {
                 selectedBranches = selectedBranches.filter(b => b !== value);
             }
+            updateEnvironment(); // Send update on check/uncheck
         };
     });
     branchesList.querySelectorAll('.branch-state').forEach(sel => {
         sel.onchange = (e) => {
             branchStates[e.target.dataset.branch] = e.target.value;
+            updateEnvironment(); // Send update on state change
         };
     });
 }
@@ -97,13 +99,14 @@ function renderJobs() {
 
     jobsList.innerHTML = environment[0][1].map(job => {
         return `<div class="job-item">
-            <strong>${job.name}</strong> - ${job.status}
+            <strong>${job.name}</strong> - ${JSON.stringify(job.status)}
         </div>`
     }).join('');
 }
 
 stateSelector.onchange = (e) => {
     defaultState = e.target.value;
+    updateEnvironment(); // Send update on state change
 };
 
 refreshBranchesBtn.onclick = () => {
@@ -125,11 +128,21 @@ function setupSocketIO() {
 
     wsEnv.on('environments', (data) => {
         environment = data;
+        // Sync selectedBranches with EnvironmentDto
+        if (Array.isArray(environment) && environment.length > 0 && environment[0][0] && environment[0][0].branches) {
+            selectedBranches = environment[0][0].branches.map(b => Array.isArray(b) ? b[0] : b);
+        }
         renderBranches();
-        renderJobs()
+        renderJobs();
         showStatus('Environment updated via Socket.IO.');
     });
 
+    wsEnv.on('disconnect', () => {
+        showStatus('Disconnected from environment websocket.', true);
+    });
+    wsBranches.on('disconnect', () => {
+        showStatus('Disconnected from branches websocket.', true);
+    });
     wsErr.on('error', (data) => {
         showStatus(data.message || 'Unknown error', true);
     });
@@ -141,7 +154,8 @@ function sendEnvironmentUpdate(envUpdate) {
 
 function updateEnvironment() {
     const envUpdate = {
-        branches: selectedBranches.map(branch => [branch, branch]), // adjust as needed
+        id: environment && environment.length > 0 ? environment[0][0].id : null, // Assuming first element has the ID
+        branches: selectedBranches.map(branch => branch), // adjust as needed
         state: defaultState
     };
     sendEnvironmentUpdate(envUpdate);

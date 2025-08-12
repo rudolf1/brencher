@@ -43,16 +43,14 @@ class CheckoutAndMergeResult:
 
 class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
     wd: GitClone
-    branches: List[str]
 
-    def __init__(self, wd: GitClone, branches: List[str],
+    def __init__(self, wd: GitClone,
                         git_user_email,
                         git_user_name,
                         push: bool = True,
                   **kwargs):
         super().__init__(**kwargs)
         self.wd = wd
-        self.branches = branches
         self.git_user_email = git_user_email
         self.git_user_name = git_user_name
         self.push = push
@@ -87,7 +85,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         if not isinstance(repo_path, str):
             raise BaseException(f"Unknown repo path {repo_path}")
         
-        if len(self.branches) == 0:
+        if len(self.env.branches) == 0:
             raise BaseException(f"Empty branches set")
 
         # Open the repository
@@ -96,10 +94,10 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         with repo.config_writer() as cw:
             cw.set_value("user", "email", self.git_user_email)
             cw.set_value("user", "name", self.git_user_name)
-        logger.info(f"Selected branches: {self.branches}")
+        logger.info(f"Selected branches: {self.env.branches}")
         # Extract commit ids for the selected branches
         commit_ids: Dict[Commit, str] = {}
-        for br in self.branches:
+        for br in self.env.branches:
             commit = repo.commit(f'origin/{br}')
             commit_ids[commit] = br
 
