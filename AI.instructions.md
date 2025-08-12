@@ -1,3 +1,11 @@
+docker run -it --rm \
+-v /media/DATA/src/brencher:/br \
+-v /var/run/docker.sock:/var/run/docker.sock \
+registry.rudolf.keenetic.link/brencher:auto-b62e6 \
+/bin/bash
+
+
+
 # Startup config .env
 - Git repository url
 - Authentication username

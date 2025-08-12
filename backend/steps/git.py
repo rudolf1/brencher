@@ -35,14 +35,27 @@ class GitClone(AbstractStep[str]):
             
 import hashlib
 
-class CheckoutMerged(AbstractStep[Tuple[str, str]]):
+@dataclass
+class CheckoutAndMergeResult:
+    branch_name: str
+    commit_hash: str
+    version: str
+
+class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
     wd: GitClone
     branches: List[str]
 
-    def __init__(self, wd: GitClone, branches: List[str], **kwargs):
+    def __init__(self, wd: GitClone, branches: List[str],
+                        git_user_email,
+                        git_user_name,
+                        push: bool = True,
+                  **kwargs):
         super().__init__(**kwargs)
         self.wd = wd
         self.branches = branches
+        self.git_user_email = git_user_email
+        self.git_user_name = git_user_name
+        self.push = push
 
     def _commits_tree(self, repo: git.Repo) -> Dict[Commit, List[Commit]]:
         childs: Dict[Commit, List[Commit]] = {}
@@ -66,7 +79,7 @@ class CheckoutMerged(AbstractStep[Tuple[str, str]]):
                 
         return visited
 
-    def progress(self) -> Tuple[str, str]:
+    def progress(self) -> CheckoutAndMergeResult:
         if self.wd.result_obj is BaseException:
             raise self.wd.result_obj
 
@@ -79,22 +92,28 @@ class CheckoutMerged(AbstractStep[Tuple[str, str]]):
 
         # Open the repository
         repo = git.Repo(repo_path)
-
+        # Set user email and name for the repo
+        with repo.config_writer() as cw:
+            cw.set_value("user", "email", self.git_user_email)
+            cw.set_value("user", "name", self.git_user_name)
         logger.info(f"Selected branches: {self.branches}")
         # Extract commit ids for the selected branches
         commit_ids: Dict[Commit, str] = {}
-        for branch in self.branches:
-            commit = repo.commit(f'origin/{branch}')
-            commit_ids[commit] = branch
+        for br in self.branches:
+            commit = repo.commit(f'origin/{br}')
+            commit_ids[commit] = br
+
+        logger.info(f"Commit ids for branches: {commit_ids}")
 
         tree = self._commits_tree(repo)
 
         merge_commit = [(c, self._find_merge_childs(tree, c)) for c in commit_ids.keys()]
-        result = merge_commit[0]
+        result = set(merge_commit[0][1])
         for c, l in merge_commit[1:]:
-            inters = set(result).intersection(set(l))
-            if len(inters) == 0:
+            result = set(result).intersection(set(l))
+            if len(result) == 0:
                 break
+
         if len(result) > 0:
             merge_commit = [c for c in merge_commit[0][1] if c in result][0]
             logger.info(f"Common commit found {merge_commit}")
@@ -102,24 +121,30 @@ class CheckoutMerged(AbstractStep[Tuple[str, str]]):
             merge_commit = None
             logger.info(f"Common commit not found")
 
-        if merge_commit is not None:
-            for head in repo.branches:
-                if head.commit.hexsha == merge_commit.hexsha:
-                    logger.info(f"Merge commit {merge_commit} corresponds to branch {head}")
-                    return (head.name, merge_commit.hexsha)
         sorted_commits = sorted(commit_ids.keys(), key=lambda x: x.hexsha)
         auto_branch_hash = hashlib.sha1(''.join([x.hexsha for x in sorted_commits]).encode()).hexdigest()
-        logger.info(f"Commit ids for branches: {commit_ids}")
-
         auto_branch_name = f"auto/{auto_branch_hash}"
+        version = '-'.join([x.hexsha[0:5] for x in sorted_commits])
+        if merge_commit is not None:
+            for head in repo.branches:
+                if head.is_remote and head.commit.hexsha == merge_commit.hexsha:
+                    logger.info(f"Merge commit {merge_commit} corresponds to branch {head}")
+                    return CheckoutAndMergeResult(head.name, merge_commit.hexsha, version)
+        # TODO No sense to generate branch name from hash. Just use commit it after merge.
+        # TODO Not sure. Think about it.
+        # TODO Write test to cover usecases.
+        # TODO Blocker!!! Not able to push in docker.
+        # TODO Blocker!!! Do not lookup local branches.
+
 
         if merge_commit is not None:
             repo.git.branch('-f', auto_branch_name, merge_commit.hexsha)
             repo.git.checkout(auto_branch_name)
-            repo.git.push('-f', 'origin', auto_branch_name)
             logger.info(f"Head is {repo.head.commit}")
-            logger.info(f"Pushed {merge_commit} to {auto_branch_name}")
-            return (auto_branch_name, merge_commit.hexsha)
+            if self.push:
+                repo.git.push('-f', 'origin', auto_branch_name)
+                logger.info(f"Pushed {merge_commit} to {auto_branch_name}")
+            return CheckoutAndMergeResult(auto_branch_name, merge_commit.hexsha, version)
         
         logger.info(f"Looking for existing auto branch: {auto_branch_name}")
         
@@ -131,40 +156,35 @@ class CheckoutMerged(AbstractStep[Tuple[str, str]]):
                 repo.git.checkout(auto_branch_name)
                 auto_branch_hash = repo.head.commit.hexsha
                 
-                return (auto_branch_name, auto_branch_hash)
+                return CheckoutAndMergeResult(auto_branch_name, auto_branch_hash, version)
 
+        repo.git.checkout(repo.head.commit.hexsha)
+        if auto_branch_name in repo.branches:
+            repo.git.branch('-D', auto_branch_name)
         # Auto branch doesn't exist, create it
         logger.info(f"Creating new auto branch: {auto_branch_name}")
         
-        # Start with the first branch
-        base_branch = self.branches[0]
-        repo.git.checkout(base_branch)
-        
-        # Create temporary branch for merging
-        temp_branch = f"temp-merge-{auto_branch_hash}"
-        # Remove temp_branch if it exists
-        if temp_branch in repo.heads:
-            repo.git.branch('-D', temp_branch)
-        repo.git.checkout('-b', temp_branch)
+        commits = list(commit_ids.keys())
+        repo.git.branch('-f', auto_branch_name,  commits[0].hexsha)
+        repo.git.checkout(auto_branch_name)
         
         # Merge the rest of the branches
-        for branch in self.branches[1:]:
+        for commit in commits[1:]:
             try:
-                logger.info(f"Merging branch: {branch}")
-                repo.git.merge(branch, '--no-ff')
+                logger.info(f"Merging commit: {commit}")
+                repo.git.merge(commit, '--no-ff')
             except git.GitCommandError as e:
                 # Handle merge conflicts according to predefined rules
                 # For now, we'll abort the merge and report failure
                 repo.git.merge('--abort')
-                error_message = f"Merge conflict when merging {branch}: {str(e)}"
+                error_message = f"Merge conflict when merging {commit}: {str(e)}"
                 logger.error(error_message)
                 
                 raise BaseException(error_message)
         
-        # Create and push the auto branch
-        repo.git.branch('-f', auto_branch_name)
-        repo.git.checkout(auto_branch_name)
-        auto_branch_hash = repo.head.commit.hexsha
-        repo.git.push('-f', 'origin', auto_branch_name)
         
-        return (auto_branch_name,auto_branch_hash)
+        auto_branch_hash = repo.head.commit.hexsha
+        if self.push:
+            logger.info(f"Pushing {auto_branch_hash} to {auto_branch_name}")
+            repo.git.push('-f', 'origin', auto_branch_name)
+        return CheckoutAndMergeResult(auto_branch_name,auto_branch_hash, version)

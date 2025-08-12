@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
 load_dotenv("local.env")
+load_dotenv('/run/secrets/brencher-secrets')
+
 app = Flask(__name__, static_folder='frontend')
 socketio = SocketIO(app, cors_allowed_origins="*")
 

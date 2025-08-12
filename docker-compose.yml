@@ -3,10 +3,13 @@ services:
   brencher-backend:
     build: .
     image: registry.rudolf.keenetic.link/brencher:${version}
+    user: 1000:998
     ports:
       - "5000:5000"
+    container_name: brencher-backend
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/passwd:/etc/passwd
     environment:
       - PYTHONUNBUFFERED=1
     deploy:
@@ -15,6 +18,12 @@ services:
         condition: on-failure
     networks:
       - brencher-net
+    secrets:
+      - brencher-secrets
+
+secrets:
+  brencher-secrets:
+    external: true
 
 networks:
   brencher-net:
