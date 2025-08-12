@@ -17,6 +17,7 @@ services:
       restart_policy:
         condition: on-failure
     networks:
+      - default
       - brencher-net
     secrets:
       - brencher-secrets
