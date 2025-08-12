@@ -18,7 +18,7 @@ COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 
 # Expose port for Flask
-EXPOSE 5000
+EXPOSE 5001
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

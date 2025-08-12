@@ -5,7 +5,7 @@ services:
     image: registry.rudolf.keenetic.link/brencher:${version}
     user: 1000:998
     ports:
-      - "5000:5000"
+      - "5001:5001"
     container_name: brencher-backend
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
