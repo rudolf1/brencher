@@ -8,7 +8,7 @@ from steps.step import AbstractStep
 
 env = Environment(
     id="brencher",
-    branches=["main", "small_fix"],
+    branches=["main"],
     state="Active",
     repo="https://github.com/rudolf1/brencher.git",
 )
