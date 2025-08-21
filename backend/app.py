@@ -199,6 +199,7 @@ if __name__ == '__main__':
                 except Exception as e:
                     logger.error(f"Error emitting environments: {str(e)}")
             with state_lock:
+                logger.error(f"Processing")
                 processing.process_all_jobs(environments, lambda: emit_envs())
             environment_update_event.wait(timeout=1*60)
             environment_update_event.clear()
