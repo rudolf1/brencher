@@ -175,8 +175,9 @@ if __name__ == '__main__':
                                     if not branch_name.startswith('auto/'): # Skip auto branches
                                         new_branches.append(branch_name)
 
-                            branches [env.id]= new_branches
+                            branches[env.id]= new_branches
                             logger.info(f"Fetched {env.id}: {len (new_branches)} branches")
+                            environment_update_event.set()
                         except BaseException as e:
                             socketio.emit('error', {'message': e}, namespace='/ws/errors')
         while True:
