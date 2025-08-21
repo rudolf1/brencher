@@ -112,7 +112,7 @@ class EnvironmentNamespace(Namespace):
         for e, _ in environments:
             if e.id == data.get('id'):
                 e.branches = data.get('branches', e.branches)
-                logger.info(f"Updated environment {e.id} state to {e.state} and branches to {e.branches}")
+                logger.info(f"Updated environment {e.id} branches to {e.branches}")
         environment_update_event.set()
         emit('environments', get_envs_to_emit(), namespace='/ws/environment')
 
