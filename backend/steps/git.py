@@ -1,6 +1,7 @@
 import tempfile
 import git
 from git.objects import Commit
+from git.refs import Reference
 import logging
 from dataclasses import dataclass, asdict, field
 from typing import List, Optional, Union, Tuple, Set, Iterator, Dict
@@ -128,11 +129,6 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
                 if head.is_remote and head.commit.hexsha == merge_commit.hexsha:
                     logger.info(f"Merge commit {merge_commit} corresponds to branch {head}")
                     return CheckoutAndMergeResult(head.name, merge_commit.hexsha, version)
-        # TODO No sense to generate branch name from hash. Just use commit it after merge.
-        # TODO Not sure. Think about it.
-        # TODO Write test to cover usecases.
-        # TODO Blocker!!! Not able to push in docker.
-        # TODO Blocker!!! Do not lookup local branches.
 
 
         if merge_commit is not None:

@@ -83,12 +83,48 @@ class DockerComposeBuild(AbstractStep[List[str]]):
         except Exception as e:
             raise e
 
+
+@dataclass
+class DockerSwarmCheckResult:
+    name: str
+    image: str
+    stack: str
+    version: str
+
+class DockerSwarmCheck(AbstractStep[Dict[str, DockerSwarmCheckResult]]):
+
+    def __init__(self, 
+                 stack_name: str, 
+                 **kwargs):
+        super().__init__(**kwargs)
+        self.stack_name = stack_name
+
+    def progress(self) -> Dict[str, DockerSwarmCheckResult]:
+
+        client = docker.DockerClient(base_url='unix://var/run/docker.sock')
+        current_services = {}
+        for svc in client.services.list():
+            attrs = client.services.get(svc.id).attrs
+            name = attrs["Spec"]["Name"].replace(self.stack_name + "_", "")
+            if attrs["Spec"]["Labels"].get("com.docker.stack.namespace", "") == self.stack_name:
+                logger.info(f"Service {svc.name} is running with image {attrs}")
+                current_services[name] = DockerSwarmCheckResult(
+                    name = name,
+                    image   = attrs["Spec"]["Labels"].get("com.docker.stack.image", ""),
+                    stack   = attrs["Spec"]["Labels"].get("com.docker.stack.namespace", ""),
+                    version = attrs["Spec"]["TaskTemplate"]["ContainerSpec"]["Labels"].get("org.brencher.version", ""),
+                )
+
+        logger.info(f"Current services in stack '{self.stack_name}': {current_services}")    
+        return current_services
+
 class DockerSwarmDeploy(AbstractStep[str]):
     def __init__(self, 
                  wd: GitClone, 
                  buildDocker: DockerComposeBuild,
+                 stackChecker: DockerSwarmCheck,
                  docker_compose_path: str, 
-                 envs: Callable[[], Dict[str, str]], 
+                 envs: Callable[[], Dict[str, Any]], 
                  stack_name: str, 
                  **kwargs):
         super().__init__(**kwargs)
@@ -97,26 +133,8 @@ class DockerSwarmDeploy(AbstractStep[str]):
         self.envs = envs
         self.docker_compose_path = docker_compose_path
         self.stack_name = stack_name
+        self.stackChecker = stackChecker
 
-    def _get_stack_state(self, stack_name):
-        current_services = {}
-        cmd_ps = [
-            "docker", "service", "ls", "--format", "{{.Name}}"
-        ]
-        ps_result = subprocess.run(cmd_ps, capture_output=True, text=True, check=True)
-        stack_svc_names = ps_result.stdout.strip().splitlines()
-        for svc_name in stack_svc_names:
-            if not svc_name.startswith(stack_name + "_"):
-                continue
-            cmd_inspect = [
-                "docker", "service", "inspect", svc_name, "--format", "{{.Spec.TaskTemplate.ContainerSpec.Image}}"
-            ]
-            inspect_result = subprocess.run(cmd_inspect, capture_output=True, text=True, check=True)
-            image_tag = inspect_result.stdout.strip()
-            service_name = svc_name.removeprefix(self.stack_name + "_")
-            current_services[service_name] = image_tag
-        logger.info(f"Current services {current_services}")
-        return current_services
 
     def progress(self) -> str:
         """
@@ -126,11 +144,8 @@ class DockerSwarmDeploy(AbstractStep[str]):
             raise self.wd.result
         if isinstance(self.buildDocker.result, BaseException):
             raise self.buildDocker.result
-
-        # TODO skip if correct stack already deployed
-            # Only image tags compared. Need more.
-        # TODO I guess label for container should be added.
-        # TODO Or find keys for docker swarm to skip deploy if no changes.
+        if isinstance(self.stackChecker.result, BaseException):
+            raise self.stackChecker.result
 
         env = self.envs()
         # Prepare docker-compose file with env substitution
@@ -143,15 +158,29 @@ class DockerSwarmDeploy(AbstractStep[str]):
                 for svc in compose["services"].values():
                     if "build" in svc:
                         del svc["build"]
+                    svc["labels"] = {"org.brencher.version": env["version"]}
+            def merge_dicts(a, b):
+                for k, v in b.items():
+                    if (
+                        k in a
+                        and isinstance(a[k], dict)
+                        and isinstance(v, dict)
+                    ):
+                        merge_dicts(a[k], v)
+                    else:
+                        a[k] = v
+            del env["version"]
+            merge_dicts(compose, env)
+            # print(f"Final compose: {compose}")
             content = yaml.safe_dump(compose)
 
-        current_services = self._get_stack_state(self.stack_name)
+        current_services = self.stackChecker.result
         expected_services = compose.get("services", {})
         diffs = []
         ok = []
         for svc_name, svc in expected_services.items():
             expected_image = svc.get("image")
-            running_image = current_services.get(svc_name)
+            running_image = current_services.get(svc_name).image if svc_name in current_services else None
             l = f"Service '{svc_name}' (expected image: '{expected_image}', actual image: '{running_image}')"
             logger.info(l)
             if running_image and expected_image and running_image == expected_image:
@@ -160,15 +189,21 @@ class DockerSwarmDeploy(AbstractStep[str]):
                 diffs.append(l)
 
         if len(diffs) == 0:
+            logger.info(f"No diff found, stack is already up-to-date.")
             return '\\n'.join(ok)
         logger.info(f"Diff {diffs}")
+        if self.env.dry:
+            logger.info(f"Stack is not active, skipping deploy.")
+            return "\\n".join(diffs) + "\\nStack is not active, skipping deploy."
+        
         tmp_compose_path = docker_compose_absolute_path + ".tmp"
         with open(tmp_compose_path, 'w') as f:
             f.write(content)
+        logger.info(f"Deploying stack '{self.stack_name}' using {tmp_compose_path}")
 
         # Deploy stack to Docker Swarm
         cmd = [
-            "docker", "stack", "deploy", "--detach=true"
+            "docker", "stack", "deploy",
             "-c", tmp_compose_path,
             self.stack_name
         ]

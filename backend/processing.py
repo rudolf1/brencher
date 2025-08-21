@@ -5,20 +5,20 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def do_job(
+def process_all_jobs(
         environemnts: List[Tuple[Environment, List[AbstractStep]]], 
         onupdate: Callable[[], None]
     ):
     for env, pipe in environemnts:
-        try:
-            if env.state != 'Active':
-                continue
             for step in pipe:
-                step.do_job()
-                onupdate()
+                try:
+                    step.result
+                except BaseException as e:
+                    error_msg = f"Error processing release {env.id}, job {step.name}: {str(e)}"
+                    logger.error(error_msg)
+                    onupdate()
+                finally:
+                    onupdate()
         
-        except BaseException as e:
-            error_msg = f"Error processing release {env.id}: {str(e)}"
-            logger.error(error_msg)
-            onupdate()
+
 
