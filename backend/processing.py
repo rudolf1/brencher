@@ -12,7 +12,9 @@ def process_all_jobs(
     for env, pipe in environemnts:
             for step in pipe:
                 try:
+                    step._result = None
                     step.result
+
                 except BaseException as e:
                     error_msg = f"Error processing release {env.id}, job {step.name}: {str(e)}"
                     logger.error(error_msg)

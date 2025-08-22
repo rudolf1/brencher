@@ -107,7 +107,7 @@ class DockerSwarmCheck(AbstractStep[Dict[str, DockerSwarmCheckResult]]):
             attrs = client.services.get(svc.id).attrs
             name = attrs["Spec"]["Name"].replace(self.stack_name + "_", "")
             if attrs["Spec"]["Labels"].get("com.docker.stack.namespace", "") == self.stack_name:
-                logger.info(f"Service {svc.name} is running with image {attrs}")
+                # logger.info(f"Service {svc.name} is running with image {attrs}")
                 current_services[name] = DockerSwarmCheckResult(
                     name = name,
                     image   = attrs["Spec"]["Labels"].get("com.docker.stack.image", ""),

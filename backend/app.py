@@ -112,7 +112,7 @@ class EnvironmentNamespace(Namespace):
         for e, _ in environments:
             if e.id == data.get('id'):
                 e.branches = data.get('branches', e.branches)
-                logger.info(f"Updated environment {e.id} state to {e.state} and branches to {e.branches}")
+                logger.info(f"Updated environment {e.id} branches to {e.branches}")
         environment_update_event.set()
         emit('environments', get_envs_to_emit(), namespace='/ws/environment')
 
@@ -175,8 +175,9 @@ if __name__ == '__main__':
                                     if not branch_name.startswith('auto/'): # Skip auto branches
                                         new_branches.append(branch_name)
 
-                            branches [env.id]= new_branches
+                            branches[env.id]= new_branches
                             logger.info(f"Fetched {env.id}: {len (new_branches)} branches")
+                            environment_update_event.set()
                         except BaseException as e:
                             socketio.emit('error', {'message': e}, namespace='/ws/errors')
         while True:
@@ -198,6 +199,7 @@ if __name__ == '__main__':
                 except Exception as e:
                     logger.error(f"Error emitting environments: {str(e)}")
             with state_lock:
+                logger.error(f"Processing")
                 processing.process_all_jobs(environments, lambda: emit_envs())
             environment_update_event.wait(timeout=1*60)
             environment_update_event.clear()
@@ -211,4 +213,4 @@ if __name__ == '__main__':
         processing.join()
         refresh_thread.join()
     else:
-        socketio.run(app, host='0.0.0.0', port=5002, debug=False, allow_unsafe_werkzeug=True)
+        socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)
