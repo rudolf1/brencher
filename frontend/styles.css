@@ -61,6 +61,26 @@ body {
     display: none;
 }
 
+/* Filter styling */
+.filter-section {
+    margin: 16px 0;
+}
+
+.filter-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 1rem;
+    box-sizing: border-box;
+}
+
+.filter-input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
 /* Branches table styling */
 .branches-table {
     width: 100%;

@@ -17,8 +17,11 @@ const createReleaseBtn = document.getElementById('create-release');
 const stateSelector = document.getElementById('state-selector');
 const refreshBranchesBtn = document.getElementById('refresh-branches');
 const applyChangesBtn = document.getElementById('apply-changes');
+const branchFilter = document.getElementById('branch-filter');
 
 let branches = [];
+let filteredBranches = []; // Filtered list for display
+let branchCommits = {}; // Cache for branch commit information
 let selectedBranches = []; // Array of [branch_name, desired_commit] pairs
 let releases = [];
 let defaultState = 'Active';
@@ -59,8 +62,97 @@ function checkForPendingChanges() {
     }
 }
 
+function filterBranches() {
+    const filterText = branchFilter.value.toLowerCase().trim();
+    
+    if (!filterText) {
+        // Show branches that are either selected for deploy or currently deployed
+        filteredBranches = branches.filter(({ env, branch }) => {
+            const isSelected = selectedBranches.some(([branchName]) => branchName === branch);
+            const isDeployed = deployedCommits[branch] && deployedCommits[branch] !== 'N/A';
+            return isSelected || isDeployed || branches.length <= 10; // Show all if small list
+        });
+    } else {
+        // Filter based on branch name, commit ID, or commit message
+        filteredBranches = branches.filter(({ env, branch }) => {
+            // Check branch name
+            if (branch.toLowerCase().includes(filterText)) {
+                return true;
+            }
+            
+            // Check deployed commit ID
+            const deployedCommit = deployedCommits[branch];
+            if (deployedCommit && deployedCommit.toLowerCase().includes(filterText)) {
+                return true;
+            }
+            
+            // Check commit information if cached
+            const commits = branchCommits[`${env}_${branch}`];
+            if (commits && commits.head) {
+                if (commits.head.hash.toLowerCase().includes(filterText) ||
+                    commits.head.message.toLowerCase().includes(filterText) ||
+                    commits.head.author.toLowerCase().includes(filterText)) {
+                    return true;
+                }
+            }
+            
+            return false;
+        });
+    }
+    
+    renderBranches();
+}
+
+function getCommitDropdownOptions(env, branch, desiredCommit) {
+    const commits = branchCommits[`${env}_${branch}`];
+    let options = '';
+    
+    if (commits && commits.head) {
+        const head = commits.head;
+        options += `<option value="HEAD" ${desiredCommit === 'HEAD' ? 'selected' : ''}>
+            HEAD (${head.hash} - ${head.author} - ${head.message.substring(0, 50)}${head.message.length > 50 ? '...' : ''})
+        </option>`;
+        
+        // Add other commits in branch
+        if (commits.commits && commits.commits.length > 1) {
+            commits.commits.slice(1).forEach(commit => {
+                const isSelected = desiredCommit === commit.full_hash || desiredCommit === commit.hash;
+                options += `<option value="${commit.full_hash}" ${isSelected ? 'selected' : ''}>
+                    ${commit.hash} - ${commit.author} - ${commit.message.substring(0, 50)}${commit.message.length > 50 ? '...' : ''}
+                </option>`;
+            });
+        }
+    } else {
+        // Fallback if commit info not loaded
+        options += `<option value="HEAD" ${desiredCommit === 'HEAD' ? 'selected' : ''}>HEAD (loading...)</option>`;
+    }
+    
+    // Custom option
+    const isCustom = desiredCommit !== 'HEAD' && (!commits || !commits.commits || 
+                    !commits.commits.some(c => c.full_hash === desiredCommit || c.hash === desiredCommit));
+    options += `<option value="custom" ${isCustom ? 'selected' : ''}>Custom Commit</option>`;
+    
+    return options;
+}
+
+async function fetchCommitInfo(env, branch) {
+    try {
+        const response = await fetch(`/api/commits/${env}/${branch}`);
+        if (response.ok) {
+            const data = await response.json();
+            branchCommits[`${env}_${branch}`] = data;
+            return data;
+        }
+    } catch (error) {
+        console.error(`Error fetching commits for ${env}/${branch}:`, error);
+    }
+    return null;
+}
+
 function renderBranches() {
-    if (!branches.length) {
+    const branchesToShow = filteredBranches.length > 0 || branchFilter.value.trim() ? filteredBranches : branches;
+    
+    if (!branchesToShow.length) {
         branchesList.innerHTML = '<p class="loading">No branches found.</p>';
         return;
     }
@@ -77,7 +169,7 @@ function renderBranches() {
                 </tr>
             </thead>
             <tbody>
-                ${branches.map(({ env, branch }) => {
+                ${branchesToShow.map(({ env, branch }) => {
                     const isSelected = selectedBranches.some(([branchName]) => branchName === branch);
                     const selectedPair = selectedBranches.find(([branchName]) => branchName === branch);
                     const desiredCommit = selectedPair ? selectedPair[1] : 'HEAD';
@@ -92,14 +184,13 @@ function renderBranches() {
                                 ${branch} <span class="env-label">(${env})</span>
                             </td>
                             <td>
-                                <select class="desired-commit" data-branch="${branch}">
-                                    <option value="HEAD" ${desiredCommit === 'HEAD' ? 'selected' : ''}>HEAD</option>
-                                    <option value="custom" ${desiredCommit !== 'HEAD' ? 'selected' : ''}>Custom Commit</option>
+                                <select class="desired-commit" data-branch="${branch}" data-env="${env}">
+                                    ${getCommitDropdownOptions(env, branch, desiredCommit)}
                                 </select>
                                 <input type="text" class="commit-input" data-branch="${branch}" 
-                                       value="${desiredCommit !== 'HEAD' ? desiredCommit : ''}" 
+                                       value="${desiredCommit !== 'HEAD' && !branchCommits[env + '_' + branch]?.commits?.some(c => c.full_hash === desiredCommit) ? desiredCommit : ''}" 
                                        placeholder="Enter commit ID"
-                                       style="display: ${desiredCommit !== 'HEAD' ? 'inline-block' : 'none'};">
+                                       style="display: ${desiredCommit !== 'HEAD' && !branchCommits[env + '_' + branch]?.commits?.some(c => c.full_hash === desiredCommit) ? 'inline-block' : 'none'};">
                             </td>
                             <td class="deployed-commit">
                                 ${deployedCommit}
@@ -129,16 +220,35 @@ function renderBranches() {
     branchesList.querySelectorAll('.desired-commit').forEach(sel => {
         sel.onchange = (e) => {
             const branch = e.target.dataset.branch;
+            const env = e.target.dataset.env;
             const commitInput = branchesList.querySelector(`.commit-input[data-branch="${branch}"]`);
             
             if (e.target.value === 'custom') {
                 commitInput.style.display = 'inline-block';
                 commitInput.focus();
-            } else {
+            } else if (e.target.value === 'HEAD') {
                 commitInput.style.display = 'none';
                 updateBranchCommit(branch, 'HEAD');
+            } else {
+                // Selected a specific commit
+                commitInput.style.display = 'none';
+                updateBranchCommit(branch, e.target.value);
             }
         };
+        
+        // Load commit info for each branch if not already loaded
+        const branch = sel.dataset.branch;
+        const env = sel.dataset.env;
+        if (!branchCommits[`${env}_${branch}`]) {
+            fetchCommitInfo(env, branch).then(data => {
+                if (data) {
+                    // Update the dropdown with detailed options
+                    const currentValue = sel.value;
+                    sel.innerHTML = getCommitDropdownOptions(env, branch, currentValue);
+                    sel.value = currentValue; // Restore selection
+                }
+            });
+        }
     });
     
     branchesList.querySelectorAll('.commit-input').forEach(input => {
@@ -199,6 +309,11 @@ refreshBranchesBtn.onclick = () => {
     showStatus('Refreshing branches...');
 };
 
+// Filter event handler
+branchFilter.oninput = () => {
+    filterBranches();
+};
+
 // Apply changes button handler
 applyChangesBtn.onclick = () => {
     updateEnvironment();
@@ -217,7 +332,7 @@ function setupSocketIO() {
 
     wsBranches.on('branches', (data) => {
         branches = Object.entries(data).flatMap(([env, branchList]) => branchList.map(branch => ({ env, branch })));
-        renderBranches();
+        filterBranches(); // Use filter instead of direct render
         showStatus('Branches updated via Socket.IO.');
     });
 
@@ -256,7 +371,7 @@ function setupSocketIO() {
         
         // Update server state tracking for default state
         serverDefaultState = defaultState;
-        renderBranches();
+        filterBranches(); // Use filter instead of direct render
         renderJobs();
         checkForPendingChanges(); // Check if Apply button should be shown
         showStatus('Environment updated via Socket.IO.');

@@ -8,6 +8,21 @@ As input it takes field <input>.
 Result saved to field of EnvironmentDto and declared in <output> section.
 After processing new EnvironmentDto save it to state via compareAndSet.
 
+## Environment Data Structure
+- Environment branches field stores List[Tuple[str, str]] format
+- Each tuple represents [branch_name, desired_commit] pair
+- desired_commit can be "HEAD" or a specific commit ID
+- Maintains backward compatibility with simple branch name lists
+
+## API Endpoints
+### `/api/commits/<env_id>/<branch_name>`
+- Returns commit information for a specific branch in an environment
+- Response includes:
+  - `head`: HEAD commit details (hash, author, message, date)
+  - `commits`: Recent commits in the branch (excluding already deployed)
+  - `deployed_branches`: List of currently deployed branch names
+- Used by frontend for enhanced commit selection dropdown
+
 # Steps stored in folder `steps`
 
 All steps must inherit from BaseStep and implement idempotent behavior. This means that:
@@ -28,20 +43,23 @@ All steps must inherit from BaseStep and implement idempotent behavior. This mea
 ## CheckoutMerged
 ### Input
     `clone` object of type GitClone
-    branches - list of branches to merge
+    branches - list of [branch_name, desired_commit] pairs where desired_commit can be "HEAD" or a specific commit ID
 ### Logic    
     - Inherits from BaseStep
+    - Process each branch pair to resolve desired commits:
+      - If desired_commit is "HEAD", use the latest commit of the branch
+      - If desired_commit is a commit ID, validate and use that specific commit
     - Find any branch `auto/<hash>`:
-      - It is merged state of commits pointed by <environment.branches>
-      - If found, verify the branch is up-to-date by comparing commit hashes of source branches
+      - It is merged state of commits pointed by resolved commit IDs from environment.branches
+      - If found, verify the branch is up-to-date by comparing commit hashes of source commits
       - If branch exists but is outdated, update it with fresh merges
       - If valid and up-to-date, set branch name and commit to <output>, and finish
     - If no matching branch exists:
       - Creates a new temporary branch for merging
-      - All selected branches are merged into this temporary branch. If merge conflicts occur, the backend should handle them according to predefined rules (e.g., fail the operation and notify the user, or attempt an automatic merge if possible)
-      - After a successful merge, the backend creates a branch named `auto/<hash>`, where `<hash>` is a deterministic hash generated from the commit names of the branches (e.g., using SHA-1 or MD5 on the sorted branch names)
+      - All selected commits are merged into this temporary branch. If merge conflicts occur, the backend should handle them according to predefined rules (e.g., fail the operation and notify the user, or attempt an automatic merge if possible)
+      - After a successful merge, the backend creates a branch named `auto/<hash>`, where `<hash>` is a deterministic hash generated from the commit IDs being merged
       - The merged result in the `auto/<hash>` branch is pushed to the remote git repository
-    - Ensures idempotency by verifying the current state of branches and only performing necessary operations
+    - Ensures idempotency by verifying the current state of commits and only performing necessary operations
     - If failed, save result to <output>
 
 ## GradleBuild
