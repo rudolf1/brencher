@@ -7,6 +7,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_socketio import SocketIO, emit
 from dotenv import load_dotenv
 import git
+from steps.git import GitClone
 import tempfile
 import logging
 from dataclasses import dataclass, asdict, field
@@ -51,11 +52,7 @@ app = Flask(__name__, static_folder='frontend')
 app.json = DataclassJSONProvider(app)
 socketio = SocketIO(app, cors_allowed_origins="*", json=custom_json)
 
-import configs.brencher
-import configs.brencher_local
-environments = [configs.brencher.brencher, configs.brencher_local.brencher_local]
-profiles = os.getenv('PROFILES', 'brencher_local').split(',')
-environments = [e for e in environments if e[0].id in profiles]
+environments = []
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
 
@@ -63,39 +60,6 @@ FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
 branches = {}
 state_lock = threading.Lock()
 
-def fetch_branches():
-
-    for e, _ in environments:
-        url = e.repo
-        protocol, rest = url.split('://')
-        # Get environment variables
-        GIT_USERNAME = os.getenv('GIT_USERNAME', '')
-        GIT_PASSWORD = os.getenv('GIT_PASSWORD', '')
-        url = f"{protocol}://{GIT_USERNAME}:{GIT_PASSWORD}@{rest}"
-
-        try:
-            with tempfile.TemporaryDirectory() as tmp_dir:
-                repo = git.Repo.clone_from(url, tmp_dir, bare=True)
-                # Specify refspec to fetch all branches
-                fetch_info = repo.remotes.origin.fetch(refspec='+refs/heads/*:refs/remotes/origin/*')
-                
-                # Extract branch names
-                new_branches = []
-                for ref in repo.refs:
-                    if ref.name.startswith('origin/') and not ref.name.startswith('origin/HEAD'):
-                        branch_name = ref.name[len('origin/'):]
-                        if not branch_name.startswith('auto/'):  # Skip auto branches
-                            new_branches.append(branch_name)
-                
-                branches[e.id] = new_branches
-                logger.info(f"Fetched {e.id}:{len(new_branches)} branches")
-                
-        except Exception as e:
-            error_msg = f"Failed to fetch branches: {str(e)}"
-            logger.error(error_msg)
-            socketio.emit('error', {'message': error_msg}, namespace='/ws/errors')
-
-# API Routes
 @app.route('/')
 def serve_index():
     return send_from_directory(FRONTEND_DIR, 'index.html')
@@ -147,9 +111,8 @@ class EnvironmentNamespace(Namespace):
 
         for e, _ in environments:
             if e.id == data.get('id'):
-                e.state = data.get('state', e.state)
                 e.branches = data.get('branches', e.branches)
-                logger.info(f"Updated environment {e.id} state to {e.state} and branches to {e.branches}")
+                logger.info(f"Updated environment {e.id} branches to {e.branches}")
         environment_update_event.set()
         emit('environments', get_envs_to_emit(), namespace='/ws/environment')
 
@@ -164,8 +127,59 @@ socketio.on_namespace(EnvironmentNamespace('/ws/environment'))
 socketio.on_namespace(ErrorsNamespace('/ws/errors'))
 
 if __name__ == '__main__':
+
+    import configs.brencher
+    import configs.brencher_local
+    environments = [configs.brencher.brencher, configs.brencher_local.brencher_local]
+
+    import sys
+    cli_env_ids = sys.argv[1:]
+    if len(cli_env_ids) == 0:
+        cli_env_ids = os.getenv('PROFILES', '')
+    else:
+        cli_env_ids = cli_env_ids[0]
+    
+    if len(cli_env_ids) > 0 and cli_env_ids[0] == '-':
+        cli_env_ids = cli_env_ids[1:].split(',')
+        cli_env_ids = [x for x in cli_env_ids if len(x) > 0]
+        if cli_env_ids and len(cli_env_ids) > 0:
+            environments = [e for e in environments if e[0].id not in cli_env_ids]
+    else:
+        cli_env_ids = cli_env_ids.split(',')
+        cli_env_ids = [x for x in cli_env_ids if len(x) > 0]
+        if cli_env_ids and len(cli_env_ids) > 0:
+            environments = [e for e in environments if e[0].id in cli_env_ids]
+
+    if 'dry' in sys.argv[1:]:
+        for e in environments:
+            e[0].dry = True
+
+    logger.info(f"Resulting profiles {[e.id for e, _ in environments]}")        
+    
     # Background thread to refresh branches every 5 minutes
     def branch_refresh_thread():
+        def fetch_branches():
+            global branches, environments
+            with state_lock:
+                for env, pipe in environments:
+                    new_branches = []
+                    for step in pipe:
+                        if not isinstance(step, GitClone):
+                            continue
+                        try:
+                            step._result = None
+                            repo = git.Repo(step.result)
+                            for ref in repo.refs:
+                                if ref.name.startswith('origin/') and not ref.name.startswith('origin/HEAD'):
+                                    branch_name = ref.name [len('origin/'):]
+                                    if not branch_name.startswith('auto/'): # Skip auto branches
+                                        new_branches.append(branch_name)
+
+                            branches[env.id]= new_branches
+                            logger.info(f"Fetched {env.id}: {len (new_branches)} branches")
+                            environment_update_event.set()
+                        except BaseException as e:
+                            socketio.emit('error', {'message': e}, namespace='/ws/errors')
         while True:
             fetch_branches()
             socketio.emit('branches', branches, namespace='/ws/branches')
@@ -184,8 +198,10 @@ if __name__ == '__main__':
                     socketio.emit('environments', get_envs_to_emit(), namespace='/ws/environment')
                 except Exception as e:
                     logger.error(f"Error emitting environments: {str(e)}")
-            processing.do_job(environments, lambda: emit_envs())
-            environment_update_event.wait(timeout=1000)
+            with state_lock:
+                logger.error(f"Processing")
+                processing.process_all_jobs(environments, lambda: emit_envs())
+            environment_update_event.wait(timeout=1*60)
             environment_update_event.clear()
 
     processing = threading.Thread(target=processing_thread)
@@ -193,4 +209,8 @@ if __name__ == '__main__':
     processing.start()
 
     # Run the server
-    socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)
+    if 'noweb' in sys.argv[1:]:
+        processing.join()
+        refresh_thread.join()
+    else:
+        socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)

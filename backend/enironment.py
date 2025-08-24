@@ -5,6 +5,6 @@ from typing import List, Dict, Any, Optional, Tuple, Callable
 class Environment:
     id: str
     branches: List[str]
-    state: str  # 'Active' or 'Pause'
+    dry: bool
     repo: str # git repo
     # pipeline: List[AbstractStep]

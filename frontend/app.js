@@ -16,6 +16,7 @@ const closeStatus = document.getElementById('close-status');
 const createReleaseBtn = document.getElementById('create-release');
 const stateSelector = document.getElementById('state-selector');
 const refreshBranchesBtn = document.getElementById('refresh-branches');
+const applyChangesBtn = document.getElementById('apply-changes');
 
 let branches = [];
 let selectedBranches = [];
@@ -24,6 +25,11 @@ let defaultState = 'Active';
 let environment = null;
 let jobs = [];
 let branchStates = {};
+
+// Server state tracking for change detection
+let serverSelectedBranches = [];
+let serverBranchStates = {};
+let serverDefaultState = 'Active';
 
 let wsBranches = null;
 let wsEnv = null;
@@ -36,6 +42,25 @@ function showStatus(message, isError = false) {
     statusMessage.style.color = isError ? '#721c24' : '#333';
 }
 closeStatus.onclick = () => statusBar.classList.add('hidden');
+
+function checkForPendingChanges() {
+    // Check if selected branches differ
+    const selectedChanged = JSON.stringify([...selectedBranches].sort()) !== JSON.stringify([...serverSelectedBranches].sort());
+    
+    // Check if branch states differ
+    const statesChanged = JSON.stringify(branchStates) !== JSON.stringify(serverBranchStates);
+    
+    // Check if default state differs
+    const defaultStateChanged = defaultState !== serverDefaultState;
+    
+    const hasChanges = selectedChanged || statesChanged || defaultStateChanged;
+    
+    if (hasChanges) {
+        applyChangesBtn.classList.remove('hidden');
+    } else {
+        applyChangesBtn.classList.add('hidden');
+    }
+}
 
 function renderBranches() {
     if (!branches.length) {
@@ -62,13 +87,13 @@ function renderBranches() {
             } else {
                 selectedBranches = selectedBranches.filter(b => b !== value);
             }
-            updateEnvironment(); // Send update on check/uncheck
+            checkForPendingChanges(); // Check for changes instead of immediate update
         };
     });
     branchesList.querySelectorAll('.branch-state').forEach(sel => {
         sel.onchange = (e) => {
             branchStates[e.target.dataset.branch] = e.target.value;
-            updateEnvironment(); // Send update on state change
+            checkForPendingChanges(); // Check for changes instead of immediate update
         };
     });
 }
@@ -106,12 +131,23 @@ function renderJobs() {
 
 stateSelector.onchange = (e) => {
     defaultState = e.target.value;
-    updateEnvironment(); // Send update on state change
+    checkForPendingChanges(); // Check for changes instead of immediate update
 };
 
 refreshBranchesBtn.onclick = () => {
     fetchBranches();
     showStatus('Refreshing branches...');
+};
+
+// Apply changes button handler
+applyChangesBtn.onclick = () => {
+    updateEnvironment();
+    // Update server state tracking to match current state
+    serverSelectedBranches = [...selectedBranches];
+    serverBranchStates = {...branchStates};
+    serverDefaultState = defaultState;
+    checkForPendingChanges(); // This will hide the Apply button
+    showStatus('Changes applied successfully.');
 };
 
 // Socket.IO setup
@@ -131,9 +167,15 @@ function setupSocketIO() {
         // Sync selectedBranches with EnvironmentDto
         if (Array.isArray(environment) && environment.length > 0 && environment[0][0] && environment[0][0].branches) {
             selectedBranches = environment[0][0].branches.map(b => Array.isArray(b) ? b[0] : b);
+            // Update server state tracking
+            serverSelectedBranches = [...selectedBranches];
         }
+        // Update server state tracking for branch states and default state
+        serverBranchStates = {...branchStates};
+        serverDefaultState = defaultState;
         renderBranches();
         renderJobs();
+        checkForPendingChanges(); // Check if Apply button should be shown
         showStatus('Environment updated via Socket.IO.');
     });
 
