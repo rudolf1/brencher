@@ -1,5 +1,6 @@
 from enironment import Environment
 from steps.step import AbstractStep
+from steps.git import GitUnmerge
 from typing import List, Dict, Any, Optional, Tuple, Callable
 import logging
 
@@ -14,13 +15,15 @@ def process_all_jobs(
                 try:
                     step._result = None
                     step.result
-
+                    if isinstance(step, GitUnmerge) and len(env.branches) == 0:
+                        env.branches = [ b1 for c,b in step.result for b1 in b ]
+                        logger.error(f"Branches on startup resolved {env.id}, job {step.name}: {env.branches}")
                 except BaseException as e:
                     error_msg = f"Error processing release {env.id}, job {step.name}: {str(e)}"
                     logger.error(error_msg)
                     onupdate()
                 finally:
                     onupdate()
-        
+
 
 

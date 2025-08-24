@@ -182,3 +182,47 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
             logger.info(f"Pushing {auto_branch_hash} to {auto_branch_name}")
             repo.git.push('-f', 'origin', auto_branch_name)
         return CheckoutAndMergeResult(auto_branch_name,auto_branch_hash, version)
+
+
+from steps.docker import DockerSwarmCheckResult, DockerSwarmCheck
+
+class GitUnmerge(AbstractStep[List[str]]):
+    wd: GitClone
+
+    def __init__(self, wd: GitClone,
+                 check: DockerSwarmCheck,
+                  **kwargs):
+        super().__init__(**kwargs)
+        self.wd = wd
+        self.check = check
+
+    def progress(self) -> List[str]:
+        wd = self.wd.result
+        deployState: Dict[str, DockerSwarmCheckResult] = self.check.result
+
+        version = set([it.version for it in deployState.values()])
+        if len(version) != 1:
+            raise BaseException(f"Expected exactly one version, got: {version}")
+        version = list(version)[0]
+        repo = git.Repo(wd)
+        if 'auto-' in version:
+            version = version[5:]
+            version = version.split('-')
+            commits = []
+            for v in version:
+                commit = repo.commit(v)
+                # branches = [head.name for head in repo.heads if head.commit.hexsha == commit.hexsha]
+                branches = [ref.name for ref in repo.remotes.origin.refs if ref.commit.hexsha == commit.hexsha]
+                branches = [b[len('origin/'):] for b in branches if b.startswith('origin/') and not b.startswith('origin/HEAD')]
+                
+                # if len(branches) == 0 or branches[0].startswith('auto/'):
+                #     # Find all parent commits of the given commit
+                #     parents = [parent for parent in commit.parents]
+                #     branches = [head.name for head in repo.heads for commit in parents if head.commit.hexsha == commit.hexsha]
+                commits.append((commit.hexsha, branches))
+
+            version = commits
+        else:
+            version = [version]
+        return version
+

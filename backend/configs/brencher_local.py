@@ -1,5 +1,4 @@
-from steps.git import GitClone
-from steps.git import CheckoutMerged
+from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.docker import DockerComposeBuild
 from steps.docker import DockerSwarmDeploy, DockerSwarmCheck
 from enironment import Environment
@@ -8,7 +7,7 @@ from steps.step import AbstractStep
 
 env_local = Environment(
     id="brencher_local",
-    branches=["main", "main_local"],
+    branches=[],
     dry=False,
     repo="https://github.com/rudolf1/brencher.git",
 )
@@ -58,12 +57,14 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         docker_compose_path = "docker-compose.yml", 
         env=env,
     )
+    unmerge = GitUnmerge(clone, dockerSwarmCheck, env=env)
     return [
         clone,
         checkoutMerged,
         buildDocker,
         dockerSwarmCheck,
         deployDocker,
+        unmerge
     ]
 
 brencher_local: Tuple[Environment, List[AbstractStep]] = (env_local, create_pipeline(env_local))
