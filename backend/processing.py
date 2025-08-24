@@ -16,7 +16,7 @@ def process_all_jobs(
                     step._result = None
                     step.result
                     if isinstance(step, GitUnmerge) and len(env.branches) == 0:
-                        env.branches = [ b1 for c,b in step.result for b1 in b ]
+                        env.branches = [ [b1, 'HEAD'] for c,b in step.result for b1 in b ]
                         logger.error(f"Branches on startup resolved {env.id}, job {step.name}: {env.branches}")
                 except BaseException as e:
                     error_msg = f"Error processing release {env.id}, job {step.name}: {str(e)}"

@@ -111,7 +111,17 @@ class EnvironmentNamespace(Namespace):
 
         for e, _ in environments:
             if e.id == data.get('id'):
-                e.branches = data.get('branches', e.branches)
+                # Handle both old format (list of strings) and new format (list of [branch, commit] pairs)
+                branches_data = data.get('branches', e.branches)
+                if branches_data and len(branches_data) > 0:
+                    if isinstance(branches_data[0], list):
+                        # New format: [branch_name, desired_commit] pairs
+                        e.branches = branches_data
+                    else:
+                        # Old format: list of branch names, convert to new format
+                        e.branches = [[branch, 'HEAD'] for branch in branches_data]
+                else:
+                    e.branches = []
                 logger.info(f"Updated environment {e.id} branches to {e.branches}")
         environment_update_event.set()
         emit('environments', get_envs_to_emit(), namespace='/ws/environment')

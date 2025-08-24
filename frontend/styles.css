@@ -60,3 +60,68 @@ body {
 .hidden {
     display: none;
 }
+
+/* Branches table styling */
+.branches-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+}
+
+.branches-table th {
+    background: #f8f9fa;
+    padding: 12px 8px;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.branches-table td {
+    padding: 12px 8px;
+    vertical-align: middle;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.branch-row:hover {
+    background: #f8f9fa;
+}
+
+.branch-name {
+    font-weight: 500;
+}
+
+.env-label {
+    color: #6c757d;
+    font-size: 0.9em;
+    font-weight: normal;
+}
+
+.desired-commit {
+    margin-right: 8px;
+    padding: 4px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.commit-input {
+    padding: 4px 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9em;
+    width: 200px;
+    font-family: monospace;
+}
+
+.deployed-commit {
+    font-family: monospace;
+    font-size: 0.9em;
+    color: #6c757d;
+}
+
+/* Checkbox styling */
+input[type="checkbox"] {
+    margin: 0;
+    transform: scale(1.2);
+}
