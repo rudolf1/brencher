@@ -24,7 +24,7 @@ class GitClone(AbstractStep[str]):
         if os.path.exists(os.path.join(self.temp_dir, ".git")):
             logger.info(f"Repository already cloned at {self.temp_dir}, fetching updates.")
             repo = git.Repo(self.temp_dir)
-            result = repo.remotes.origin.fetch()
+            result = repo.remotes.origin.fetch(prune=True)
             if not result or any(fetch_info.flags & fetch_info.ERROR for fetch_info in result):
                 raise BaseException(f"Failed to fetch updates for {self.env.repo}")
         else:
