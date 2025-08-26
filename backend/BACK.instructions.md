@@ -14,14 +14,6 @@ After processing new EnvironmentDto save it to state via compareAndSet.
 - desired_commit can be "HEAD" or a specific commit ID
 - Maintains backward compatibility with simple branch name lists
 
-## API Endpoints
-### `/api/commits/<env_id>/<branch_name>`
-- Returns commit information for a specific branch in an environment
-- Response includes:
-  - `head`: HEAD commit details (hash, author, message, date)
-  - `commits`: Recent commits in the branch (excluding already deployed)
-  - `deployed_branches`: List of currently deployed branch names
-- Used by frontend for enhanced commit selection dropdown
 
 # Steps stored in folder `steps`
 

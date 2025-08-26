@@ -68,84 +68,6 @@ def serve_index():
 def serve_static(path):
     return send_from_directory(FRONTEND_DIR, path)
 
-@app.route('/api/commits/<env_id>/<branch_name>')
-def get_branch_commits(env_id, branch_name):
-    """Get commits for a specific branch in an environment"""
-    try:
-        with state_lock:
-            # Find the environment and get the repo path
-            env_found = None
-            for env, pipe in environments:
-                if env.id == env_id:
-                    env_found = env
-                    break
-            
-            if not env_found:
-                return jsonify({'error': 'Environment not found'}), 404
-            
-            # Find GitClone step to get repo path
-            repo_path = None
-            for step in pipe:
-                if isinstance(step, GitClone):
-                    repo_path = step.result
-                    break
-            
-            if not repo_path:
-                return jsonify({'error': 'Repository not found'}), 404
-            
-            # Get commits for the branch
-            repo = git.Repo(repo_path)
-            
-            # Get HEAD commit info
-            try:
-                head_commit = repo.heads[branch_name].commit
-                head_info = {
-                    'hash': head_commit.hexsha[:8],
-                    'full_hash': head_commit.hexsha,
-                    'author': str(head_commit.author),
-                    'message': head_commit.message.strip(),
-                    'date': head_commit.committed_datetime.isoformat()
-                }
-            except:
-                head_info = None
-            
-            # Get commits in this branch that are not in already deployed branches
-            deployed_branches = set()
-            if env_id in branches:
-                # Get currently deployed commits from GitUnmerge results if available
-                for env_item, jobs in [(env_found, [])]:  # Simplified for now
-                    for job in jobs:
-                        if hasattr(job, 'name') and job.name == 'GitUnmerge' and hasattr(job, 'status'):
-                            if isinstance(job.status, list):
-                                for commit_hash, branch_names in job.status:
-                                    if isinstance(branch_names, list):
-                                        deployed_branches.update(branch_names)
-            
-            # Get recent commits in branch (limit to 20 for performance)
-            branch_commits = []
-            try:
-                commits = list(repo.iter_commits(f'origin/{branch_name}', max_count=20))
-                for commit in commits:
-                    branch_commits.append({
-                        'hash': commit.hexsha[:8],
-                        'full_hash': commit.hexsha,
-                        'author': str(commit.author),
-                        'message': commit.message.strip(),
-                        'date': commit.committed_datetime.isoformat()
-                    })
-            except:
-                branch_commits = []
-            
-            return jsonify({
-                'head': head_info,
-                'commits': branch_commits,
-                'deployed_branches': list(deployed_branches)
-            })
-            
-    except Exception as e:
-        logger.error(f"Error fetching commits for {env_id}/{branch_name}: {e}")
-        return jsonify({'error': str(e)}), 500
-
 # --- WebSocket Endpoints ---
 from flask import copy_current_request_context
 from flask_socketio import Namespace
@@ -189,17 +111,7 @@ class EnvironmentNamespace(Namespace):
 
         for e, _ in environments:
             if e.id == data.get('id'):
-                # Handle both old format (list of strings) and new format (list of [branch, commit] pairs)
-                branches_data = data.get('branches', e.branches)
-                if branches_data and len(branches_data) > 0:
-                    if isinstance(branches_data[0], list):
-                        # New format: [branch_name, desired_commit] pairs
-                        e.branches = branches_data
-                    else:
-                        # Old format: list of branch names, convert to new format
-                        e.branches = [[branch, 'HEAD'] for branch in branches_data]
-                else:
-                    e.branches = []
+                e.branches = data.get('branches', e.branches)
                 logger.info(f"Updated environment {e.id} branches to {e.branches}")
         environment_update_event.set()
         emit('environments', get_envs_to_emit(), namespace='/ws/environment')
@@ -250,7 +162,7 @@ if __name__ == '__main__':
             global branches, environments
             with state_lock:
                 for env, pipe in environments:
-                    new_branches = []
+                    new_branches = {}
                     for step in pipe:
                         if not isinstance(step, GitClone):
                             continue
@@ -261,9 +173,23 @@ if __name__ == '__main__':
                                 if ref.name.startswith('origin/') and not ref.name.startswith('origin/HEAD'):
                                     branch_name = ref.name [len('origin/'):]
                                     if not branch_name.startswith('auto/'): # Skip auto branches
-                                        new_branches.append(branch_name)
+                                        branch_commits = []
+                                        cmt = [ref.commit]
+                                        for _ in range(10):
+                                            for commit in cmt:
+                                                branch_commits.append({
+                                                    'hexsha': commit.hexsha,
+                                                    'author': commit.author.name,
+                                                    'date': commit.committed_datetime.isoformat(),
+                                                    'message': commit.message.strip()
+                                                })
 
-                            branches[env.id]= new_branches
+                                            cmt = [p for c in cmt for p in c.parents]
+                                        
+                                        # for commit in branch_commits:
+                                        new_branches[branch_name] = branch_commits
+
+                            branches[env.id] = new_branches
                             logger.info(f"Fetched {env.id}: {len (new_branches)} branches")
                             environment_update_event.set()
                         except BaseException as e:
@@ -301,4 +227,4 @@ if __name__ == '__main__':
         processing.join()
         refresh_thread.join()
     else:
-        socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)
+        socketio.run(app, host='0.0.0.0', port=5002, debug=False, allow_unsafe_werkzeug=True)

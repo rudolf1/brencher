@@ -99,18 +99,12 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         # Extract commit ids for the selected branches
         commit_ids: Dict[Commit, str] = {}
         for branch_pair in self.env.branches:
-            if isinstance(branch_pair, list) and len(branch_pair) == 2:
-                branch_name, desired_commit = branch_pair
-                if desired_commit == 'HEAD':
-                    commit = repo.commit(f'origin/{branch_name}')
-                else:
-                    commit = repo.commit(desired_commit)
-                commit_ids[commit] = branch_name
-            else:
-                # Handle old format for backward compatibility
-                branch_name = branch_pair
+            branch_name, desired_commit = branch_pair
+            if desired_commit == 'HEAD':
                 commit = repo.commit(f'origin/{branch_name}')
-                commit_ids[commit] = branch_name
+            else:
+                commit = repo.commit(desired_commit)
+            commit_ids[commit] = branch_name
 
         logger.info(f"Commit ids for branches: {commit_ids}")
 

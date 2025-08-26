@@ -19,8 +19,7 @@
 ### Commit Selection
 - Dropdown shows:
   - HEAD option with commit details (hash, author, message)
-  - Individual commits in the branch (excluding already deployed commits)
-  - Custom commit option for manual entry
+  - Individual commits in the branch
 - Text input for custom commit IDs when "Custom Commit" is selected
 
 ## Data Structure
@@ -68,17 +67,8 @@
     to see clear error messages in the UI if a request fails or the backend returns an error, 
     so I can quickly address problems.
 
-### Updated state of environment should be sent to server via websocket in cases
-- When I check or uncheck a branch  
-- When I change the desired commit for a branch
-- When I change the default state
-
 ### Apply Changes Pattern
 - Changes are tracked locally and "Apply Changes" button appears when modifications are detected
 - Button submits all pending changes at once via websocket
 - Server state tracking prevents unnecessary updates
 
-### API Endpoints
-- `/api/commits/<env_id>/<branch_name>` - Fetch commit information for enhanced dropdown
-  - Returns HEAD commit details and recent branch commits
-  - Used to populate dropdown with commit author, message, and hash information
