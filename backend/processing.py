@@ -16,6 +16,9 @@ def process_all_jobs(
                     step._result = None
                     step.result
                     if isinstance(step, GitUnmerge) and len(env.branches) == 0:
+                        # TODO Move to separate job.
+                        # If branches list empty, need to find any brunch which includes commit and add pair (branch, commit)
+                        # If branches not empty, need to find most priority branch (project specific) and add (branch, HEAD)
                         env.branches = [ (b1, c) for c,b in step.result for b1 in b ]
                         logger.error(f"Branches on startup resolved {env.id}, job {step.name}: {env.branches}")
                 except BaseException as e:
