@@ -63,36 +63,23 @@ function checkForPendingChanges() {
 function filterBranches() {
     const filterText = branchFilter.value.toLowerCase().trim();
     
-    if (!filterText) {
-        // Show branches that are either selected for deploy or currently deployed
-        filteredBranches = branches.filter(({ env, branch }) => {
-            const isSelected = selectedBranches.some(([branchName]) => branchName === branch);
-            const isDeployed = deployedCommits[branch] && deployedCommits[branch] !== 'N/A';
-            return isSelected || isDeployed || branches.length <= 10; // Show all if small list
-        });
-    } else {
-        // Filter based on branch name, commit ID, or commit message
-        filteredBranches = branches.filter(({ env, branch, commits }) => {
-            // Check branch name
-            if (branch.toLowerCase().includes(filterText)) return true;
+    filteredBranches = branches.filter(({ env, branch, commits }) => {
+        const isSelected = selectedBranches.some(([branchName]) => branchName === branch);
+        const isDeployed = deployedCommits[branch] && deployedCommits[branch] !== 'N/A';
+        const isFiltered = !!filterText && branch.toLowerCase().includes(filterText)
 
-            // Check deployed commit short hash
-            const deployedCommit = deployedCommits[branch];
-            if (deployedCommit && deployedCommit.toLowerCase().includes(filterText)) return true;
-
-            // Check commits list
-            if (Array.isArray(commits)) {
-                return commits.some(c => {
-                    const shortHash = c.hexsha ? c.hexsha.substring(0,8).toLowerCase() : '';
-                    return (c.hexsha && c.hexsha.toLowerCase().includes(filterText)) ||
-                           shortHash.includes(filterText) ||
-                           (c.message && c.message.toLowerCase().includes(filterText)) ||
-                           (c.author && c.author.toLowerCase().includes(filterText));
-                });
-            }
-            return false;
+        const isFilteredByCommit = !!filterText && Array.isArray(commits) && commits.some(c => {
+            const shortHash = c.hexsha ? c.hexsha.substring(0,8).toLowerCase() : '';
+            return (c.hexsha && c.hexsha.toLowerCase().includes(filterText)) ||
+                    shortHash.includes(filterText) ||
+                    (c.message && c.message.toLowerCase().includes(filterText)) ||
+                    (c.author && c.author.toLowerCase().includes(filterText));
         });
-    }
+
+
+        return isSelected || isDeployed || isFiltered || isFilteredByCommit
+        //  || branches.length <= 10; // Show all if small list
+    });
     
     renderBranches();
 }
