@@ -13,7 +13,6 @@ const releasesList = document.getElementById('releases-list');
 const statusBar = document.getElementById('status-bar');
 const statusMessage = document.getElementById('status-message');
 const closeStatus = document.getElementById('close-status');
-const stateSelector = document.getElementById('state-selector');
 const refreshBranchesBtn = document.getElementById('refresh-branches');
 const applyChangesBtn = document.getElementById('apply-changes');
 const branchFilter = document.getElementById('branch-filter');
@@ -22,7 +21,6 @@ let branches = [];
 let filteredBranches = []; // Filtered list for display
 let selectedBranches = []; // Array of [branch_name, desired_commit] pairs
 let releases = [];
-let defaultState = 'Active';
 let environment = null;
 let jobs = [];
 let branchStates = {};
@@ -30,7 +28,6 @@ let deployedCommits = {}; // Stores current deployed commit info from GitUnmerge
 
 // Server state tracking for change detection
 let serverSelectedBranches = []; // Array of [branch_name, desired_commit] pairs
-let serverDefaultState = 'Active';
 
 let wsBranches = null;
 let wsEnv = null;
@@ -48,10 +45,7 @@ function checkForPendingChanges() {
     // Check if selected branches differ (comparing [branch_name, commit] pairs)
     const selectedChanged = JSON.stringify([...selectedBranches].sort()) !== JSON.stringify([...serverSelectedBranches].sort());
     
-    // Check if default state differs
-    const defaultStateChanged = defaultState !== serverDefaultState;
-    
-    const hasChanges = selectedChanged || defaultStateChanged;
+    const hasChanges = selectedChanged;
     
     if (hasChanges) {
         applyChangesBtn.classList.remove('hidden');
@@ -245,14 +239,10 @@ function renderJobs() {
     }).join('');
 }
 
-stateSelector.onchange = (e) => {
-    defaultState = e.target.value;
-    checkForPendingChanges(); // Check for changes instead of immediate update
-};
 
 refreshBranchesBtn.onclick = () => {
-    fetchBranches();
-    showStatus('Refreshing branches...');
+    updateEnvironment()
+    showStatus('Refreshing...');
 };
 
 // Filter event handler
@@ -265,7 +255,6 @@ applyChangesBtn.onclick = () => {
     updateEnvironment();
     // Update server state tracking to match current state
     serverSelectedBranches = [...selectedBranches];
-    serverDefaultState = defaultState;
     checkForPendingChanges(); // This will hide the Apply button
     showStatus('Changes applied successfully.');
 };
@@ -322,8 +311,6 @@ function setupSocketIO() {
             }
         }
         
-        // Update server state tracking for default state
-        serverDefaultState = defaultState;
         filterBranches(); // Use filter instead of direct render
         renderJobs();
         checkForPendingChanges(); // Check if Apply button should be shown
@@ -345,7 +332,6 @@ function updateEnvironment() {
     const envUpdate = {
         id: environment && environment.length > 0 ? environment[0][0].id : null,
         branches: selectedBranches, // Send as [branch_name, desired_commit] pairs
-        state: defaultState
     };
     wsEnv.emit('update', envUpdate);
 }

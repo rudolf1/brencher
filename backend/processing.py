@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def process_all_jobs(
-        environemnts: List[Tuple[Environment, List[AbstractStep]]], 
+        environemnts: List[Tuple[Environment, List[AbstractStep]]],
         onupdate: Callable[[], None]
     ):
     for env, pipe in environemnts:
