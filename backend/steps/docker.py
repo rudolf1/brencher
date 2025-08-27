@@ -161,18 +161,19 @@ class DockerSwarmDeploy(AbstractStep[str]):
                     svc["labels"] = {"org.brencher.version": env["version"]}
             def merge_dicts(a, b):
                 for k, v in b.items():
-                    if (
-                        k in a
-                        and isinstance(a[k], dict)
-                        and isinstance(v, dict)
-                    ):
-                        merge_dicts(a[k], v)
+                    if k in a:
+                        if isinstance(a[k], dict) and isinstance(v, dict):
+                            merge_dicts(a[k], v)
+                        elif isinstance(a[k], list) and isinstance(v, list):
+                            a[k] = a[k] + v
+                        else:
+                            a[k] = v
                     else:
                         a[k] = v
             del env["version"]
             merge_dicts(compose, env)
-            # print(f"Final compose: {compose}")
             content = yaml.safe_dump(compose)
+            print(f"Final compose: {content}")
 
         current_services = self.stackChecker.result
         expected_services = compose.get("services", {})
