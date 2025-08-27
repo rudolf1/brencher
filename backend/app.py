@@ -130,7 +130,12 @@ if __name__ == '__main__':
 
     import configs.brencher
     import configs.brencher_local
-    environments = [configs.brencher.brencher, configs.brencher_local.brencher_local]
+    import configs.brencher_local1
+    environments = [
+        configs.brencher.brencher, 
+        configs.brencher_local.brencher_local,
+        configs.brencher_local1.brencher_local
+        ]
 
     import sys
     cli_env_ids = sys.argv[1:]
