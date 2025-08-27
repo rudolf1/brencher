@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from steps.step import AbstractStep
 
 env_local = Environment(
-    id="brencher_local",
+    id="brencher_local2",
     branches=[],
     dry=False,
     repo="https://github.com/rudolf1/brencher.git",
@@ -35,7 +35,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         env=env
                     )
     dockerSwarmCheck = DockerSwarmCheck(
-        stack_name = "brencher_local",
+        stack_name = "brencher_local2",
         env=env, 
     )
     deployDocker = DockerSwarmDeploy(
@@ -48,16 +48,16 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                     "brencher-backend" :{
                         "user" : "1000:998",
                         "ports": [
-                            "5002:5002"
+                            "5002:5001"
                         ],
 
                         "environment": {
-                            "PROFILES" : "brencher_local"
+                            "PROFILES" : "brencher_local2"
                         }
                     }
                 }
         },
-        stack_name = "brencher_local",
+        stack_name = "brencher_local2",
         docker_compose_path = "docker-compose.yml", 
         env=env,
     )
