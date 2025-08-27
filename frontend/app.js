@@ -242,7 +242,7 @@ function renderJobs() {
 
 
 refreshBranchesBtn.onclick = () => {
-    updateEnvironment();
+    wsEnv.emit('update', { id: "" });
     showStatus('Refreshing...');
 };
 
