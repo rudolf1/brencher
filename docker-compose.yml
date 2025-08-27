@@ -5,10 +5,7 @@ services:
     image: registry.rudolf.keenetic.link/brencher:${version}
     user: 1000:137
     ports:
-      - target: 5001
-        published: 5001
-        protocol: tcp
-        mode: ingress
+      - "5001:5001"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /etc/passwd:/etc/passwd

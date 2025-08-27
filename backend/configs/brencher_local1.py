@@ -47,9 +47,6 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                 "services": {
                     "brencher-backend" :{
                         "user" : "1000:998",
-                        "ports": [{
-                            "published": 5003
-                        }],
                         "environment": {
                             "PROFILES" : "brencher_local"
                         }
