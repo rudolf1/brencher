@@ -49,7 +49,8 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         "user" : "1000:998",
                         "environment": {
                             "PROFILES" : "brencher_local"
-                        }
+                        },
+                        "ports":[]
                     }
                 }
         },
