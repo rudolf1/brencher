@@ -11,8 +11,8 @@ services:
       - /etc/passwd:/etc/passwd
     environment:
       - PYTHONUNBUFFERED=1
-      - VIRTUAL_HOST=brencher.rudolf.keenetic.link
-      - LETSENCRYPT_HOST=brencher.rudolf.keenetic.link
+      - VIRTUAL_HOST=brencher.dev.keenetic.link
+      - LETSENCRYPT_HOST=brencher.dev.keenetic.link
       - PROFILES=brencher
     deploy:
       replicas: 1
