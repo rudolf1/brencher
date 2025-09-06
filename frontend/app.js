@@ -2,14 +2,13 @@
 // You can add your Socket.IO and UI code here
 console.log('app.js loaded');
 
-const socket = io();
-
+// WebSocket namespaces
 const WS_BRANCHES = '/ws/branches';
 const WS_ENVIRONMENT = '/ws/environment';
 const WS_ERRORS = '/ws/errors';
 
+// DOM refs
 const branchesList = document.getElementById('branches-list');
-const releasesList = document.getElementById('releases-list');
 const statusBar = document.getElementById('status-bar');
 const statusMessage = document.getElementById('status-message');
 const closeStatus = document.getElementById('close-status');
@@ -17,18 +16,23 @@ const refreshBranchesBtn = document.getElementById('refresh-branches');
 const applyChangesBtn = document.getElementById('apply-changes');
 const branchFilter = document.getElementById('branch-filter');
 
+// Branches list (flattened) for UI rendering: [{ envId, envName, branch, commits: [] }]
 let branches = [];
-let filteredBranches = []; // Filtered list for display
-let selectedBranches = []; // Array of [branch_name, desired_commit] pairs
-let releases = [];
-let environment = null;
-let jobs = [];
-let branchStates = {};
-let deployedCommits = {}; // Stores current deployed commit info from GitUnmerge
+let filteredBranches = [];
 
-// Server state tracking for change detection
-let serverSelectedBranches = []; // Array of [branch_name, desired_commit] pairs
+// Environment runtime state storage:
+// environmentsRaw: array as received from backend: [ [envObj, jobsArr], ... ]
+let environmentsRaw = [];
 
+// Per-environment maps
+// selectedBranchesByEnv: envId -> Array<[branch, desiredCommit]>
+const selectedBranchesByEnv = {};
+// serverSelectedBranchesByEnv mirrors server's last known selection for diffing
+const serverSelectedBranchesByEnv = {};
+// deployedCommitsByEnv: envId -> { branchName: deployedShortHash }
+const deployedCommitsByEnv = {};
+
+// Socket instances
 let wsBranches = null;
 let wsEnv = null;
 let wsErr = null;
@@ -42,44 +46,38 @@ function showStatus(message, isError = false) {
 closeStatus.onclick = () => statusBar.classList.add('hidden');
 
 function checkForPendingChanges() {
-    // Check if selected branches differ (comparing [branch_name, commit] pairs)
-    const selectedChanged = JSON.stringify([...selectedBranches].sort()) !== JSON.stringify([...serverSelectedBranches].sort());
-    
-    const hasChanges = selectedChanged;
-    
-    if (hasChanges) {
-        applyChangesBtn.classList.remove('hidden');
-    } else {
-        applyChangesBtn.classList.add('hidden');
-    }
+    // Determine if any environment has changed selections
+    const changed = Object.keys(selectedBranchesByEnv).some(envId => {
+        const localSel = [...(selectedBranchesByEnv[envId] || [])].sort();
+        const serverSel = [...(serverSelectedBranchesByEnv[envId] || [])].sort();
+        return JSON.stringify(localSel) !== JSON.stringify(serverSel);
+    });
+    if (changed) applyChangesBtn.classList.remove('hidden');
+    else applyChangesBtn.classList.add('hidden');
 }
 
 function filterBranches() {
     const filterText = branchFilter.value.toLowerCase().trim();
-    
-    filteredBranches = branches.filter(({ env, branch, commits }) => {
-        const isSelected = selectedBranches.some(([branchName]) => branchName === branch);
-        const isDeployed = deployedCommits[branch] && deployedCommits[branch] !== 'N/A';
-        const isFiltered = !!filterText && branch.toLowerCase().includes(filterText)
-
+    filteredBranches = branches.filter(({ envId, branch, commits }) => {
+        const selList = selectedBranchesByEnv[envId] || [];
+        const deployedMap = deployedCommitsByEnv[envId] || {};
+        const isSelected = selList.some(([b]) => b === branch);
+        const isDeployed = deployedMap[branch] && deployedMap[branch] !== 'N/A';
+        const isFiltered = !!filterText && branch.toLowerCase().includes(filterText);
         const isFilteredByCommit = !!filterText && Array.isArray(commits) && commits.some(c => {
             const shortHash = c.hexsha ? c.hexsha.substring(0,8).toLowerCase() : '';
             return (c.hexsha && c.hexsha.toLowerCase().includes(filterText)) ||
-                    shortHash.includes(filterText) ||
-                    (c.message && c.message.toLowerCase().includes(filterText)) ||
-                    (c.author && c.author.toLowerCase().includes(filterText));
+                shortHash.includes(filterText) ||
+                (c.message && c.message.toLowerCase().includes(filterText)) ||
+                (c.author && c.author.toLowerCase().includes(filterText));
         });
-
-
-        return isSelected || isDeployed || isFiltered || isFilteredByCommit
-        //  || branches.length <= 10; // Show all if small list
+        return isSelected || isDeployed || isFiltered || isFilteredByCommit;
     });
-    
     renderBranches();
 }
 
-function getCommitDropdownOptions(env, branchName, desiredCommit) {
-    const branchObj = branches.find(b => b.env === env && b.branch === branchName);
+function getCommitDropdownOptions(envId, branchName, desiredCommit) {
+    const branchObj = branches.find(b => b.envId === envId && b.branch === branchName);
     let options = '';
     const commits = branchObj && Array.isArray(branchObj.commits) ? branchObj.commits : [];
 
@@ -107,9 +105,9 @@ function getCommitDropdownOptions(env, branchName, desiredCommit) {
     return options;
 }
 
-function branchHasCommit(env, branchName, commit) {
+function branchHasCommit(envId, branchName, commit) {
     if (commit === 'HEAD') return true;
-    const branchObj = branches.find(b => b.env === env && b.branch === branchName);
+    const branchObj = branches.find(b => b.envId === envId && b.branch === branchName);
     if (!branchObj) return false;
     return branchObj.commits?.some(c => {
         const full = c.hexsha;
@@ -120,128 +118,131 @@ function branchHasCommit(env, branchName, commit) {
 
 function renderBranches() {
     const branchesToShow = filteredBranches.length > 0 || branchFilter.value.trim() ? filteredBranches : branches;
-    
     if (!branchesToShow.length) {
         branchesList.innerHTML = '<p class="loading">No branches found.</p>';
         return;
     }
-    
-    // Create table structure for branches
-    branchesList.innerHTML = `
-        <table class="branches-table">
-            <thead>
-                <tr>
-                    <th>Deploy</th>
-                    <th>Branch Name</th>
-                    <th>Desired Commit</th>
-                    <th>Current Deployed</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${branchesToShow.map(({ env, branch }) => {
-                    const isSelected = selectedBranches.some(([branchName]) => branchName === branch);
-                    const selectedPair = selectedBranches.find(([branchName]) => branchName === branch);
-                    const desiredCommit = selectedPair ? selectedPair[1] : 'HEAD';
-                    const deployedCommit = deployedCommits[branch] || 'N/A';
-                    
-                    return `
-                        <tr class="branch-row">
+
+    // Group by envId for clearer separation
+    const groups = branchesToShow.reduce((acc, b) => {
+        acc[b.envId] = acc[b.envId] || { envName: b.envName, rows: [] };
+        acc[b.envId].rows.push(b);
+        return acc;
+    }, {});
+
+    branchesList.innerHTML = Object.entries(groups).map(([envId, { envName, rows }]) => {
+        return `
+        <div class="env-block">
+            <h3 class="env-title">Environment: ${envName || envId}</h3>
+            <table class="branches-table">
+                <thead>
+                    <tr>
+                        <th>Deploy</th>
+                        <th>Branch</th>
+                        <th>Desired Commit</th>
+                        <th>Deployed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(({ envId: eId, branch }) => {
+                        const selList = selectedBranchesByEnv[eId] || [];
+                        const pair = selList.find(([b]) => b === branch);
+                        const desiredCommit = pair ? pair[1] : 'HEAD';
+                        const deployedMap = deployedCommitsByEnv[eId] || {};
+                        const deployedCommit = deployedMap[branch] || 'N/A';
+                        const hasCommit = branchHasCommit(eId, branch, desiredCommit);
+                        return `
+                        <tr class="branch-row" data-env="${eId}" data-branch="${branch}">
+                            <td><input type="checkbox" value="${branch}" data-env="${eId}" ${pair ? 'checked' : ''}></td>
+                            <td>${branch}</td>
                             <td>
-                                <input type="checkbox" value="${branch}" ${isSelected ? 'checked' : ''}>
-                            </td>
-                            <td class="branch-name">
-                                ${branch} <span class="env-label">(${env})</span>
-                            </td>
-                            <td>
-                                <select class="desired-commit" data-branch="${branch}" data-env="${env}">
-                                    ${getCommitDropdownOptions(env, branch, desiredCommit)}
+                                <select class="desired-commit" data-branch="${branch}" data-env="${eId}">
+                                    ${getCommitDropdownOptions(eId, branch, desiredCommit)}
                                 </select>
-                                <input type="text" class="commit-input" data-branch="${branch}" 
-                                       value="${desiredCommit !== 'HEAD' && !branchHasCommit(env, branch, desiredCommit) ? desiredCommit : ''}" 
-                                       placeholder="Enter commit ID"
-                                       style="display: ${desiredCommit !== 'HEAD' && !branchHasCommit(env, branch, desiredCommit) ? 'inline-block' : 'none'};">
+                                <input type="text" class="commit-input" data-branch="${branch}" data-env="${eId}"
+                                       value="${desiredCommit !== 'HEAD' && !hasCommit ? desiredCommit : ''}"
+                                       placeholder="Enter commit ID" style="display: ${desiredCommit !== 'HEAD' && !hasCommit ? 'inline-block' : 'none'};" />
                             </td>
-                            <td class="deployed-commit">
-                                ${deployedCommit}
-                            </td>
-                        </tr>
-                    `;
-                }).join('')}
-            </tbody>
-        </table>
-    `;
-    
-    // Attach event listeners
+                            <td>${deployedCommit}</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>`;
+    }).join('');
+
+    // Event wiring
     branchesList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-        cb.onchange = (e) => {
+        cb.onchange = e => {
             const branch = e.target.value;
+            const envId = e.target.dataset.env;
+            selectedBranchesByEnv[envId] = selectedBranchesByEnv[envId] || [];
             if (e.target.checked) {
-                if (!selectedBranches.some(([branchName]) => branchName === branch)) {
-                    selectedBranches.push([branch, 'HEAD']);
+                if (!selectedBranchesByEnv[envId].some(([b]) => b === branch)) {
+                    selectedBranchesByEnv[envId].push([branch, 'HEAD']);
                 }
             } else {
-                selectedBranches = selectedBranches.filter(([branchName]) => branchName !== branch);
+                selectedBranchesByEnv[envId] = selectedBranchesByEnv[envId].filter(([b]) => b !== branch);
             }
             checkForPendingChanges();
         };
     });
-    
     branchesList.querySelectorAll('.desired-commit').forEach(sel => {
-        sel.onchange = (e) => {
+        sel.onchange = e => {
             const branch = e.target.dataset.branch;
-            const env = e.target.dataset.env;
-            const commitInput = branchesList.querySelector(`.commit-input[data-branch="${branch}"]`);
-            
+            const envId = e.target.dataset.env;
+            const commitInput = branchesList.querySelector(`.commit-input[data-env="${envId}"][data-branch="${branch}"]`);
             if (e.target.value === 'custom') {
                 commitInput.style.display = 'inline-block';
                 commitInput.focus();
             } else if (e.target.value === 'HEAD') {
                 commitInput.style.display = 'none';
-                updateBranchCommit(branch, 'HEAD');
+                updateBranchCommit(envId, branch, 'HEAD');
             } else {
-                // Selected a specific commit
                 commitInput.style.display = 'none';
-                updateBranchCommit(branch, e.target.value);
+                updateBranchCommit(envId, branch, e.target.value);
             }
         };
     });
-    
     branchesList.querySelectorAll('.commit-input').forEach(input => {
-        input.onchange = input.onblur = (e) => {
+        input.onchange = input.onblur = e => {
             const branch = e.target.dataset.branch;
+            const envId = e.target.dataset.env;
             const commitId = e.target.value.trim();
-            updateBranchCommit(branch, commitId || 'HEAD');
+            updateBranchCommit(envId, branch, commitId || 'HEAD');
         };
     });
 }
 
-function updateBranchCommit(branch, commit) {
-    const index = selectedBranches.findIndex(([branchName]) => branchName === branch);
-    if (index !== -1) {
-        selectedBranches[index] = [branch, commit];
-        checkForPendingChanges();
-    }
+function updateBranchCommit(envId, branch, commit) {
+    selectedBranchesByEnv[envId] = selectedBranchesByEnv[envId] || [];
+    const idx = selectedBranchesByEnv[envId].findIndex(([b]) => b === branch);
+    if (idx !== -1) selectedBranchesByEnv[envId][idx] = [branch, commit];
+    checkForPendingChanges();
 }
 
 function renderJobs() {
     const jobsList = document.getElementById('jobs-list');
     if (!jobsList) return;
-    if (!environment) return;
-    if (!environment.length) {
+    if (!Array.isArray(environmentsRaw) || environmentsRaw.length === 0) {
         jobsList.innerHTML = '<p class="loading">No jobs found.</p>';
         return;
     }
-
-    jobsList.innerHTML = environment[0][1].map(job => {
-        return `<div class="job-item">
-            <strong>${job.name}</strong> - ${JSON.stringify(job.status)}
-        </div>`
+    jobsList.innerHTML = environmentsRaw.map(([envObj, jobsArr]) => {
+        return `
+            <div class="env-jobs">
+                <h4>Environment: ${envObj.name || envObj.id || ''}</h4>
+                ${Array.isArray(jobsArr) && jobsArr.length > 0
+                    ? jobsArr.map(job => `
+                        <div class="job-item"><strong>${job.env} - ${job.name}</strong> - ${JSON.stringify(job.status)}</div>`).join('')
+                    : '<div class="job-item">No jobs found.</div>'}
+            </div>`;
     }).join('');
 }
 
 
 refreshBranchesBtn.onclick = () => {
-    updateEnvironment()
+    wsEnv.emit('update', { id: "" });
     showStatus('Refreshing...');
 };
 
@@ -253,10 +254,6 @@ branchFilter.oninput = () => {
 // Apply changes button handler
 applyChangesBtn.onclick = () => {
     updateEnvironment();
-    // Update server state tracking to match current state
-    serverSelectedBranches = [...selectedBranches];
-    checkForPendingChanges(); // This will hide the Apply button
-    showStatus('Changes applied successfully.');
 };
 
 // Socket.IO setup
@@ -265,75 +262,82 @@ function setupSocketIO() {
     wsEnv = io(WS_ENVIRONMENT);
     wsErr = io(WS_ERRORS);
 
-    wsBranches.on('branches', (data) => {
-        // Expecting data: { env: { branchName: [ {full_hash, hash, author, message}, ... up to 10 ] } }
-        branches = Object.entries(data).flatMap(([env, branchList]) => 
-            Object.entries(branchList).map(([branchName, commitList]) => ({
-                env: env,
-                branch: branchName,
-                commits: commitList
-            }))
+    wsBranches.on('branches', data => {
+        // data: { envId: { branchName: commits[] } }
+        branches = Object.entries(data).flatMap(([envId, branchMap]) =>
+            Object.entries(branchMap).map(([branchName, commitList]) => {
+                const envObj = (environmentsRaw.find(([e]) => e.id === envId) || [null])[0];
+                return { envId, envName: envObj ? (envObj.name || envObj.id) : envId, branch: branchName, commits: commitList };
+            })
         );
-        filterBranches(); // Use filter instead of direct render
-        showStatus('Branches updated via Socket.IO.');
+        filterBranches();
+        showStatus('Branches updated.');
     });
 
-    wsEnv.on('environments', (data) => {
-        environment = data;
-        // Sync selectedBranches with EnvironmentDto
-        if (Array.isArray(environment) && environment.length > 0 && environment[0][0] && environment[0][0].branches) {
-            // Convert branches to [branch_name, desired_commit] pairs
-            if (Array.isArray(environment[0][0].branches) && environment[0][0].branches.length > 0) {
-                if (Array.isArray(environment[0][0].branches[0])) {
-                    // Already in [branch_name, desired_commit] format
-                    selectedBranches = [...environment[0][0].branches];
+    wsEnv.on('environments', data => {
+        environmentsRaw = data || [];
+
+        // Sync selections and deployed commits per environment
+        environmentsRaw.forEach(([envObj, jobsArr]) => {
+            if (!envObj) return;
+            const envId = envObj.id || envObj.name || 'unknown';
+            // Branch selections
+            if (Array.isArray(envObj.branches) && envObj.branches.length > 0) {
+                if (Array.isArray(envObj.branches[0])) {
+                    selectedBranchesByEnv[envId] = [...envObj.branches];
                 } else {
-                    // Convert from simple branch names to [branch_name, 'HEAD'] pairs
-                    selectedBranches = environment[0][0].branches.map(b => [b, 'HEAD']);
+                    selectedBranchesByEnv[envId] = envObj.branches.map(b => [b, 'HEAD']);
                 }
+                serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
+            } else if (!selectedBranchesByEnv[envId]) {
+                selectedBranchesByEnv[envId] = [];
+                serverSelectedBranchesByEnv[envId] = [];
             }
-            // Update server state tracking
-            serverSelectedBranches = [...selectedBranches];
-        }
-        
-        // Extract deployed commits from GitUnmerge results if available
-        if (Array.isArray(environment) && environment.length > 0 && environment[0][1]) {
-            const gitUnmergeResults = environment[0][1].find(job => job.name === 'GitUnmerge');
-            if (gitUnmergeResults && gitUnmergeResults.status && Array.isArray(gitUnmergeResults.status)) {
-                deployedCommits = {};
-                gitUnmergeResults.status.forEach(([commitHash, branchNames]) => {
+
+            // Deployed commits from GitUnmerge job
+            const gitUnmergeJob = Array.isArray(jobsArr) ? jobsArr.find(j => j.name === 'GitUnmerge') : null;
+            deployedCommitsByEnv[envId] = {};
+            if (gitUnmergeJob && Array.isArray(gitUnmergeJob.status)) {
+                gitUnmergeJob.status.forEach(([commitHash, branchNames]) => {
                     if (Array.isArray(branchNames)) {
-                        branchNames.forEach(branchName => {
-                            deployedCommits[branchName] = commitHash.substring(0, 8); // Show short hash
+                        branchNames.forEach(bName => {
+                            deployedCommitsByEnv[envId][bName] = commitHash.substring(0, 8);
                         });
                     }
                 });
             }
-        }
-        
-        filterBranches(); // Use filter instead of direct render
+        });
+
+        // Rebuild branches list environment names for rows already present
+        branches = branches.map(b => {
+            const envEntry = environmentsRaw.find(([e]) => (e.id || e.name) === b.envId);
+            return { ...b, envName: envEntry ? (envEntry[0].name || envEntry[0].id) : b.envName };
+        });
+
+        filterBranches();
         renderJobs();
-        checkForPendingChanges(); // Check if Apply button should be shown
-        showStatus('Environment updated via Socket.IO.');
+        checkForPendingChanges();
+        showStatus('Environments updated.');
     });
 
-    wsEnv.on('disconnect', () => {
-        showStatus('Disconnected from environment websocket.', true);
-    });
-    wsBranches.on('disconnect', () => {
-        showStatus('Disconnected from branches websocket.', true);
-    });
-    wsErr.on('error', (data) => {
-        showStatus(data.message || 'Unknown error', true);
-    });
+    wsEnv.on('disconnect', () => showStatus('Disconnected from environment websocket.', true));
+    wsBranches.on('disconnect', () => showStatus('Disconnected from branches websocket.', true));
+    wsErr.on('error', data => showStatus(data.message || 'Unknown error', true));
 }
 
 function updateEnvironment() {
-    const envUpdate = {
-        id: environment && environment.length > 0 ? environment[0][0].id : null,
-        branches: selectedBranches, // Send as [branch_name, desired_commit] pairs
-    };
-    wsEnv.emit('update', envUpdate);
+    // Emit updates only for environments whose selection changed
+    Object.keys(selectedBranchesByEnv).forEach(envId => {
+        const localSel = [...(selectedBranchesByEnv[envId] || [])].sort();
+        const serverSel = [...(serverSelectedBranchesByEnv[envId] || [])].sort();
+        if (JSON.stringify(localSel) !== JSON.stringify(serverSel)) {
+            wsEnv.emit('update', { id: envId, branches: selectedBranchesByEnv[envId] });
+            // Optimistically sync server state
+            serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
+        }
+    });
+    checkForPendingChanges();
+    showStatus('Changes applied (pending server confirmation).');
 }
 
 // Initial load
