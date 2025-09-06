@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from steps.step import AbstractStep
 
 env = Environment(
-    id="brencher",
+    id="torreser_proxy",
     branches=[("photosHelper/streams", "HEAD")],
     dry=False,
     repo="https://github.com/rudolf1/uber_backup.git",
