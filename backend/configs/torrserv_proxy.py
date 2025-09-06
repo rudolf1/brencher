@@ -6,7 +6,8 @@ from steps.step import AbstractStep
 
 env = Environment(
     id="torreser_proxy",
-    branches=[("photosHelper/streams", "HEAD")],
+    branches=[],
+    # ("photosHelper/streams", "HEAD")
     dry=False,
     repo="https://github.com/rudolf1/uber_backup.git",
 )
