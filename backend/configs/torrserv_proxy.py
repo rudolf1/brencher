@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from steps.step import AbstractStep
 
 env = Environment(
-    id="torrserver_proxy",
+    id="torrserv_proxy",
     branches=[],
     # ("photosHelper/streams", "HEAD")
     dry=False,
