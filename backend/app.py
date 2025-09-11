@@ -91,7 +91,6 @@ def get_envs_to_emit():
                         "name": r.name,
                         "status": [str(r.result_obj), stack],
                     })
-                    res[-1]["stacktrace"] = stack
                 else:
                     res.append({
                         "name":r.name, 
