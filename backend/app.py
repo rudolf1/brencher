@@ -14,6 +14,7 @@ from dataclasses import dataclass, asdict, field
 from typing import List, Dict, Any, Optional
 import shutil
 import subprocess
+import traceback
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -85,10 +86,12 @@ def get_envs_to_emit():
             res = []
             for r in p:
                 if isinstance(r.result_obj, BaseException): 
+                    stack = traceback.format_exception(type(r.result_obj), r.result_obj, r.result_obj.__traceback__)
                     res.append({
                         "name": r.name,
-                        "status": [str(r.result_obj), getattr(r.result_obj, "__traceback__", None)],
+                        "status": [str(r.result_obj), stack],
                     })
+                    res[-1]["stacktrace"] = stack
                 else:
                     res.append({
                         "name":r.name, 
