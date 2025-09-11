@@ -86,8 +86,8 @@ def get_envs_to_emit():
             for r in p:
                 if isinstance(r.result_obj, BaseException): 
                     res.append({
-                        "name":r.name, 
-                        "status": str(r.result_obj)
+                        "name": r.name,
+                        "status": [str(r.result_obj), getattr(r.result_obj, "__traceback__", None)],
                     })
                 else:
                     res.append({
