@@ -50,7 +50,7 @@ class DockerComposeBuild(AbstractStep[List[str]]):
             services = compose.get('services', {})
 
             for name, svc in services.items():
-                build_ctx = os.path.join(self.wd.result, svc.get('build'))
+                build_ctx = os.path.join(os.path.dirname(docker_compose_absolute_path), svc.get('build'))
                 image = svc.get('image')
                 if not build_ctx or not image:
                     continue

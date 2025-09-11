@@ -8,6 +8,7 @@ services:
       - "5001:5001"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - tmp:/tmp
       - /etc/passwd:/etc/passwd
     environment:
       - PYTHONUNBUFFERED=1
@@ -28,6 +29,9 @@ services:
 secrets:
   brencher-secrets:
     external: true
+
+volumes:
+  tmp:
 
 networks:
   brencher-net:
