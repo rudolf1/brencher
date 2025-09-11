@@ -24,7 +24,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
     buildDocker = DockerComposeBuild(clone,
                         docker_repo_username = "", 
                         docker_repo_password = "", 
-                        docker_compose_path = "docker-compose.yml", 
+                        docker_compose_path = "reverseproxy/docker-compose.yml", 
                         docker_repo_url="https://registry.rudolf.keenetic.link", 
                         publish=False,
                         envs = lambda: { 
