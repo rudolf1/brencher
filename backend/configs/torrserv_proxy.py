@@ -46,7 +46,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
             "version": "auto-" + checkoutMerged.result.version
        },
         stack_name = "torrserv_proxy",
-        docker_compose_path = "docker-compose.yml", 
+        docker_compose_path = "reverseproxy/docker-compose.yml", 
         env=env, 
     )
     unmerge = GitUnmerge(clone, dockerSwarmCheck, env=env)
