@@ -14,6 +14,7 @@ from dataclasses import dataclass, asdict, field
 from typing import List, Dict, Any, Optional
 import shutil
 import subprocess
+import traceback
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -85,9 +86,10 @@ def get_envs_to_emit():
             res = []
             for r in p:
                 if isinstance(r.result_obj, BaseException): 
+                    stack = traceback.format_exception(type(r.result_obj), r.result_obj, r.result_obj.__traceback__)
                     res.append({
-                        "name":r.name, 
-                        "status": str(r.result_obj)
+                        "name": r.name,
+                        "status": [str(r.result_obj), stack],
                     })
                 else:
                     res.append({
@@ -131,11 +133,13 @@ if __name__ == '__main__':
     import configs.brencher
     import configs.brencher_local2
     import configs.brencher_local1
+    import configs.torrserv_proxy
     environments = [
         configs.brencher.brencher, 
         configs.brencher_local2.brencher_local,
-        configs.brencher_local1.brencher_local
-        ]
+        configs.brencher_local1.brencher_local,
+        configs.torrserv_proxy.config
+    ]
 
     import sys
     cli_env_ids = sys.argv[1:]
@@ -170,27 +174,12 @@ if __name__ == '__main__':
                 try:
                     if not isinstance(step, GitClone):
                         continue
-                    repo = git.Repo(step.result)
-                    for ref in repo.refs:
-                        if ref.name.startswith('origin/') and not ref.name.startswith('origin/HEAD'):
-                            branch_name = ref.name [len('origin/'):]
-                            if not branch_name.startswith('auto/'): # Skip auto branches
-                                branches[env.id][branch_name] = []
-                                cmt = [ref.commit]
-                                for _ in range(10):
-                                    for commit in cmt:
-                                        branches[env.id][branch_name].append({
-                                            'hexsha': commit.hexsha,
-                                            'author': commit.author.name,
-                                            'date': commit.committed_datetime.isoformat(),
-                                            'message': commit.message.strip()
-                                        })
-
-                                    cmt = [p for c in cmt for p in c.parents]
-                    logger.info(f"Fetched {env.id}: {len (branches[env.id])} branches")
+                    branches[env.id] = {**branches[env.id], **step.get_branches()}
                 except BaseException as e:
                     socketio.emit('error', {'message': e}, namespace='/ws/errors')
-            socketio.emit('branches', branches, namespace='/ws/branches')
+            logger.info(f"Fetched {env.id}: {len (branches[env.id])} branches")
+            # logger.info(f"Fetched {env.id}: {branches[env.id]}")
+        socketio.emit('branches', branches, namespace='/ws/branches')
 
 
     def processing_thread():

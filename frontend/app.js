@@ -231,11 +231,26 @@ function renderJobs() {
     jobsList.innerHTML = environmentsRaw.map(([envObj, jobsArr]) => {
         return `
             <div class="env-jobs">
-                <h4>Environment: ${envObj.name || envObj.id || ''}</h4>
-                ${Array.isArray(jobsArr) && jobsArr.length > 0
-                    ? jobsArr.map(job => `
-                        <div class="job-item"><strong>${job.env} - ${job.name}</strong> - ${JSON.stringify(job.status)}</div>`).join('')
-                    : '<div class="job-item">No jobs found.</div>'}
+            <h4>Environment: ${envObj.name || envObj.id || ''}</h4>
+            ${Array.isArray(jobsArr) && jobsArr.length > 0
+                ? jobsArr.map(job => {
+                let statusDisplay = '';
+                let tooltip = '';
+                if (Array.isArray(job.status) && job.status.length > 0) {
+                    statusDisplay = typeof job.status[0] === 'string' ? job.status[0] : JSON.stringify(job.status[0]);
+                    if (job.status.length > 1) {
+                    tooltip = job.status.slice(1).flatMap(s => typeof s === 'string' ? [s] : s).join('<br/>');
+                    }
+                } else {
+                    statusDisplay = typeof job.status === 'string' ? job.status : JSON.stringify(job.status);
+                }
+                return `
+                    <div class="job-item">
+                        <strong>${job.env} - ${job.name}</strong> - ${statusDisplay}
+                        ${tooltip ? `<span class="tooltip-icon" title="${tooltip.replace(/"/g, '&quot;')}">&#x1F6C8;</span>` : ''}
+                    </div>`;
+                }).join('')
+                : '<div class="job-item">No jobs found.</div>'}
             </div>`;
     }).join('');
 }

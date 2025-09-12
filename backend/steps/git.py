@@ -4,7 +4,7 @@ from git.objects import Commit
 from git.refs import Reference
 import logging
 from dataclasses import dataclass, asdict, field
-from typing import List, Optional, Union, Tuple, Set, Iterator, Dict
+from typing import List, Optional, Union, Tuple, Set, Iterator, Dict, Any
 from steps.step import AbstractStep
 import tempfile
 import os
@@ -13,9 +13,11 @@ from enironment import Environment
 logger = logging.getLogger(__name__)
 
 class GitClone(AbstractStep[str]):
-    def __init__(self, env: Environment, **kwargs):
+    def __init__(self, env: Environment, branchNamePrefix="", **kwargs):
         super().__init__(env, **kwargs)
         self.temp_dir = os.path.join(tempfile.gettempdir(), f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
+        self.branchNamePrefix = branchNamePrefix
+
 
     def progress(self) -> str:
 
@@ -28,12 +30,41 @@ class GitClone(AbstractStep[str]):
             if not result or any(fetch_info.flags & fetch_info.ERROR for fetch_info in result):
                 raise BaseException(f"Failed to fetch updates for {self.env.repo}")
         else:
-            git.Repo.clone_from(self.env.repo, self.temp_dir)
+            repo = git.Repo.init(self.temp_dir)
+            repo.remotes.append(repo.create_remote(
+                'origin', 
+                self.env.repo
+            ))
+            if self.branchNamePrefix != "":
+                repo.config_writer().set_value('remote "origin"',"fetch", f"+refs/heads/{self.branchNamePrefix}/*:refs/remotes/origin/{self.branchNamePrefix}/*").release()
+            repo.remotes.origin.fetch(prune=True)
             if not os.path.exists(os.path.join(self.temp_dir, ".git")):
                 raise BaseException(f"Failed to clone repository {self.env.repo} to {self.temp_dir}")
         
         return self.temp_dir
-            
+    
+
+    def get_branches(self) -> Dict[str, List[Any]]:
+        repo = git.Repo(self.temp_dir)
+        result = {}
+        for ref in repo.refs:
+            if ref.name.startswith('origin/') and not ref.name.startswith('origin/HEAD'):
+                branch_name = ref.name [len('origin/'):]
+                if not branch_name.startswith('auto/'): # Skip auto branches
+                    result[branch_name] = []
+                    cmt = [ref.commit]
+                    for _ in range(10):
+                        for commit in cmt:
+                            result[branch_name].append({
+                                'hexsha': commit.hexsha,
+                                'author': commit.author.name,
+                                'date': commit.committed_datetime.isoformat(),
+                                'message': commit.message.strip()
+                            })
+
+                        cmt = [p for c in cmt for p in c.parents]
+        return result
+
 import hashlib
 
 @dataclass
