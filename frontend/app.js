@@ -235,12 +235,10 @@ function renderJobs() {
             ${Array.isArray(jobsArr) && jobsArr.length > 0
                 ? jobsArr.map(job => {
                 let statusDisplay = `<pre>` + JSON.stringify(job.status, null, 2) + `</pre>`;
-                if (typeof job.status === 'string') {
-                    statusDisplay = statusDisplay.replace(
-                        /(https?:\/\/[^\s"']+)/g,
-                        url => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
-                    );
-                }
+                statusDisplay = statusDisplay.replace(
+                    /(https?:\/\/[^\s"']+)/g,
+                    url => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+                );
                 return `
                     <div class="job-item">
                         <strong>${job.env} - ${job.name}</strong><br />${statusDisplay}                        
