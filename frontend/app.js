@@ -20,6 +20,9 @@ const branchFilter = document.getElementById('branch-filter');
 let branches = [];
 let filteredBranches = [];
 
+// Toggle state: show all branches or filtered
+let showAllBranches = false;
+
 // Environment runtime state storage:
 // environmentsRaw: array as received from backend: [ [envObj, jobsArr], ... ]
 let environmentsRaw = [];
@@ -71,7 +74,7 @@ function filterBranches() {
                 (c.message && c.message.toLowerCase().includes(filterText)) ||
                 (c.author && c.author.toLowerCase().includes(filterText));
         });
-        return isSelected || isDeployed || isFiltered || isFilteredByCommit;
+        return showAllBranches || isSelected || isDeployed || isFiltered || isFilteredByCommit;
     });
     renderBranches();
 }
@@ -234,20 +237,14 @@ function renderJobs() {
             <h4>Environment: ${envObj.name || envObj.id || ''}</h4>
             ${Array.isArray(jobsArr) && jobsArr.length > 0
                 ? jobsArr.map(job => {
-                let statusDisplay = '';
-                let tooltip = '';
-                if (Array.isArray(job.status) && job.status.length > 0) {
-                    statusDisplay = typeof job.status[0] === 'string' ? job.status[0] : JSON.stringify(job.status[0]);
-                    if (job.status.length > 1) {
-                    tooltip = job.status.slice(1).flatMap(s => typeof s === 'string' ? [s] : s).join('<br/>');
-                    }
-                } else {
-                    statusDisplay = typeof job.status === 'string' ? job.status : JSON.stringify(job.status);
-                }
+                let statusDisplay = `<pre>` + JSON.stringify(job.status, null, 2) + `</pre>`;
+                statusDisplay = statusDisplay.replace(
+                    /(https?:\/\/[^\s"']+)/g,
+                    url => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+                );
                 return `
                     <div class="job-item">
-                        <strong>${job.env} - ${job.name}</strong> - ${statusDisplay}
-                        ${tooltip ? `<span class="tooltip-icon" title="${tooltip.replace(/"/g, '&quot;')}">&#x1F6C8;</span>` : ''}
+                        <strong>${job.env} - ${job.name}</strong><br />${statusDisplay}                        
                     </div>`;
                 }).join('')
                 : '<div class="job-item">No jobs found.</div>'}
@@ -265,6 +262,16 @@ refreshBranchesBtn.onclick = () => {
 branchFilter.oninput = () => {
     filterBranches();
 };
+
+// Toggle show all button handler
+const toggleShowAllBtn = document.getElementById('toggle-show-all');
+if (toggleShowAllBtn) {
+    toggleShowAllBtn.onclick = () => {
+        showAllBranches = !showAllBranches;
+        toggleShowAllBtn.textContent = showAllBranches ? 'Show Filtered' : 'Show All';
+        filterBranches();
+    };
+}
 
 // Apply changes button handler
 applyChangesBtn.onclick = () => {
@@ -349,6 +356,7 @@ function updateEnvironment() {
             wsEnv.emit('update', { id: envId, branches: selectedBranchesByEnv[envId] });
             // Optimistically sync server state
             serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
+            branchFilter.value = '';
         }
     });
     checkForPendingChanges();
