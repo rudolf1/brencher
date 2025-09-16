@@ -234,7 +234,7 @@ function renderJobs() {
             <h4>Environment: ${envObj.name || envObj.id || ''}</h4>
             ${Array.isArray(jobsArr) && jobsArr.length > 0
                 ? jobsArr.map(job => {
-                let statusDisplay = JSON.stringify(job.status, null, 2);
+                let statusDisplay = `<pre>` + JSON.stringify(job.status, null, 2) + `</pre>`;
                 if (typeof job.status === 'string') {
                     statusDisplay = statusDisplay.replace(
                         /(https?:\/\/[^\s"']+)/g,
