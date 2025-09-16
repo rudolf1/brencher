@@ -182,9 +182,10 @@ class DockerSwarmDeploy(AbstractStep[str]):
             expected_image = svc.get("image")
             running_image = current_services.get(svc_name).image if svc_name in current_services else None
             l = {
-                "serice": svc_name,
+                "service": svc_name,
                 "expected_image": expected_image,
                 "actual_image": running_image,
+                "stack": self.stack_name,
             }
             logger.info(l)
             if running_image and expected_image and running_image == expected_image:

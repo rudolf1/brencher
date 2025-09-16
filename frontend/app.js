@@ -20,6 +20,9 @@ const branchFilter = document.getElementById('branch-filter');
 let branches = [];
 let filteredBranches = [];
 
+// Toggle state: show all branches or filtered
+let showAllBranches = false;
+
 // Environment runtime state storage:
 // environmentsRaw: array as received from backend: [ [envObj, jobsArr], ... ]
 let environmentsRaw = [];
@@ -71,7 +74,7 @@ function filterBranches() {
                 (c.message && c.message.toLowerCase().includes(filterText)) ||
                 (c.author && c.author.toLowerCase().includes(filterText));
         });
-        return isSelected || isDeployed || isFiltered || isFilteredByCommit;
+        return showAllBranches || isSelected || isDeployed || isFiltered || isFilteredByCommit;
     });
     renderBranches();
 }
@@ -259,6 +262,16 @@ refreshBranchesBtn.onclick = () => {
 branchFilter.oninput = () => {
     filterBranches();
 };
+
+// Toggle show all button handler
+const toggleShowAllBtn = document.getElementById('toggle-show-all');
+if (toggleShowAllBtn) {
+    toggleShowAllBtn.onclick = () => {
+        showAllBranches = !showAllBranches;
+        toggleShowAllBtn.textContent = showAllBranches ? 'Show Filtered' : 'Show All';
+        filterBranches();
+    };
+}
 
 // Apply changes button handler
 applyChangesBtn.onclick = () => {
