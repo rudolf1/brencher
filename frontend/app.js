@@ -356,6 +356,7 @@ function updateEnvironment() {
             wsEnv.emit('update', { id: envId, branches: selectedBranchesByEnv[envId] });
             // Optimistically sync server state
             serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
+            branchFilter.value = '';
         }
     });
     checkForPendingChanges();
