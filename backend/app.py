@@ -174,7 +174,7 @@ if __name__ == '__main__':
                 try:
                     if not isinstance(step, GitClone):
                         continue
-                    branches[env.id] = {**branches[env.id], **step.get_branches()}
+                    branches[env.id] = {**step.get_branches()}
                 except BaseException as e:
                     socketio.emit('error', {'message': e}, namespace='/ws/errors')
             logger.info(f"Fetched {env.id}: {len (branches[env.id])} branches")
