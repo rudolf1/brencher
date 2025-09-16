@@ -136,7 +136,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
         self.stackChecker = stackChecker
 
 
-    def progress(self) -> str:
+    def progress(self) -> Any:
         """
         Deploys to Docker Swarm using the specified docker-compose.yaml.
         """
@@ -194,11 +194,13 @@ class DockerSwarmDeploy(AbstractStep[str]):
 
         if len(diffs) == 0:
             logger.info(f"No diff found, stack is already up-to-date.")
-            return '\\n'.join(ok)
+            return ok
         logger.info(f"Diff {diffs}")
         if self.env.dry:
             logger.info(f"Stack is not active, skipping deploy.")
-            return "\\n".join(diffs) + "\\nStack is not active, skipping deploy."
+            return {
+                "diffs": diffs,
+            }
         
         tmp_compose_path = docker_compose_absolute_path + ".tmp"
         with open(tmp_compose_path, 'w') as f:
