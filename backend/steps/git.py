@@ -163,6 +163,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
             for head in repo.branches:
                 if head.is_remote and head.commit.hexsha == merge_commit.hexsha:
                     logger.info(f"Merge commit {merge_commit} corresponds to branch {head}")
+                    repo.git.checkout(head.name)
                     return CheckoutAndMergeResult(head.name, merge_commit.hexsha, version)
 
 
