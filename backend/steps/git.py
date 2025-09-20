@@ -158,7 +158,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         sorted_commits = sorted(commit_ids.keys(), key=lambda x: x.hexsha)
         auto_branch_hash = hashlib.sha1(''.join([x.hexsha for x in sorted_commits]).encode()).hexdigest()
         auto_branch_name = f"auto/{auto_branch_hash}"
-        version = '-'.join([x.hexsha[0:5] for x in sorted_commits])
+        version = '-'.join([x.hexsha[0:8] for x in sorted_commits])
         if merge_commit is not None:
             for head in repo.branches:
                 if head.is_remote and head.commit.hexsha == merge_commit.hexsha:
@@ -241,8 +241,8 @@ class GitUnmerge(AbstractStep[List[str]]):
         version = list(version)[0]
         repo = git.Repo(wd)
         if 'auto-' in version:
-            version = version[5:]
-            version = version.split('-')
+            version = version[len('auto-'):].split('-')
+
             commits = []
             for v in version:
                 commit = repo.commit(v)

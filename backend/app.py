@@ -175,6 +175,8 @@ if __name__ == '__main__':
                     if not isinstance(step, GitClone):
                         continue
                     branches[env.id] = {**step.get_branches()}
+                    print("Delete check {env.branches} after {list(set(env.branches).intersection(branches[env.id]))}")
+                    # env.branches = list(set(env.branches).intersection(branches[env.id]))
                 except BaseException as e:
                     socketio.emit('error', {'message': e}, namespace='/ws/errors')
             logger.info(f"Fetched {env.id}: {len (branches[env.id])} branches")
