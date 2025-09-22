@@ -49,8 +49,8 @@ class GradleBuild:
                 
                 # Clone with authentication if needed
                 auth_url = self._get_auth_git_url(repo_url)
-                repo = git.Repo.clone_from(auth_url, build_dir)
-                repo.git.checkout(checkout_result.branch_name)
+                with git.Repo.clone_from(auth_url, build_dir) as repo:
+                    repo.git.checkout(checkout_result.branch_name)
                 
                 # Calculate build version from commit hash
                 build_version = checkout_result.commit_hash[:5] if checkout_result.commit_hash else "dev"
