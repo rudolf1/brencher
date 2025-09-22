@@ -48,9 +48,14 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                     "brencher-backend" :{
                         "user" : "1000:998",
                         "environment": {
-                            "PROFILES" : "brencher_local1,brencher_local2"
+                            "PROFILES" : "brencher_local1"
                         },
                         "ports":["5003:5001"],
+                    }
+                },
+                "networks": {
+                    "brencher-net": {
+                        "driver": "overlay"
                     }
                 }
         },
