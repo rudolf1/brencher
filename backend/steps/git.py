@@ -188,7 +188,6 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
                 
                 return CheckoutAndMergeResult(auto_branch_name, auto_branch_hash, version)
 
-        repo.git.checkout(repo.head.commit.hexsha)
         if auto_branch_name in repo.branches:
             repo.git.branch('-D', auto_branch_name)
         # Auto branch doesn't exist, create it
@@ -196,7 +195,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         
         commits = list(commit_ids.keys())
         repo.git.branch('-f', auto_branch_name,  commits[0].hexsha)
-        repo.git.checkout(auto_branch_name)
+        repo.git.checkout(commits[0].hexsha)
         
         # Merge the rest of the branches
         for commit in commits[1:]:
