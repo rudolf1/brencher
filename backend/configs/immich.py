@@ -2,7 +2,7 @@ from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from enironment import Environment
 from typing import List, Dict, Any, Optional, Tuple
-from steps.step import AbstractStep, OK
+from steps.step import AbstractStep
 
 env = Environment(
     id="immich",
