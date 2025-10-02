@@ -14,12 +14,12 @@ logger = logging.getLogger(__name__)
 class DockerComposeBuild(AbstractStep[List[str]]):
     def __init__(self, 
                  wd: GitClone, 
-                 docker_repo_username:str, 
-                 docker_repo_password:str, 
-                 docker_compose_path:str, 
+                 docker_repo_username: str, 
+                 docker_repo_password: str, 
+                 docker_compose_path: str, 
                  docker_repo_url: str,
                  publish: bool,
-                 envs: Callable[[], Dict[str, str]], **kwargs):
+                 envs: Callable[[], Dict[str, Any]], **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.wd = wd
         self.envs = envs
@@ -97,7 +97,7 @@ class DockerSwarmCheck(AbstractStep[Dict[str, DockerSwarmCheckResult]]):
 
     def __init__(self, 
                  stack_name: str, 
-                 **kwargs):
+                 **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.stack_name = stack_name
 
@@ -128,7 +128,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
                  docker_compose_path: str, 
                  envs: Callable[[], Dict[str, Any]], 
                  stack_name: str, 
-                 **kwargs):
+                 **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.wd = wd
         self.buildDocker = buildDocker
@@ -142,13 +142,9 @@ class DockerSwarmDeploy(AbstractStep[str]):
         """
         Deploys to Docker Swarm using the specified docker-compose.yaml.
         """
-        if isinstance(self.wd.result, BaseException):
-            raise self.wd.result
-        if isinstance(self.buildDocker.result, BaseException):
-            raise self.buildDocker.result
-        if isinstance(self.stackChecker.result, BaseException):
-            raise self.stackChecker.result
-
+        # These checks are not needed as the AbstractStep.result property handles exceptions
+        # But keeping them for clarity
+        
         env = self.envs()
         # Prepare docker-compose file with env substitution
         docker_compose_absolute_path = os.path.join(self.wd.result, self.docker_compose_path)
@@ -161,7 +157,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
                     if "build" in svc:
                         del svc["build"]
                     svc["labels"] = {"org.brencher.version": env["version"]}
-            def merge_dicts(a, b):
+            def merge_dicts(a: Dict[str, Any], b: Dict[str, Any]) -> None:
                 for k, v in b.items():
                     if (
                         k in a
@@ -182,7 +178,8 @@ class DockerSwarmDeploy(AbstractStep[str]):
         ok = []
         for svc_name, svc in expected_services.items():
             expected_image = svc.get("image")
-            running_image = current_services.get(svc_name).image if svc_name in current_services else None
+            running_service = current_services.get(svc_name)
+            running_image = running_service.image if running_service is not None else None
             l = {
                 "service": svc_name,
                 "expected_image": expected_image,

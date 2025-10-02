@@ -4,3 +4,6 @@ gitpython
 python-dotenv
 docker
 PyYAML
+mypy
+types-PyYAML
+types-requests
