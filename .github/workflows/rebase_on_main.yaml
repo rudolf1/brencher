@@ -39,8 +39,10 @@ jobs:
           MAIN=main
           # Collect remote branch names (exclude HEAD and main)
           branches=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
-                    | sed 's|^origin/||' \
-                    | grep -v '^HEAD$' || true)
+            | sed 's|^origin/||' \
+            | grep -v -e '^HEAD$' -e '^main$' -e '^origin$' \
+            | sed '/^$/d' \
+            | sort -u || true)
           failed=()
           for br in $branches; do
             if [[ "$br" == "$MAIN" ]]; then
