@@ -1,0 +1,72 @@
+name: Merge branches onto main
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: rebase-on-main
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "GitHub Actions"
+
+      - name: Fetch all branches
+        run: |
+          git remote set-url origin "https://x-access-token:${{ secrets.REPO_TOKEN }}@github.com/${{ github.repository }}.git"
+          git fetch --all --prune
+
+      - name: Merge every branch onto main
+        shell: bash
+        run: |
+          set -eo pipefail
+          MAIN=main
+          # Collect remote branch names (exclude HEAD and main)
+          branches=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
+                    | sed 's|^origin/||' \
+                    | grep -v '^HEAD$' || true)
+          failed=()
+          for br in $branches; do
+            if [[ "$br" == "$MAIN" ]]; then
+              continue
+            fi
+            echo "=== Processing branch: $br ==="
+            # Create/update a local branch from remote
+            git checkout -B "$br" "origin/$br"
+            # Merge origin/main into branch (non-interactive)
+            if git merge --no-edit "origin/$MAIN"; then
+              # Push updated branch to remote (no force)
+              if git push origin "$br"; then
+                echo "Pushed merged $br"
+              else
+                echo "Push failed for $br"
+                failed+=("$br")
+              fi
+            else
+              echo "Merge failed for $br, aborting merge and skipping"
+              git merge --abort || true
+              failed+=("$br")
+            fi
+          done
+          if [ ${#failed[@]} -ne 0 ]; then
+            echo "Merge skipped/failed for branches: ${failed[*]}"
+            exit 1
+          else
+            echo "All branches merged successfully."
+          fi
