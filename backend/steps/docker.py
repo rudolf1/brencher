@@ -173,7 +173,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
                     svc["labels"] = {"org.brencher.version": env["version"]}
             del env["version"]
             merge_dicts(compose, env)
-            # print(f"Final compose: {compose}")
+#            logger.info(f"Final compose: {compose}")
             content = yaml.safe_dump(compose)
 
         current_services = self.stackChecker.result
@@ -213,6 +213,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
         # Deploy stack to Docker Swarm
         cmd = [
             "docker", "stack", "deploy",
+            "--prune",
             "-c", tmp_compose_path,
             self.stack_name
         ]
