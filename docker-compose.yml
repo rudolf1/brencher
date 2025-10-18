@@ -8,12 +8,13 @@ services:
       - "5001:5001"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - tmp:/tmp
       - /etc/passwd:/etc/passwd
     environment:
       - PYTHONUNBUFFERED=1
       - VIRTUAL_HOST=brencher.rudolf.keenetic.link
       - LETSENCRYPT_HOST=brencher.rudolf.keenetic.link
-      - PROFILES=brencher
+      - PROFILES=brencher,torrserv_proxy
     deploy:
       replicas: 1
       restart_policy:
@@ -28,6 +29,9 @@ services:
 secrets:
   brencher-secrets:
     external: true
+
+volumes:
+  tmp:
 
 networks:
   brencher-net:

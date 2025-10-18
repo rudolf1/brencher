@@ -1,8 +1,40 @@
 # UI Requirements
 
-## Branch List
-- Display list of branches in all git repositories
-- Each branch has a checkbox
+# UI Requirements
+
+## Branch List Display
+- Display list of branches in all git repositories as a table format
+- Each branch has a checkbox for deployment selection
+- Branch name with environment context (production, development, staging)
+- Desired commit selection with dropdown and custom input
+- Current deployed commit ID display from GitUnmerge results
+
+### Filter Functionality
+- Filter textbox at the top of the branch table (empty by default)
+- Branches are displayed based on:
+  - Checked for deploy (always shown)
+  - Unchecked but currently deployed (returned by GitUnmerge)
+  - Filter text matches branch name, commit ID, or commit message
+
+### Commit Selection
+- Dropdown shows:
+  - HEAD option with commit details (hash, author, message)
+  - Individual commits in the branch
+- Text input for custom commit IDs when "Custom Commit" is selected
+
+## Data Structure
+- Environment branch list format: Array of [branch_name, desired_commit] pairs
+- desired_commit can be:
+  - "HEAD" for latest commit
+  - Full commit hash for specific commits
+  - Custom commit ID entered by user
+
+## Table Layout
+- Borderless table with columns:
+  1. Deploy (checkbox)
+  2. Branch Name (with environment label)
+  3. Desired Commit (dropdown + optional text input)
+  4. Current Deployed (commit hash from GitUnmerge)
 
 ## Environment State
 - On each update for EnvironmentDto render pipeline on right conlumn on UI
@@ -35,5 +67,8 @@
     to see clear error messages in the UI if a request fails or the backend returns an error, 
     so I can quickly address problems.
 
-### Updated state of environment should be sent to server via websocket in cases
-- When I check or uncheck a branch
+### Apply Changes Pattern
+- Changes are tracked locally and "Apply Changes" button appears when modifications are detected
+- Button submits all pending changes at once via websocket
+- Server state tracking prevents unnecessary updates
+

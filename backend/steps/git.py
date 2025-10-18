@@ -4,7 +4,7 @@ from git.objects import Commit
 from git.refs import Reference
 import logging
 from dataclasses import dataclass, asdict, field
-from typing import List, Optional, Union, Tuple, Set, Iterator, Dict
+from typing import List, Optional, Union, Tuple, Set, Iterator, Dict, Any
 from steps.step import AbstractStep
 import tempfile
 import os
@@ -13,9 +13,11 @@ from enironment import Environment
 logger = logging.getLogger(__name__)
 
 class GitClone(AbstractStep[str]):
-    def __init__(self, env: Environment, **kwargs):
+    def __init__(self, env: Environment, branchNamePrefix="", **kwargs):
         super().__init__(env, **kwargs)
         self.temp_dir = os.path.join(tempfile.gettempdir(), f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
+        self.branchNamePrefix = branchNamePrefix
+
 
     def progress(self) -> str:
 
@@ -24,16 +26,45 @@ class GitClone(AbstractStep[str]):
         if os.path.exists(os.path.join(self.temp_dir, ".git")):
             logger.info(f"Repository already cloned at {self.temp_dir}, fetching updates.")
             repo = git.Repo(self.temp_dir)
-            result = repo.remotes.origin.fetch()
+            result = repo.remotes.origin.fetch(prune=True)
             if not result or any(fetch_info.flags & fetch_info.ERROR for fetch_info in result):
                 raise BaseException(f"Failed to fetch updates for {self.env.repo}")
         else:
-            git.Repo.clone_from(self.env.repo, self.temp_dir)
+            repo = git.Repo.init(self.temp_dir)
+            repo.remotes.append(repo.create_remote(
+                'origin', 
+                self.env.repo
+            ))
+            if self.branchNamePrefix != "":
+                repo.config_writer().set_value('remote "origin"',"fetch", f"+refs/heads/{self.branchNamePrefix}/*:refs/remotes/origin/{self.branchNamePrefix}/*").release()
+            repo.remotes.origin.fetch(prune=True)
             if not os.path.exists(os.path.join(self.temp_dir, ".git")):
                 raise BaseException(f"Failed to clone repository {self.env.repo} to {self.temp_dir}")
         
         return self.temp_dir
-            
+    
+
+    def get_branches(self) -> Dict[str, List[Any]]:
+        repo = git.Repo(self.temp_dir)
+        result = {}
+        for ref in repo.refs:
+            if ref.name.startswith('origin/') and not ref.name.startswith('origin/HEAD'):
+                branch_name = ref.name [len('origin/'):]
+                if not branch_name.startswith('auto/'): # Skip auto branches
+                    result[branch_name] = []
+                    cmt = [ref.commit]
+                    for _ in range(10):
+                        for commit in cmt:
+                            result[branch_name].append({
+                                'hexsha': commit.hexsha,
+                                'author': commit.author.name,
+                                'date': commit.committed_datetime.isoformat(),
+                                'message': commit.message.strip()
+                            })
+
+                        cmt = [p for c in cmt for p in c.parents]
+        return result
+
 import hashlib
 
 @dataclass
@@ -98,9 +129,13 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         logger.info(f"Selected branches: {self.env.branches}")
         # Extract commit ids for the selected branches
         commit_ids: Dict[Commit, str] = {}
-        for br in self.env.branches:
-            commit = repo.commit(f'origin/{br}')
-            commit_ids[commit] = br
+        for branch_pair in self.env.branches:
+            branch_name, desired_commit = branch_pair
+            if desired_commit == 'HEAD':
+                commit = repo.commit(f'origin/{branch_name}')
+            else:
+                commit = repo.commit(desired_commit)
+            commit_ids[commit] = branch_name
 
         logger.info(f"Commit ids for branches: {commit_ids}")
 
@@ -123,11 +158,12 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         sorted_commits = sorted(commit_ids.keys(), key=lambda x: x.hexsha)
         auto_branch_hash = hashlib.sha1(''.join([x.hexsha for x in sorted_commits]).encode()).hexdigest()
         auto_branch_name = f"auto/{auto_branch_hash}"
-        version = '-'.join([x.hexsha[0:5] for x in sorted_commits])
+        version = '-'.join([x.hexsha[0:8] for x in sorted_commits])
         if merge_commit is not None:
             for head in repo.branches:
                 if head.is_remote and head.commit.hexsha == merge_commit.hexsha:
                     logger.info(f"Merge commit {merge_commit} corresponds to branch {head}")
+                    repo.git.checkout(head.name)
                     return CheckoutAndMergeResult(head.name, merge_commit.hexsha, version)
 
 
@@ -152,7 +188,6 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
                 
                 return CheckoutAndMergeResult(auto_branch_name, auto_branch_hash, version)
 
-        repo.git.checkout(repo.head.commit.hexsha)
         if auto_branch_name in repo.branches:
             repo.git.branch('-D', auto_branch_name)
         # Auto branch doesn't exist, create it
@@ -160,7 +195,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         
         commits = list(commit_ids.keys())
         repo.git.branch('-f', auto_branch_name,  commits[0].hexsha)
-        repo.git.checkout(auto_branch_name)
+        repo.git.checkout(commits[0].hexsha)
         
         # Merge the rest of the branches
         for commit in commits[1:]:
@@ -182,3 +217,47 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
             logger.info(f"Pushing {auto_branch_hash} to {auto_branch_name}")
             repo.git.push('-f', 'origin', auto_branch_name)
         return CheckoutAndMergeResult(auto_branch_name,auto_branch_hash, version)
+
+
+from steps.docker import DockerSwarmCheckResult, DockerSwarmCheck
+
+class GitUnmerge(AbstractStep[List[str]]):
+    wd: GitClone
+
+    def __init__(self, wd: GitClone,
+                 check: DockerSwarmCheck,
+                  **kwargs):
+        super().__init__(**kwargs)
+        self.wd = wd
+        self.check = check
+
+    def progress(self) -> List[str]:
+        wd = self.wd.result
+        deployState: Dict[str, DockerSwarmCheckResult] = self.check.result
+
+        version = set([it.version for it in deployState.values()])
+        if len(version) != 1:
+            raise BaseException(f"Expected exactly one version, got: {version}")
+        version = list(version)[0]
+        repo = git.Repo(wd)
+        if 'auto-' in version:
+            version = version[len('auto-'):].split('-')
+
+            commits = []
+            for v in version:
+                commit = repo.commit(v)
+                # branches = [head.name for head in repo.heads if head.commit.hexsha == commit.hexsha]
+                branches = [ref.name for ref in repo.remotes.origin.refs if ref.commit.hexsha == commit.hexsha]
+                branches = [b[len('origin/'):] for b in branches if b.startswith('origin/') and not b.startswith('origin/HEAD')]
+                
+                # if len(branches) == 0 or branches[0].startswith('auto/'):
+                #     # Find all parent commits of the given commit
+                #     parents = [parent for parent in commit.parents]
+                #     branches = [head.name for head in repo.heads for commit in parents if head.commit.hexsha == commit.hexsha]
+                commits.append((commit.hexsha, branches))
+
+            version = commits
+        else:
+            version = [version]
+        return version
+

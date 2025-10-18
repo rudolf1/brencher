@@ -14,6 +14,7 @@ from dataclasses import dataclass, asdict, field
 from typing import List, Dict, Any, Optional
 import shutil
 import subprocess
+import traceback
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -85,9 +86,10 @@ def get_envs_to_emit():
             res = []
             for r in p:
                 if isinstance(r.result_obj, BaseException): 
+                    stack = traceback.format_exception(type(r.result_obj), r.result_obj, r.result_obj.__traceback__)
                     res.append({
-                        "name":r.name, 
-                        "status": str(r.result_obj)
+                        "name": r.name,
+                        "status": [str(r.result_obj), stack],
                     })
                 else:
                     res.append({
@@ -129,8 +131,15 @@ socketio.on_namespace(ErrorsNamespace('/ws/errors'))
 if __name__ == '__main__':
 
     import configs.brencher
-    import configs.brencher_local
-    environments = [configs.brencher.brencher, configs.brencher_local.brencher_local]
+    import configs.brencher_local2
+    import configs.brencher_local1
+    import configs.torrserv_proxy
+    environments = [
+        configs.brencher.brencher, 
+        configs.brencher_local2.brencher_local,
+        configs.brencher_local1.brencher_local,
+        configs.torrserv_proxy.config
+    ]
 
     import sys
     cli_env_ids = sys.argv[1:]
@@ -157,38 +166,23 @@ if __name__ == '__main__':
     logger.info(f"Resulting profiles {[e.id for e, _ in environments]}")        
     
     # Background thread to refresh branches every 5 minutes
-    def branch_refresh_thread():
-        def fetch_branches():
-            global branches, environments
-            with state_lock:
-                for env, pipe in environments:
-                    new_branches = []
-                    for step in pipe:
-                        if not isinstance(step, GitClone):
-                            continue
-                        try:
-                            step._result = None
-                            repo = git.Repo(step.result)
-                            for ref in repo.refs:
-                                if ref.name.startswith('origin/') and not ref.name.startswith('origin/HEAD'):
-                                    branch_name = ref.name [len('origin/'):]
-                                    if not branch_name.startswith('auto/'): # Skip auto branches
-                                        new_branches.append(branch_name)
+    def emit_fresh_branches():
+        global branches, environments
+        for env, pipe in environments:
+            branches[env.id] = {}
+            for step in pipe:
+                try:
+                    if not isinstance(step, GitClone):
+                        continue
+                    branches[env.id] = {**step.get_branches()}
+                    # logger.info(f"Delete check {env.branches} after {[x for x in env.branches if x[0] in branches[env.id].keys()]}")
+                    env.branches = [x for x in env.branches if x[0] in branches[env.id].keys()]
+                except BaseException as e:
+                    socketio.emit('error', {'message': e}, namespace='/ws/errors')
+            logger.info(f"Fetched {env.id}: {len (branches[env.id])} branches")
+            # logger.info(f"Fetched {env.id}: {branches[env.id]}")
+        socketio.emit('branches', branches, namespace='/ws/branches')
 
-                            branches[env.id]= new_branches
-                            logger.info(f"Fetched {env.id}: {len (new_branches)} branches")
-                            environment_update_event.set()
-                        except BaseException as e:
-                            socketio.emit('error', {'message': e}, namespace='/ws/errors')
-        while True:
-            fetch_branches()
-            socketio.emit('branches', branches, namespace='/ws/branches')
-            time.sleep(300)  # 5 minutes
-
-    # Start branch refresh thread
-    refresh_thread = threading.Thread(target=branch_refresh_thread)
-    refresh_thread.daemon = True
-    refresh_thread.start()
 
     def processing_thread():
         while True:
@@ -201,6 +195,7 @@ if __name__ == '__main__':
             with state_lock:
                 logger.error(f"Processing")
                 processing.process_all_jobs(environments, lambda: emit_envs())
+                emit_fresh_branches()
             environment_update_event.wait(timeout=1*60)
             environment_update_event.clear()
 
@@ -211,6 +206,5 @@ if __name__ == '__main__':
     # Run the server
     if 'noweb' in sys.argv[1:]:
         processing.join()
-        refresh_thread.join()
     else:
         socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)

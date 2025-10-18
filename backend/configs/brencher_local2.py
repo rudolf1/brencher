@@ -1,11 +1,12 @@
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
-from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
+from steps.docker import DockerComposeBuild
+from steps.docker import DockerSwarmDeploy, DockerSwarmCheck
 from enironment import Environment
 from typing import List, Dict, Any, Optional, Tuple
 from steps.step import AbstractStep
 
-env = Environment(
-    id="brencher",
+env_local = Environment(
+    id="brencher_local2",
     branches=[],
     dry=False,
     repo="https://github.com/rudolf1/brencher.git",
@@ -20,6 +21,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         git_user_name="brencher_bot"
             )
     
+
     buildDocker = DockerComposeBuild(clone,
                         docker_repo_username = "", 
                         docker_repo_password = "", 
@@ -28,14 +30,12 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         publish=False,
                         envs = lambda: { 
                             "version": "auto-" + checkoutMerged.result.version,
-                            "user_group" : "1000:137" 
+                            "user_group" : "1000:998" 
                         },
                         env=env
                     )
-    
-
     dockerSwarmCheck = DockerSwarmCheck(
-        stack_name = "brencher",
+        stack_name = "brencher_local2",
         env=env, 
     )
     deployDocker = DockerSwarmDeploy(
@@ -43,22 +43,30 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         buildDocker=buildDocker,
         stackChecker=dockerSwarmCheck,
         envs = lambda: { 
-            "version": "auto-" + checkoutMerged.result.version
-       },
-        stack_name = "brencher",
+                "version": "auto-" + checkoutMerged.result.version,
+                "services": {
+                    "brencher-backend" :{
+                        "user" : "1000:998",
+                        "environment": {
+                            "PROFILES" : "brencher_local"
+                        },
+                        "ports":[],
+                    }
+                }
+        },
+        stack_name = "brencher_local2",
         docker_compose_path = "docker-compose.yml", 
-        env=env, 
+        env=env,
     )
     unmerge = GitUnmerge(clone, dockerSwarmCheck, env=env)
-
     return [
         clone,
         checkoutMerged,
         buildDocker,
-        dockerSwarmCheck, 
-        unmerge,       
+        dockerSwarmCheck,
         deployDocker,
+        unmerge
     ]
 
-brencher: Tuple[Environment, List[AbstractStep]] = (env, create_pipeline(env))
+brencher_local: Tuple[Environment, List[AbstractStep]] = (env_local, create_pipeline(env_local))
 

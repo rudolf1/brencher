@@ -5,10 +5,10 @@ from typing import List, Dict, Any, Optional, Tuple
 from steps.step import AbstractStep
 
 env = Environment(
-    id="brencher",
+    id="torrserv_proxy",
     branches=[],
     dry=False,
-    repo="https://github.com/rudolf1/brencher.git",
+    repo="https://github.com/rudolf1/reverseproxy.git",
 )
 
 
@@ -28,14 +28,13 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         publish=False,
                         envs = lambda: { 
                             "version": "auto-" + checkoutMerged.result.version,
-                            "user_group" : "1000:137" 
                         },
                         env=env
                     )
     
 
     dockerSwarmCheck = DockerSwarmCheck(
-        stack_name = "brencher",
+        stack_name = "torrserv_proxy",
         env=env, 
     )
     deployDocker = DockerSwarmDeploy(
@@ -45,7 +44,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         envs = lambda: { 
             "version": "auto-" + checkoutMerged.result.version
        },
-        stack_name = "brencher",
+        stack_name = "torrserv_proxy",
         docker_compose_path = "docker-compose.yml", 
         env=env, 
     )
@@ -60,5 +59,5 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         deployDocker,
     ]
 
-brencher: Tuple[Environment, List[AbstractStep]] = (env, create_pipeline(env))
+config: Tuple[Environment, List[AbstractStep]] = (env, create_pipeline(env))
 

@@ -50,7 +50,9 @@ class DockerComposeBuild(AbstractStep[List[str]]):
             services = compose.get('services', {})
 
             for name, svc in services.items():
-                build_ctx = os.path.join(self.wd.result, svc.get('build'))
+                if svc.get('build') is None:
+                    continue
+                build_ctx = os.path.join(os.path.dirname(docker_compose_absolute_path), svc.get('build'))
                 image = svc.get('image')
                 if not build_ctx or not image:
                     continue
@@ -136,7 +138,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
         self.stackChecker = stackChecker
 
 
-    def progress(self) -> str:
+    def progress(self) -> Any:
         """
         Deploys to Docker Swarm using the specified docker-compose.yaml.
         """
@@ -171,7 +173,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
                         a[k] = v
             del env["version"]
             merge_dicts(compose, env)
-            # print(f"Final compose: {compose}")
+#            logger.info(f"Final compose: {compose}")
             content = yaml.safe_dump(compose)
 
         current_services = self.stackChecker.result
@@ -181,7 +183,12 @@ class DockerSwarmDeploy(AbstractStep[str]):
         for svc_name, svc in expected_services.items():
             expected_image = svc.get("image")
             running_image = current_services.get(svc_name).image if svc_name in current_services else None
-            l = f"Service '{svc_name}' (expected image: '{expected_image}', actual image: '{running_image}')"
+            l = {
+                "service": svc_name,
+                "expected_image": expected_image,
+                "actual_image": running_image,
+                "stack": self.stack_name,
+            }
             logger.info(l)
             if running_image and expected_image and running_image == expected_image:
                 ok.append(l)
@@ -190,11 +197,13 @@ class DockerSwarmDeploy(AbstractStep[str]):
 
         if len(diffs) == 0:
             logger.info(f"No diff found, stack is already up-to-date.")
-            return '\\n'.join(ok)
+            return ok
         logger.info(f"Diff {diffs}")
         if self.env.dry:
             logger.info(f"Stack is not active, skipping deploy.")
-            return "\\n".join(diffs) + "\\nStack is not active, skipping deploy."
+            return {
+                "diffs": diffs,
+            }
         
         tmp_compose_path = docker_compose_absolute_path + ".tmp"
         with open(tmp_compose_path, 'w') as f:
@@ -204,6 +213,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
         # Deploy stack to Docker Swarm
         cmd = [
             "docker", "stack", "deploy",
+            "--prune",
             "-c", tmp_compose_path,
             self.stack_name
         ]
