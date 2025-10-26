@@ -48,15 +48,15 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                     "brencher-backend" :{
                         "user" : "1000:998",
                         "environment": {
-                            "PROFILES" : "brencher_local"
+                            "PROFILES" : "brencher_local1"
                         },
-                        "ports": [
-                            "5002:5002"
-                        ]
+                        "ports": {
+                            "5002":"5002"
+                        }
                     }
                 }
         },
-        stack_name = "brencher_local1",
+        stack_name = "brencher_local2",
         docker_compose_path = "docker-compose.yml", 
         env=env,
     )
