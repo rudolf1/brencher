@@ -50,11 +50,13 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         "environment": {
                             "PROFILES" : "brencher_local"
                         },
-                        "ports":[],
+                        "ports": [
+                            "5002:5002"
+                        ]
                     }
                 }
         },
-        stack_name = "brencher_local2",
+        stack_name = "brencher_local1",
         docker_compose_path = "docker-compose.yml", 
         env=env,
     )

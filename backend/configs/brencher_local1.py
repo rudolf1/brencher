@@ -54,7 +54,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                     }
                 }
         },
-        stack_name = "brencher_local1",
+        stack_name = "brencher_local2",
         docker_compose_path = "docker-compose.yml", 
         env=env,
     )
