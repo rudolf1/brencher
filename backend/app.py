@@ -171,7 +171,7 @@ class EnvironmentNamespace(Namespace):
         emit('environments', get_envs_to_emit())
 
     def on_update(self, data):
-        global environments
+        global environments, remote_sio
 
         logger.info(f"Received environment update: {data}")
 
@@ -179,7 +179,12 @@ class EnvironmentNamespace(Namespace):
             if e.id == data.get('id'):
                 e.branches = data.get('branches', e.branches)
                 logger.info(f"Updated environment {e.id} branches to {e.branches}")
+
         environment_update_event.set()
+
+        if remote_sio is not None:
+            remote_sio.emit('environments', data, namespace='/ws/environment')
+
         emit('environments', get_envs_to_emit(), namespace='/ws/environment')
 
 class ErrorsNamespace(Namespace):
