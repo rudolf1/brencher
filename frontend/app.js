@@ -297,7 +297,8 @@ function setupSocketIO() {
     });
 
     wsEnv.on('environments', data => {
-        environmentsRaw = data || [];
+        payload = data || {};
+        environmentsRaw = Object.values(payload);
 
         // Sync selections and deployed commits per environment
         environmentsRaw.forEach(([envObj, jobsArr]) => {
