@@ -131,11 +131,13 @@ socketio.on_namespace(ErrorsNamespace('/ws/errors'))
 if __name__ == '__main__':
 
     import configs.brencher
+    import configs.brencher2
     import configs.brencher_local2
     import configs.brencher_local1
     import configs.torrserv_proxy
     environments = [
         configs.brencher.brencher, 
+        configs.brencher2.brencher,
         configs.brencher_local2.brencher_local,
         configs.brencher_local1.brencher_local,
         configs.torrserv_proxy.config
