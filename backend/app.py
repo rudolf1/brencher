@@ -11,10 +11,12 @@ from steps.git import GitClone
 import tempfile
 import logging
 from dataclasses import dataclass, asdict, field
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import shutil
 import subprocess
 import traceback
+from enironment import Environment
+from steps.step import AbstractStep
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -26,7 +28,7 @@ load_dotenv("local.env")
 load_dotenv('/run/secrets/brencher-secrets')
 
 class DataclassJSONEncoder(json.JSONEncoder):
-    def default(self, o):
+    def default(self, o: Any) -> Any:
         if hasattr(o, '__dataclass_fields__'):
             return asdict(o)
         if isinstance(o, BaseException):
@@ -44,29 +46,29 @@ custom_json.loads = json.loads
 from flask.json.provider import DefaultJSONProvider
 
 class DataclassJSONProvider(DefaultJSONProvider):
-    def dumps(self, obj, **kwargs):
+    def dumps(self, obj: Any, **kwargs: Any) -> str:
         return json.dumps(obj, cls=DataclassJSONEncoder, **kwargs)
-    def loads(self, s, **kwargs):
+    def loads(self, s: str | bytes, **kwargs: Any) -> Any:
         return json.loads(s, **kwargs)
 
 app = Flask(__name__, static_folder='frontend')
 app.json = DataclassJSONProvider(app)
 socketio = SocketIO(app, cors_allowed_origins="*", json=custom_json)
 
-environments = []
+environments: List[Tuple[Environment, List[AbstractStep[Any]]]] = []
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
 
 # In-memory state
-branches = {}
+branches: Dict[str, Dict[str, Any]] = {}
 state_lock = threading.Lock()
 
 @app.route('/')
-def serve_index():
+def serve_index() -> Any:
     return send_from_directory(FRONTEND_DIR, 'index.html')
 
 @app.route('/<path:path>')
-def serve_static(path):
+def serve_static(path: str) -> Any:
     return send_from_directory(FRONTEND_DIR, path)
 
 # --- WebSocket Endpoints ---
@@ -74,16 +76,16 @@ from flask import copy_current_request_context
 from flask_socketio import Namespace
 
 class BranchesNamespace(Namespace):
-    def on_connect(self, auth=None):
+    def on_connect(self, auth: Optional[Any] = None) -> None:
         emit('branches', branches)
-    def on_update(self, data):
+    def on_update(self, data: Any) -> None:
         emit('branches', branches)
 
-def get_envs_to_emit():
-        env_dtos = []
+def get_envs_to_emit() -> List[Tuple[Dict[str, Any], List[Dict[str, Any]]]]:
+        env_dtos: List[Tuple[Dict[str, Any], List[Dict[str, Any]]]] = []
         for e, p in environments:
             env = asdict(e)
-            res = []
+            res: List[Dict[str, Any]] = []
             for r in p:
                 if isinstance(r.result_obj, BaseException): 
                     stack = traceback.format_exception(type(r.result_obj), r.result_obj, r.result_obj.__traceback__)
@@ -103,10 +105,10 @@ environment_update_event = threading.Event()
 
 class EnvironmentNamespace(Namespace):
 
-    def on_connect(self, auth=None):
+    def on_connect(self, auth: Optional[Any] = None) -> None:
         emit('environments', get_envs_to_emit())
 
-    def on_update(self, data):
+    def on_update(self, data: Dict[str, Any]) -> None:
         global environments
 
         logger.info(f"Received environment update: {data}")
@@ -119,9 +121,9 @@ class EnvironmentNamespace(Namespace):
         emit('environments', get_envs_to_emit(), namespace='/ws/environment')
 
 class ErrorsNamespace(Namespace):
-    def on_connect(self, auth=None):
+    def on_connect(self, auth: Optional[Any] = None) -> None:
         pass
-    def on_error(self, data):
+    def on_error(self, data: Any) -> None:
         emit('error', data)
 
 socketio.on_namespace(BranchesNamespace('/ws/branches'))
@@ -142,19 +144,20 @@ if __name__ == '__main__':
     ]
 
     import sys
-    cli_env_ids = sys.argv[1:]
-    if len(cli_env_ids) == 0:
-        cli_env_ids = os.getenv('PROFILES', '')
+    cli_env_ids_list = sys.argv[1:]
+    cli_env_ids_str: str
+    if len(cli_env_ids_list) == 0:
+        cli_env_ids_str = os.getenv('PROFILES', '')
     else:
-        cli_env_ids = cli_env_ids[0]
+        cli_env_ids_str = cli_env_ids_list[0]
     
-    if len(cli_env_ids) > 0 and cli_env_ids[0] == '-':
-        cli_env_ids = cli_env_ids[1:].split(',')
+    if len(cli_env_ids_str) > 0 and cli_env_ids_str[0] == '-':
+        cli_env_ids = cli_env_ids_str[1:].split(',')
         cli_env_ids = [x for x in cli_env_ids if len(x) > 0]
         if cli_env_ids and len(cli_env_ids) > 0:
             environments = [e for e in environments if e[0].id not in cli_env_ids]
     else:
-        cli_env_ids = cli_env_ids.split(',')
+        cli_env_ids = cli_env_ids_str.split(',')
         cli_env_ids = [x for x in cli_env_ids if len(x) > 0]
         if cli_env_ids and len(cli_env_ids) > 0:
             environments = [e for e in environments if e[0].id in cli_env_ids]
@@ -166,7 +169,7 @@ if __name__ == '__main__':
     logger.info(f"Resulting profiles {[e.id for e, _ in environments]}")        
     
     # Background thread to refresh branches every 5 minutes
-    def emit_fresh_branches():
+    def emit_fresh_branches() -> None:
         global branches, environments
         for env, pipe in environments:
             branches[env.id] = {}
@@ -184,10 +187,10 @@ if __name__ == '__main__':
         socketio.emit('branches', branches, namespace='/ws/branches')
 
 
-    def processing_thread():
+    def processing_thread() -> None:
         while True:
             import processing
-            def emit_envs():
+            def emit_envs() -> None:
                 try:
                     socketio.emit('environments', get_envs_to_emit(), namespace='/ws/environment')
                 except Exception as e:
