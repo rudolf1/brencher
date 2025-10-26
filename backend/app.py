@@ -61,6 +61,7 @@ FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
 
 # In-memory state
 environments: Dict[str, Tuple[enironment.Environment, List[AbstractStep]]] = {}
+environments_slaves: Dict[str, Tuple[enironment.Environment, List[AbstractStep]]] = {}
 branches = {}
 state_lock = threading.Lock()
 
@@ -110,14 +111,10 @@ if slave_url:
 
     @remote_sio.on('environments', namespace='/ws/environment')
     def _remote_environments(data):
-        global environments
-        print(f"Got envs {data}")
-        data1 = {d.id: d for d in data}
-        print(f"Got envs1 {data1}")
-        data2 = get_envs_to_emit()
-        merge_dicts(data2, data1)
+        global environments, environments_slaves
+        environments_slaves = data
         try:
-            socketio.emit('environments', _mark_forwarded(data2), namespace='/ws/environment')
+            socketio.emit('environments', get_global_envs_to_emit(), namespace='/ws/environment')
         except Exception as e:
             logger.error(f"Error forwarding remote environments locally: {e}")
 
@@ -143,7 +140,7 @@ class BranchesNamespace(Namespace):
     def on_update(self, data):
         emit('branches', branches)
 
-def get_envs_to_emit():
+def get_local_envs_to_emit():
         env_dtos = {}
         for e, p in environments.values():
             env = asdict(e)
@@ -163,12 +160,18 @@ def get_envs_to_emit():
             env_dtos[env['id']] = (env, res)
         return env_dtos
 
+def get_global_envs_to_emit():
+    global environments, environments_slaves
+    data_to_submit = get_local_envs_to_emit()
+    merge_dicts(data_to_submit, environments_slaves)
+    return data_to_submit
+
 environment_update_event = threading.Event()
 
 class EnvironmentNamespace(Namespace):
 
     def on_connect(self, auth=None):
-        emit('environments', get_envs_to_emit())
+        emit('environments', get_global_envs_to_emit())
 
     def on_update(self, data):
         global environments, remote_sio
@@ -182,10 +185,11 @@ class EnvironmentNamespace(Namespace):
 
         environment_update_event.set()
 
-        if remote_sio is not None:
-            remote_sio.emit('environments', data, namespace='/ws/environment')
+        if remote_sio is not None and remote_sio.connected:
+            remote_sio.emit('update', data, namespace='/ws/environment')
+            logger.info(f"Updated slave")
 
-        emit('environments', get_envs_to_emit(), namespace='/ws/environment')
+        emit('environments', get_global_envs_to_emit(), namespace='/ws/environment')
 
 class ErrorsNamespace(Namespace):
     def on_connect(self, auth=None):
@@ -262,7 +266,7 @@ if __name__ == '__main__':
             import processing
             def emit_envs():
                 try:
-                    socketio.emit('environments', get_envs_to_emit(), namespace='/ws/environment')
+                    socketio.emit('environments', get_local_envs_to_emit(), namespace='/ws/environment')
                 except Exception as e:
                     logger.error(f"Error emitting environments: {str(e)}")
             with state_lock:

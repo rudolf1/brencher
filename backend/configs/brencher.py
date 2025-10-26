@@ -51,6 +51,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                     },
                 }
             }
+            #  SLAVE_BRENCHER='http://100.70.193.97:5002' .venv/bin/python3 backend/app.py brencher_localX
        },
         stack_name = "brencher",
         docker_compose_path = "docker-compose.yml", 
