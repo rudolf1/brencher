@@ -50,9 +50,9 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         "environment": {
                             "PROFILES" : "brencher_local1"
                         },
-                        "ports": {
-                            "5002":"5002"
-                        }
+                        "ports": [
+                            "5002:5002"
+                        ]
                     }
                 }
         },
