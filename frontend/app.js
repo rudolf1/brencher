@@ -246,8 +246,7 @@ function renderJobs() {
                 const storageKey = 'jobSpoiler:' + key;
                 const safeId = 'spoiler-' + encodeURIComponent(key).replace(/[^a-zA-Z0-9_-]/g, '_');
                 const isError = /error|exception/i.test(statusDisplay);
-                const stored = (typeof localStorage !== 'undefined') ? localStorage.getItem(storageKey) : null;
-                const openByDefault = isError || stored === 'open';
+                const openByDefault = isError || window._jobSpoilerState[storageKey] === 'open';
 
                 return `
                     <div class="job-item">
