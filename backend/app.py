@@ -208,12 +208,14 @@ if __name__ == '__main__':
     import configs.brencher_local2
     import configs.brencher_local1
     import configs.torrserv_proxy
+    import configs.immich
     environments_l = [
         configs.brencher.brencher, 
         configs.brencher2.brencher,
         configs.brencher_local2.brencher_local,
         configs.brencher_local1.brencher_local,
-        configs.torrserv_proxy.config
+        configs.torrserv_proxy.config,
+        configs.immich.config,
     ]
     environments = {e[0].id: e for e in environments_l}
 
