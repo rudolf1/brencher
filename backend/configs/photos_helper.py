@@ -1,15 +1,14 @@
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
-from steps.docker import DockerComposeBuild
-from steps.docker import DockerSwarmDeploy, DockerSwarmCheck
+from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from enironment import Environment
 from typing import List, Dict, Any, Optional, Tuple
 from steps.step import AbstractStep
 
-env_local = Environment(
-    id="brencher_local1",
+env = Environment(
+    id="torrserv_proxy",
     branches=[],
     dry=False,
-    repo="https://github.com/rudolf1/brencher.git",
+    repo="https://github.com/rudolf1/reverseproxy.git",
 )
 
 
@@ -21,7 +20,6 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         git_user_name="brencher_bot"
             )
     
-
     buildDocker = DockerComposeBuild(clone,
                         docker_repo_username = "", 
                         docker_repo_password = "", 
@@ -30,12 +28,13 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         publish=False,
                         envs = lambda: { 
                             "version": "auto-" + checkoutMerged.result.version,
-                            "user_group" : "1000:998" 
                         },
                         env=env
                     )
+    
+
     dockerSwarmCheck = DockerSwarmCheck(
-        stack_name = "brencher_local1",
+        stack_name = "torrserv_proxy",
         env=env, 
     )
     deployDocker = DockerSwarmDeploy(
@@ -43,31 +42,22 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         buildDocker=buildDocker,
         stackChecker=dockerSwarmCheck,
         envs = lambda: { 
-                "version": "auto-" + checkoutMerged.result.version,
-                "services": {
-                    "brencher-backend" :{
-                        "user" : "1000:998",
-                        "environment": {
-                            "PROFILES" : "brencher_local",
-                            "SLAVE_BRENCHER" : "192.169.1.96:5002"
-                        },
-                        "ports":[]
-                    }
-                }
-        },
-        stack_name = "brencher_local2",
+            "version": "auto-" + checkoutMerged.result.version
+       },
+        stack_name = "torrserv_proxy",
         docker_compose_path = "docker-compose.yml", 
-        env=env,
+        env=env, 
     )
     unmerge = GitUnmerge(clone, dockerSwarmCheck, env=env)
+
     return [
         clone,
         checkoutMerged,
         buildDocker,
-        dockerSwarmCheck,
+        dockerSwarmCheck, 
+        unmerge,       
         deployDocker,
-        unmerge
     ]
 
-brencher_local: Tuple[Environment, List[AbstractStep]] = (env_local, create_pipeline(env_local))
+config: Tuple[Environment, List[AbstractStep]] = (env, create_pipeline(env))
 

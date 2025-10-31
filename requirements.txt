@@ -4,3 +4,4 @@ gitpython
 python-dotenv
 docker
 PyYAML
+websocket-client
