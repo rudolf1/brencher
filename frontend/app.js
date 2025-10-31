@@ -253,7 +253,7 @@ function renderJobs() {
                         <div class="job-header" style="cursor:pointer;font-weight:bold;"
                              onclick="toggleJobSpoiler('${key}', '${safeId}')">
                             ${isError
-                                ? `<span style="color:#dc3545;font-weight:bold;margin-right:6px;" title="Error">❗</span>`
+                                ? `<span style="color:#dc3545;font-weight:bold;margin-right:6px;" title="Error">!</span>`
                                 : `<span style="color:#28a745;font-weight:bold;margin-right:6px;" title="OK">✔</span>`}
                             ${envObj.id} - ${job.name}
                         </div>
