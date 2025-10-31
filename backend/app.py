@@ -232,6 +232,7 @@ if __name__ == '__main__':
         if cli_env_ids and len(cli_env_ids) > 0:
             environments = { k: e for k, e in environments.items() if k not in cli_env_ids }
     else:
+        logger.info(f"cli_env_ids {cli_env_ids}")        
         cli_env_ids = cli_env_ids.split(',')
         cli_env_ids = [x for x in cli_env_ids if len(x) > 0]
         if cli_env_ids and len(cli_env_ids) > 0:
