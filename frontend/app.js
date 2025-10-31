@@ -252,7 +252,7 @@ function renderJobs() {
                 return `
                     <div class="job-item">
                         <div class="job-header" style="cursor:pointer;font-weight:bold;"
-                             onclick="toggleJobSpoiler(${JSON.stringify(key)}, ${JSON.stringify(safeId)})">
+                             onclick="toggleJobSpoiler('${key}', '${safeId}')">
                             ${envObj.id} - ${job.name}
                         </div>
                         <div id="${safeId}" class="job-spoiler" style="display: ${openByDefault ? 'block' : 'none'}; margin-top:8px;">
