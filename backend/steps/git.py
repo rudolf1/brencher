@@ -19,44 +19,31 @@ class GitClone(AbstractStep[str]):
         self.branchNamePrefix = branchNamePrefix
         self.credEnvPrefix = credEnvPrefix
 
+    def _get_auth_git_url(self, url: str) -> str:
+        username = os.getenv(f'{self.credEnvPrefix}_USERNAME')
+        password = os.getenv(f'{self.credEnvPrefix}_PASSWORD')
+        if username and password:
+            # Extract protocol and the rest of the URL
+            protocol, rest = url.split('://')
+            return f"{protocol}://{username}:{password}@{rest}"
+        
+        return url
 
     def progress(self) -> str:
 
         logger.info(f"Cloning repository {self.env.repo} to {self.temp_dir}")
         os.makedirs(self.temp_dir, exist_ok=True)
-        
-        # Get git credentials from environment variables if credEnvPrefix is provided
-        git_username = None
-        git_password = None
-        if self.credEnvPrefix:
-            git_username = os.environ.get(f"{self.credEnvPrefix}_USERNAME")
-            git_password = os.environ.get(f"{self.credEnvPrefix}_PASSWORD")
-        
         if os.path.exists(os.path.join(self.temp_dir, ".git")):
             logger.info(f"Repository already cloned at {self.temp_dir}, fetching updates.")
             repo = git.Repo(self.temp_dir)
-            
-            # Set credentials if provided
-            if git_username and git_password:
-                with repo.config_writer() as cw:
-                    cw.set_value("credential", "username", git_username)
-                    cw.set_value("credential", "helper", f"!f() {{ echo \"password={git_password}\"; }}; f")
-            
             result = repo.remotes.origin.fetch(prune=True)
             if not result or any(fetch_info.flags & fetch_info.ERROR for fetch_info in result):
                 raise BaseException(f"Failed to fetch updates for {self.env.repo}")
         else:
             repo = git.Repo.init(self.temp_dir)
-            
-            # Set credentials if provided
-            if git_username and git_password:
-                with repo.config_writer() as cw:
-                    cw.set_value("credential", "username", git_username)
-                    cw.set_value("credential", "helper", f"!f() {{ echo \"password={git_password}\"; }}; f")
-            
             repo.remotes.append(repo.create_remote(
                 'origin', 
-                self.env.repo
+                self._get_auth_git_url(self.env.repo)
             ))
             if self.branchNamePrefix != "":
                 repo.config_writer().set_value('remote "origin"',"fetch", f"+refs/heads/{self.branchNamePrefix}/*:refs/remotes/origin/{self.branchNamePrefix}/*").release()
