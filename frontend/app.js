@@ -242,9 +242,22 @@ function renderJobs() {
                     /(https?:\/\/[^\s"']+)/g,
                     url => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
                 );
+                const key = `${envObj.id}::${job.name}`;
+                const storageKey = 'jobSpoiler:' + key;
+                const safeId = 'spoiler-' + encodeURIComponent(key).replace(/[^a-zA-Z0-9_-]/g, '_');
+                const isError = /error|exception/i.test(statusDisplay);
+                const stored = (typeof localStorage !== 'undefined') ? localStorage.getItem(storageKey) : null;
+                const openByDefault = isError || stored === 'open';
+
                 return `
                     <div class="job-item">
-                        <strong>${envObj.id} - ${job.name}</strong><br />${statusDisplay}                        
+                        <div class="job-header" style="cursor:pointer;font-weight:bold;"
+                             onclick="toggleJobSpoiler(${JSON.stringify(key)}, ${JSON.stringify(safeId)})">
+                            ${envObj.id} - ${job.name}
+                        </div>
+                        <div id="${safeId}" class="job-spoiler" style="display: ${openByDefault ? 'block' : 'none'}; margin-top:8px;">
+                            ${statusDisplay}
+                        </div>
                     </div>`;
                 }).join('')
                 : '<div class="job-item">No jobs found.</div>'}
@@ -252,7 +265,23 @@ function renderJobs() {
     }).join('');
 }
 
-
+toggleJobSpoiler = function(key, safeId) {
+    try {
+        const el = document.getElementById(safeId);
+        if (!el) return;
+        const storageKey = 'jobSpoiler:' + key;
+        const isHidden = window.getComputedStyle(el).display === 'none';
+        if (isHidden) {
+            el.style.display = 'block';
+            try { localStorage.setItem(storageKey, 'open'); } catch (e) {}
+        } else {
+            el.style.display = 'none';
+            try { localStorage.setItem(storageKey, 'closed'); } catch (e) {}
+        }
+    } catch (err) {
+        console.error('toggleJobSpoiler error', err);
+    }
+};
 refreshBranchesBtn.onclick = () => {
     wsEnv.emit('update', { id: "" });
     showStatus('Refreshing...');
