@@ -274,12 +274,13 @@ toggleJobSpoiler = function(key, safeId) {
         if (!el) return;
         const storageKey = 'jobSpoiler:' + key;
         const isHidden = window.getComputedStyle(el).display === 'none';
+        window._jobSpoilerState = window._jobSpoilerState || {};
         if (isHidden) {
             el.style.display = 'block';
-            try { localStorage.setItem(storageKey, 'open'); } catch (e) {}
+            window._jobSpoilerState[storageKey] = 'open';
         } else {
             el.style.display = 'none';
-            try { localStorage.setItem(storageKey, 'closed'); } catch (e) {}
+            window._jobSpoilerState[storageKey] = 'closed';
         }
     } catch (err) {
         console.error('toggleJobSpoiler error', err);
