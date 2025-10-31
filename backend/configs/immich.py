@@ -8,7 +8,7 @@ env = Environment(
     id="immich",
     branches=[("ansible/master", "HEAD")],
     dry=False,
-    repo="https://git@github.com/rudolf1/uber_backup.git",
+    repo="https://github.com/rudolf1/uber_backup.git",
 )
 
 
