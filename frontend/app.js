@@ -244,7 +244,7 @@ function renderJobs() {
                 );
                 return `
                     <div class="job-item">
-                        <strong>${job.env} - ${job.name}</strong><br />${statusDisplay}                        
+                        <strong>${envObj.id} - ${job.name}</strong><br />${statusDisplay}                        
                     </div>`;
                 }).join('')
                 : '<div class="job-item">No jobs found.</div>'}
