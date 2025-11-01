@@ -101,11 +101,6 @@ if slave_url:
     logger.info(f"SLAVE_BRENCHER set, will connect to master at {slave_url}")
     remote_sio = socketio_client.Client(logger=False, engineio_logger=False)
 
-    def _mark_forwarded(payload):
-        if isinstance(payload, dict):
-            return {**payload, '_slave_forwarded': True}
-        return {'_slave_forwarded': True, '__payload': payload}
-
     # Handlers for events from master -> re-emit locally (marked so we don't loop)
     @remote_sio.on('branches', namespace='/ws/branches')
     def _remote_branches(data):
@@ -113,7 +108,7 @@ if slave_url:
         branches_slaves = data
         merge_result = merge_dicts(branches, branches_slaves)
         try:
-            socketio.emit('branches', _mark_forwarded(merge_result), namespace='/ws/branches')
+            socketio.emit('branches', merge_result, namespace='/ws/branches')
         except Exception as e:
             logger.error(f"Error forwarding remote branches locally: {e}")
 
@@ -129,7 +124,7 @@ if slave_url:
     @remote_sio.on('error', namespace='/ws/errors')
     def _remote_error(data):
         try:
-            socketio.emit('error', _mark_forwarded(data), namespace='/ws/errors')
+            socketio.emit('error', data, namespace='/ws/errors')
         except Exception as e:
             logger.error(f"Error forwarding remote errors locally: {e}")
 
@@ -260,7 +255,7 @@ if __name__ == '__main__':
     
     # Background thread to refresh branches every 5 minutes
     def emit_fresh_branches():
-        global branches, environments
+        global branches, branches_slaves, environments
         for k, e in environments.items():
             env, pipe = e
             branches[k] = {}
@@ -275,7 +270,7 @@ if __name__ == '__main__':
                     socketio.emit('error', {'message': e}, namespace='/ws/errors')
             logger.info(f"Fetched {env.id}: {len (branches[env.id])} branches")
             # logger.info(f"Fetched {env.id}: {branches[env.id]}")
-        socketio.emit('branches', branches, namespace='/ws/branches')
+        socketio.emit('branches', merge_dicts(branches, branches_slaves), namespace='/ws/branches')
 
 
     def processing_thread():
