@@ -289,6 +289,7 @@ if __name__ == '__main__':
             environment_update_event.wait(timeout=1*60)
             environment_update_event.clear()
 
+
     processing = threading.Thread(target=processing_thread)
     processing.daemon = True
     processing.start()
@@ -305,7 +306,7 @@ if __name__ == '__main__':
             except Exception as e:
                 logger.error(f"Could not connect to SLAVE_BRENCHER {slave_url}: {e}")
             time.sleep(60)
-            
+
     t = threading.Thread(target=_connect_remote, daemon=True)
     t.start()
 
