@@ -298,12 +298,14 @@ if __name__ == '__main__':
     def _connect_remote():
         global remote_sio
         print("Connecting to SLAVE_BRENCHER...")
-        try:
-            if remote_sio is not None:
-                remote_sio.connect(slave_url, namespaces=['/ws/branches', '/ws/environment', '/ws/errors'])
-        except Exception as e:
-            logger.error(f"Could not connect to SLAVE_BRENCHER {slave_url}: {e}")
-
+        while True:
+            try:
+                if remote_sio is not None and not remote_sio.connected:
+                    remote_sio.connect(slave_url, namespaces=['/ws/branches', '/ws/environment', '/ws/errors'])
+            except Exception as e:
+                logger.error(f"Could not connect to SLAVE_BRENCHER {slave_url}: {e}")
+            time.sleep(60)
+            
     t = threading.Thread(target=_connect_remote, daemon=True)
     t.start()
 
