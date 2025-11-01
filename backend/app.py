@@ -81,15 +81,17 @@ from flask_socketio import Namespace
 T = TypeVar('T')
 def merge_dicts(a: Dict[str, T], b: Dict[str, T]) -> Dict[str, T]:
     result: Dict[str, T] = {}
-    for k, v in b.items():
+    for k in (a.keys() | b.keys()):
+        if k not in a or k not in b:
+            result[k] = a.get(k, b.get(k))  # type: ignore[arg-type]
+            continue
         if (
-            k in a
-            and isinstance(a[k], dict)
-            and isinstance(v, dict)
+            isinstance(a[k], dict)
+            and isinstance(b[k], dict)
         ):
-            result[k] = merge_dicts(a[k], v)  # type: ignore[arg-type]
+            result[k] = merge_dicts(a[k], b[k])  # type: ignore[arg-type]
         else:
-            result[k] = v
+            result[k] = b[k]
     return result
 
 slave_url = os.getenv('SLAVE_BRENCHER')
@@ -144,7 +146,7 @@ class BranchesNamespace(Namespace):
     def on_update(self, data):
         emit('branches', branches)
 
-def get_local_envs_to_emit():
+def get_local_envs_to_emit() -> Dict[str, Tuple[enironment.Environment, List[AbstractStep]]]:
         env_dtos = {}
         for e, p in environments.values():
             env = asdict(e)
