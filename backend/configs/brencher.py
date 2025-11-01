@@ -51,7 +51,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         "PYTHONUNBUFFERED": "1",
                         "VIRTUAL_HOST": "brencher.rudolf.keenetic.link",
                         "LETSENCRYPT_HOST": "brencher.rudolf.keenetic.link",
-                        "PROFILES": "brencher2,torrserv_proxy,immich",
+                        "PROFILES": "brencher,brencher2,torrserv_proxy,immich",
                     },
                 }
             }
