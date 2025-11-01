@@ -19,6 +19,7 @@ from typing import List, Dict, Any, Optional, Tuple
 import shutil
 import subprocess
 import traceback
+from typing import TypeVar
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -77,16 +78,19 @@ def serve_static(path):
 from flask import copy_current_request_context
 from flask_socketio import Namespace
 
-def merge_dicts(a, b):
+T = TypeVar('T')
+def merge_dicts(a: Dict[str, T], b: Dict[str, T]) -> Dict[str, T]:
+    result: Dict[str, T] = {}
     for k, v in b.items():
         if (
             k in a
             and isinstance(a[k], dict)
             and isinstance(v, dict)
         ):
-            merge_dicts(a[k], v)
+            result[k] = merge_dicts(a[k], v)  # type: ignore[arg-type]
         else:
-            a[k] = v
+            result[k] = v
+    return result
 
 slave_url = os.getenv('SLAVE_BRENCHER')
 remote_sio: socketio_client.Client | None = None
@@ -103,9 +107,9 @@ if slave_url:
     @remote_sio.on('branches', namespace='/ws/branches')
     def _remote_branches(data):
         global branches
-        merge_dicts(branches, data)
+        merge_result = merge_dicts(branches, data)
         try:
-            socketio.emit('branches', _mark_forwarded(data), namespace='/ws/branches')
+            socketio.emit('branches', _mark_forwarded(merge_result), namespace='/ws/branches')
         except Exception as e:
             logger.error(f"Error forwarding remote branches locally: {e}")
 
@@ -162,9 +166,13 @@ def get_local_envs_to_emit():
 
 def get_global_envs_to_emit():
     global environments, environments_slaves
-    data_to_submit = get_local_envs_to_emit()
-    merge_dicts(data_to_submit, environments_slaves)
-    return data_to_submit
+    local_envs = get_local_envs_to_emit()
+    merge_result = merge_dicts(local_envs, environments_slaves)
+
+    common_keys = set(local_envs.keys()) & set(environments_slaves.keys())
+    if len(common_keys) > 0:
+        socketio.emit('error', {'message': f"Conflict: both master and slave have environment with id {common_keys}"}, namespace='/ws/errors')
+    return merge_result
 
 environment_update_event = threading.Event()
 
@@ -225,7 +233,7 @@ if __name__ == '__main__':
         cli_env_ids = os.getenv('PROFILES', '')
     else:
         cli_env_ids = cli_env_ids[0]
-    
+    logger.info(f"cli_env_ids {cli_env_ids}")        
     if len(cli_env_ids) > 0 and cli_env_ids[0] == '-':
         cli_env_ids = cli_env_ids[1:].split(',')
         cli_env_ids = [x for x in cli_env_ids if len(x) > 0]
