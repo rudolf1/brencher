@@ -218,7 +218,9 @@ class DockerSwarmDeploy(AbstractStep[str]):
             self.stack_name
         ]
         logger.info(f"Deploying stack '{self.stack_name}' using {tmp_compose_path} in cwd {os.path.dirname(tmp_compose_path)}")
-        swarmEnv: dict[str, str] = { k:v for k,v in dotenv_values(os.path.join(os.path.dirname(tmp_compose_path), ".env")).items() if v is not None }
+        swarmEnv: dict[str, str] = {}
+        if os.path.exists(os.path.join(os.path.dirname(tmp_compose_path), ".env")):
+            swarmEnv = { k:v for k,v in dotenv_values(os.path.join(os.path.dirname(tmp_compose_path), ".env")).items() if v is not None }
         merge_dicts(swarmEnv, env)
         result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(tmp_compose_path), env=swarmEnv)
         if result.returncode != 0:
