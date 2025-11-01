@@ -242,9 +242,24 @@ function renderJobs() {
                     /(https?:\/\/[^\s"']+)/g,
                     url => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
                 );
+                const key = `${envObj.id}::${job.name}`;
+                const storageKey = 'jobSpoiler:' + key;
+                const safeId = 'spoiler-' + encodeURIComponent(key).replace(/[^a-zA-Z0-9_-]/g, '_');
+                const isError = /error|exception/i.test(statusDisplay);
+                const openByDefault = isError || (window._jobSpoilerState && window._jobSpoilerState[storageKey] === 'open');
+
                 return `
                     <div class="job-item">
-                        <strong>${job.env} - ${job.name}</strong><br />${statusDisplay}                        
+                        <div class="job-header" style="cursor:pointer;font-weight:bold;"
+                             onclick="toggleJobSpoiler('${key}', '${safeId}')">
+                            ${isError
+                                ? `<span style="color:#dc3545;font-weight:bold;margin-right:6px;" title="Error">!</span>`
+                                : `<span style="color:#28a745;font-weight:bold;margin-right:6px;" title="OK">✔</span>`}
+                            ${envObj.id} - ${job.name}
+                        </div>
+                        <div id="${safeId}" class="job-spoiler" style="display: ${openByDefault ? 'block' : 'none'}; margin-top:8px;">
+                            ${statusDisplay}
+                        </div>
                     </div>`;
                 }).join('')
                 : '<div class="job-item">No jobs found.</div>'}
@@ -252,7 +267,24 @@ function renderJobs() {
     }).join('');
 }
 
-
+toggleJobSpoiler = function(key, safeId) {
+    try {
+        const el = document.getElementById(safeId);
+        if (!el) return;
+        const storageKey = 'jobSpoiler:' + key;
+        const isHidden = window.getComputedStyle(el).display === 'none';
+        window._jobSpoilerState = window._jobSpoilerState || {};
+        if (isHidden) {
+            el.style.display = 'block';
+            window._jobSpoilerState[storageKey] = 'open';
+        } else {
+            el.style.display = 'none';
+            window._jobSpoilerState[storageKey] = 'closed';
+        }
+    } catch (err) {
+        console.error('toggleJobSpoiler error', err);
+    }
+};
 refreshBranchesBtn.onclick = () => {
     wsEnv.emit('update', { id: "" });
     showStatus('Refreshing...');

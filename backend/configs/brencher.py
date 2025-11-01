@@ -47,7 +47,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
             "services": {
                 "brencher-backend" :{
                     "environment": {
-                        "SLAVE_BRENCHER" : "192.169.1.96:5002"
+                        "SLAVE_BRENCHER" : "http://192.169.1.96:5002"
                     },
                 }
             }
