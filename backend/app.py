@@ -64,6 +64,7 @@ FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
 environments: Dict[str, Tuple[enironment.Environment, List[AbstractStep]]] = {}
 environments_slaves: Dict[str, Tuple[enironment.Environment, List[AbstractStep]]] = {}
 branches = {}
+branches_slaves = {}
 state_lock = threading.Lock()
 
 @app.route('/')
@@ -108,8 +109,9 @@ if slave_url:
     # Handlers for events from master -> re-emit locally (marked so we don't loop)
     @remote_sio.on('branches', namespace='/ws/branches')
     def _remote_branches(data):
-        global branches
-        merge_result = merge_dicts(branches, data)
+        global branches, branches_slaves
+        branches_slaves = data
+        merge_result = merge_dicts(branches, branches_slaves)
         try:
             socketio.emit('branches', _mark_forwarded(merge_result), namespace='/ws/branches')
         except Exception as e:
@@ -142,9 +144,9 @@ if slave_url:
 
 class BranchesNamespace(Namespace):
     def on_connect(self, auth=None):
-        emit('branches', branches)
+        emit('branches', merge_dicts(branches, branches_slaves))
     def on_update(self, data):
-        emit('branches', branches)
+        emit('branches', merge_dicts(branches, branches_slaves))
 
 def get_local_envs_to_emit() -> Dict[str, Tuple[enironment.Environment, List[AbstractStep]]]:
         env_dtos = {}
