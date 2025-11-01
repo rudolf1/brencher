@@ -165,7 +165,9 @@ class DockerSwarmDeploy(AbstractStep[str]):
         # Prepare docker-compose file with env substitution
         docker_compose_absolute_path = os.path.join(self.wd.result, self.docker_compose_path)
         with open(docker_compose_absolute_path, 'r') as f:
-            compose = yaml.safe_load(f.read())
+            content = f.read()
+            content = re.sub(r'\$\{([^}]+)\}', lambda m: env.get(m.group(1), ""), content)
+            compose = yaml.safe_load(content)
             if "services" in compose:
                 for svc in compose["services"].values():
                     if "build" in svc:
