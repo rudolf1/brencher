@@ -47,7 +47,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
             "services": {
                 "brencher-backend" :{
                     "environment": {
-                        "SLAVE_BRENCHER" : "http://192.169.1.96:5002",
+                        "SLAVE_BRENCHER" : "http://host.docker.internal:5002",
                         "PYTHONUNBUFFERED": "1",
                         "VIRTUAL_HOST": "brencher.rudolf.keenetic.link",
                         "LETSENCRYPT_HOST": "brencher.rudolf.keenetic.link",
