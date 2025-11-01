@@ -168,7 +168,8 @@ def get_global_envs_to_emit():
     global environments, environments_slaves
     local_envs = get_local_envs_to_emit()
     merge_result = merge_dicts(local_envs, environments_slaves)
-
+    logger.info(f"Local keys: {local_envs.keys()}")
+    logger.info(f"Slave keys: {environments_slaves.keys()}")
     common_keys = set(local_envs.keys()) & set(environments_slaves.keys())
     if len(common_keys) > 0:
         socketio.emit('error', {'message': f"Conflict: both master and slave have environment with id {common_keys}"}, namespace='/ws/errors')
