@@ -15,6 +15,16 @@ App should be delivered as docker image.
 
 Generate docker compose file to deploy to docker swarm.
 
+<<<<<<< HEAD
+## Code Quality
+
+This project enforces type annotations for all Python code using mypy. See [LINTING.md](LINTING.md) for details on:
+- Running type checking and linters locally
+- VSCode integration and recommended extensions
+- Type annotation requirements and best practices
+- CI/CD integration
+
+=======
 # Update docker secret
 
 
@@ -32,3 +42,4 @@ docker service update --secret-add brencher-secrets brencher_brencher-backend
 docker service update --secret-add brencher-secrets brencher2_brencher-backend
 
 docker service scale brencher_brencher-backend=1 brencher2_brencher-backend=1
+>>>>>>> 8b4d0e03fa4f2a5c79f8e94983687f3435baf862
