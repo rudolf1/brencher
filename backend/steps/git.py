@@ -13,11 +13,21 @@ from enironment import Environment
 logger = logging.getLogger(__name__)
 
 class GitClone(AbstractStep[str]):
-    def __init__(self, env: Environment, branchNamePrefix: str = "", **kwargs: Any) -> None:
+    def __init__(self, env: Environment, branchNamePrefix: str = "", credEnvPrefix: str = "GIT", **kwargs: Any) -> None:
         super().__init__(env, **kwargs)
         self.temp_dir = os.path.join(tempfile.gettempdir(), f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
         self.branchNamePrefix = branchNamePrefix
+        self.credEnvPrefix = credEnvPrefix
 
+    def _get_auth_git_url(self, url: str) -> str:
+        username = os.getenv(f'{self.credEnvPrefix}_USERNAME')
+        password = os.getenv(f'{self.credEnvPrefix}_PASSWORD')
+        if username and password:
+            # Extract protocol and the rest of the URL
+            protocol, rest = url.split('://')
+            return f"{protocol}://{username}:{password}@{rest}"
+        
+        return url
 
     def progress(self) -> str:
 
@@ -33,7 +43,7 @@ class GitClone(AbstractStep[str]):
             repo = git.Repo.init(self.temp_dir)
             repo.remotes.append(repo.create_remote(
                 'origin', 
-                self.env.repo
+                self._get_auth_git_url(self.env.repo)
             ))
             if self.branchNamePrefix != "":
                 repo.config_writer().set_value('remote "origin"',"fetch", f"+refs/heads/{self.branchNamePrefix}/*:refs/remotes/origin/{self.branchNamePrefix}/*").release()

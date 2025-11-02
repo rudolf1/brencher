@@ -43,7 +43,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         buildDocker=buildDocker,
         stackChecker=dockerSwarmCheck,
         envs = lambda: { 
-            "version": "auto-" + checkoutMerged.result.version
+            "version": "auto-" + checkoutMerged.result.version,
        },
         stack_name = "brencher",
         docker_compose_path = "docker-compose.yml", 

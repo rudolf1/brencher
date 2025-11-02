@@ -3,6 +3,7 @@ import subprocess
 import logging
 import docker
 import yaml
+from dotenv import dotenv_values
 from typing import List, Optional, Dict, Callable, Any
 from dataclasses import dataclass
 from steps.step import AbstractStep
@@ -123,7 +124,7 @@ class DockerSwarmCheck(AbstractStep[Dict[str, DockerSwarmCheckResult]]):
 class DockerSwarmDeploy(AbstractStep[str]):
     def __init__(self, 
                  wd: GitClone, 
-                 buildDocker: DockerComposeBuild,
+                 buildDocker: DockerComposeBuild | None,
                  stackChecker: DockerSwarmCheck,
                  docker_compose_path: str, 
                  envs: Callable[[], Dict[str, Any]], 
@@ -142,9 +143,24 @@ class DockerSwarmDeploy(AbstractStep[str]):
         """
         Deploys to Docker Swarm using the specified docker-compose.yaml.
         """
-        # These checks are not needed as the AbstractStep.result property handles exceptions
-        # But keeping them for clarity
-        
+        if isinstance(self.wd.result, BaseException):
+            raise self.wd.result
+        if self.buildDocker is not None and isinstance(self.buildDocker.result, BaseException):
+            raise self.buildDocker.result
+        if isinstance(self.stackChecker.result, BaseException):
+            raise self.stackChecker.result
+
+
+        def merge_dicts(a: Dict[str, Any], b: Dict[str, Any]) -> None:
+            for k, v in b.items():
+                if (
+                    k in a
+                    and isinstance(a[k], dict)
+                    and isinstance(v, dict)
+                ):
+                    merge_dicts(a[k], v)
+                else:
+                    a[k] = v
         env = self.envs()
         # Prepare docker-compose file with env substitution
         docker_compose_absolute_path = os.path.join(self.wd.result, self.docker_compose_path)
@@ -157,19 +173,9 @@ class DockerSwarmDeploy(AbstractStep[str]):
                     if "build" in svc:
                         del svc["build"]
                     svc["labels"] = {"org.brencher.version": env["version"]}
-            def merge_dicts(a: Dict[str, Any], b: Dict[str, Any]) -> None:
-                for k, v in b.items():
-                    if (
-                        k in a
-                        and isinstance(a[k], dict)
-                        and isinstance(v, dict)
-                    ):
-                        merge_dicts(a[k], v)
-                    else:
-                        a[k] = v
             del env["version"]
             merge_dicts(compose, env)
-#            logger.info(f"Final compose: {compose}")
+            # logger.info(f"Final compose: {compose}")
             content = yaml.safe_dump(compose)
 
         current_services = self.stackChecker.result
@@ -214,8 +220,13 @@ class DockerSwarmDeploy(AbstractStep[str]):
             "-c", tmp_compose_path,
             self.stack_name
         ]
-        logger.info(f"Deploying stack '{self.stack_name}' using {tmp_compose_path}")
+        logger.info(f"Deploying stack '{self.stack_name}' using {tmp_compose_path} in cwd {os.path.dirname(tmp_compose_path)}")
+        swarmEnv: dict[str, str] = {}
+        if os.path.exists(os.path.join(os.path.dirname(tmp_compose_path), ".env")):
+            swarmEnv = { k:v for k,v in dotenv_values(os.path.join(os.path.dirname(tmp_compose_path), ".env")).items() if v is not None }
+        # merge_dicts(swarmEnv, env)
         result = subprocess.run(cmd, capture_output=True, text=True)
+        #, cwd=os.path.dirname(tmp_compose_path), env=swarmEnv)
         if result.returncode != 0:
             logger.error(f"Stack deploy failed: {result.stderr}")
             raise RuntimeError(f"Stack deploy failed: {result.stderr}")

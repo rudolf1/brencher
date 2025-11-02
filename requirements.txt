@@ -4,6 +4,10 @@ gitpython
 python-dotenv
 docker
 PyYAML
+<<<<<<< HEAD
 mypy
 types-PyYAML
 types-requests
+=======
+websocket-client
+>>>>>>> 8b4d0e03fa4f2a5c79f8e94983687f3435baf862
