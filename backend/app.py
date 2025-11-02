@@ -64,6 +64,7 @@ FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
 environments: Dict[str, Tuple[enironment.Environment, List[AbstractStep]]] = {}
 environments_slaves: Dict[str, Tuple[enironment.Environment, List[AbstractStep]]] = {}
 branches = {}
+branches_slaves = {}
 state_lock = threading.Lock()
 
 @app.route('/')
@@ -81,15 +82,17 @@ from flask_socketio import Namespace
 T = TypeVar('T')
 def merge_dicts(a: Dict[str, T], b: Dict[str, T]) -> Dict[str, T]:
     result: Dict[str, T] = {}
-    for k, v in b.items():
+    for k in (a.keys() | b.keys()):
+        if k not in a or k not in b:
+            result[k] = a.get(k, b.get(k))  # type: ignore[arg-type]
+            continue
         if (
-            k in a
-            and isinstance(a[k], dict)
-            and isinstance(v, dict)
+            isinstance(a[k], dict)
+            and isinstance(b[k], dict)
         ):
-            result[k] = merge_dicts(a[k], v)  # type: ignore[arg-type]
+            result[k] = merge_dicts(a[k], b[k])  # type: ignore[arg-type]
         else:
-            result[k] = v
+            result[k] = b[k]
     return result
 
 slave_url = os.getenv('SLAVE_BRENCHER')
@@ -98,18 +101,14 @@ if slave_url:
     logger.info(f"SLAVE_BRENCHER set, will connect to master at {slave_url}")
     remote_sio = socketio_client.Client(logger=False, engineio_logger=False)
 
-    def _mark_forwarded(payload):
-        if isinstance(payload, dict):
-            return {**payload, '_slave_forwarded': True}
-        return {'_slave_forwarded': True, '__payload': payload}
-
     # Handlers for events from master -> re-emit locally (marked so we don't loop)
     @remote_sio.on('branches', namespace='/ws/branches')
     def _remote_branches(data):
-        global branches
-        merge_result = merge_dicts(branches, data)
+        global branches, branches_slaves
+        branches_slaves = data
+        merge_result = merge_dicts(branches, branches_slaves)
         try:
-            socketio.emit('branches', _mark_forwarded(merge_result), namespace='/ws/branches')
+            socketio.emit('branches', merge_result, namespace='/ws/branches')
         except Exception as e:
             logger.error(f"Error forwarding remote branches locally: {e}")
 
@@ -125,7 +124,7 @@ if slave_url:
     @remote_sio.on('error', namespace='/ws/errors')
     def _remote_error(data):
         try:
-            socketio.emit('error', _mark_forwarded(data), namespace='/ws/errors')
+            socketio.emit('error', data, namespace='/ws/errors')
         except Exception as e:
             logger.error(f"Error forwarding remote errors locally: {e}")
 
@@ -140,11 +139,11 @@ if slave_url:
 
 class BranchesNamespace(Namespace):
     def on_connect(self, auth=None):
-        emit('branches', branches)
+        emit('branches', merge_dicts(branches, branches_slaves))
     def on_update(self, data):
-        emit('branches', branches)
+        emit('branches', merge_dicts(branches, branches_slaves))
 
-def get_local_envs_to_emit():
+def get_local_envs_to_emit() -> Dict[str, Tuple[enironment.Environment, List[AbstractStep]]]:
         env_dtos = {}
         for e, p in environments.values():
             env = asdict(e)
@@ -256,7 +255,7 @@ if __name__ == '__main__':
     
     # Background thread to refresh branches every 5 minutes
     def emit_fresh_branches():
-        global branches, environments
+        global branches, branches_slaves, environments
         for k, e in environments.items():
             env, pipe = e
             branches[k] = {}
@@ -271,7 +270,7 @@ if __name__ == '__main__':
                     socketio.emit('error', {'message': e}, namespace='/ws/errors')
             logger.info(f"Fetched {env.id}: {len (branches[env.id])} branches")
             # logger.info(f"Fetched {env.id}: {branches[env.id]}")
-        socketio.emit('branches', branches, namespace='/ws/branches')
+        socketio.emit('branches', merge_dicts(branches, branches_slaves), namespace='/ws/branches')
 
 
     def processing_thread():
@@ -279,7 +278,7 @@ if __name__ == '__main__':
             import processing
             def emit_envs():
                 try:
-                    socketio.emit('environments', get_local_envs_to_emit(), namespace='/ws/environment')
+                    socketio.emit('environments', get_global_envs_to_emit(), namespace='/ws/environment')
                 except Exception as e:
                     logger.error(f"Error emitting environments: {str(e)}")
             with state_lock:
@@ -288,6 +287,7 @@ if __name__ == '__main__':
                 emit_fresh_branches()
             environment_update_event.wait(timeout=1*60)
             environment_update_event.clear()
+
 
     processing = threading.Thread(target=processing_thread)
     processing.daemon = True
@@ -298,11 +298,13 @@ if __name__ == '__main__':
     def _connect_remote():
         global remote_sio
         print("Connecting to SLAVE_BRENCHER...")
-        try:
-            if remote_sio is not None:
-                remote_sio.connect(slave_url, namespaces=['/ws/branches', '/ws/environment', '/ws/errors'])
-        except Exception as e:
-            logger.error(f"Could not connect to SLAVE_BRENCHER {slave_url}: {e}")
+        while True:
+            try:
+                if remote_sio is not None and not remote_sio.connected:
+                    remote_sio.connect(slave_url, namespaces=['/ws/branches', '/ws/environment', '/ws/errors'])
+            except Exception as e:
+                logger.error(f"Could not connect to SLAVE_BRENCHER {slave_url}: {e}")
+            time.sleep(60)
 
     t = threading.Thread(target=_connect_remote, daemon=True)
     t.start()

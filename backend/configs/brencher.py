@@ -44,14 +44,6 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         stackChecker=dockerSwarmCheck,
         envs = lambda: { 
             "version": "auto-" + checkoutMerged.result.version,
-            "services": {
-                "brencher-backend" :{
-                    "environment": {
-                        "SLAVE_BRENCHER" : "http://192.169.1.96:5002"
-                    },
-                }
-            }
-            #  SLAVE_BRENCHER='http://100.70.193.97:5002' .venv/bin/python3 backend/app.py brencher_localX
        },
         stack_name = "brencher",
         docker_compose_path = "docker-compose.yml", 

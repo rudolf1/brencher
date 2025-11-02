@@ -4,6 +4,8 @@ services:
     build: .
     image: registry.rudolf.keenetic.link/brencher:${version}
     user: 1000:137
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "5001:5001"
     volumes:
@@ -15,6 +17,8 @@ services:
       - VIRTUAL_HOST=brencher.rudolf.keenetic.link
       - LETSENCRYPT_HOST=brencher.rudolf.keenetic.link
       - PROFILES=brencher2,torrserv_proxy,immich
+      - SLAVE_BRENCHER=http://host.docker.internal:5002
+      # - SLAVE_BRENCHER='http://100.70.193.97:5002' .venv/bin/python3 backend/app.py brencher_localX
     deploy:
       replicas: 1
       restart_policy:
