@@ -4,6 +4,7 @@ from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from enironment import Environment
 from typing import List, Dict, Any, Optional, Tuple
 from steps.step import AbstractStep
+from brencher2 import checkPingF
 
 env = Environment(
     id="brencher",
@@ -54,12 +55,13 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
 
     checkPing = UrlCheck(
         url="https://brencher.rudolf.keenetic.link/state",
-        expected = {"res":"pong"},
+        expected = checkPingF,
         env=env
     )
     logUrls = SimpleLog(env=env,message = {
         "userLinks": {
             "App": "https://brencher.rudolf.keenetic.link/",
+            "Status": "https://brencher.rudolf.keenetic.link/state",
         }
     })
 
