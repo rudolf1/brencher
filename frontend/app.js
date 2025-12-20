@@ -234,7 +234,7 @@ function renderJobs() {
     jobsList.innerHTML = environmentsRaw.map(([envObj, jobsArr]) => {
         var linksHtml = ""
         if (Array.isArray(jobsArr)) {
-            linksHtml = jobsArr.map(job => {
+            linksHtml = jobsArr.flatMap(job => {
                 const userLinks = [];
                 const extractUserLinks = (obj) => {
                     if (!obj || typeof obj !== 'object') return;
