@@ -257,7 +257,8 @@ function renderJobs() {
 
         return `
             <div class="env-jobs">
-            <h4>Environment: ${envObj.name || envObj.id || ''} ${linksHtml}</h4>
+            <h4>Environment: ${envObj.name || envObj.id || ''}</h4> 
+            ${linksHtml ? `<div style="float:right">${linksHtml}</div>` : ''}
             ${Array.isArray(jobsArr) && jobsArr.length > 0
                 ? jobsArr.map(job => {
                 let statusDisplay = `<pre>` + JSON.stringify(job.status, null, 2) + `</pre>`;

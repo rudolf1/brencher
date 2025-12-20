@@ -1,3 +1,4 @@
+import json
 from steps.checks import SimpleLog, UrlCheck
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
@@ -61,9 +62,19 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         env=env, 
     )
     unmerge = GitUnmerge(clone, dockerSwarmCheck, env=env)
+
+    def checkPingF(obj: Any):
+        if not isinstance(obj, dict):
+            raise TypeError(f"Expected dict, got {type(obj).__name__}")
+        if "brencher" not in obj or "brencher2" not in obj:
+            raise ValueError("Dictionary must contain both 'brencher' and 'brencher2' keys")
+        for k,v in obj['brencher'][1]:
+            if "Exception" in json.dumps(v.status):
+                raise Exception(f"Brencher check failed for key {k}: {v.status}")
+
     checkPing = UrlCheck(
         url="https://brencher.rudolf.keenetic.link/state",
-        expected = {"res":"pong"},
+        expected = checkPingF,
         env=env
     )
     logUrls = SimpleLog(env=env,message = {
