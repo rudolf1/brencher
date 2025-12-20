@@ -70,7 +70,10 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
             raise ValueError("Dictionary must contain both 'brencher' and 'brencher2' keys")
         for v in obj['brencher'][1]:
             if "Exception" in json.dumps(v):
-                raise Exception(f"Brencher check failed for: {v}")
+                raise Exception(f"brencher check failed for: {v}")
+        for v in obj['brencher2'][1]:
+            if "Exception" in json.dumps(v):
+                raise Exception(f"brencher2 check failed for: {v}")
 
     checkPing = UrlCheck(
         url="https://brencher.rudolf.keenetic.link/state",
