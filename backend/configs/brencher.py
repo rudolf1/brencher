@@ -1,3 +1,4 @@
+from backend.steps.checks import SimpleLog, UrlCheck
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from enironment import Environment
@@ -51,6 +52,17 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
     )
     unmerge = GitUnmerge(clone, dockerSwarmCheck, env=env)
 
+    checkPing = UrlCheck(
+        url="https://brencher.rudolf.keenetic.link/state",
+        expected = {"res":"pong"},
+        env=env
+    )
+    logUrls = SimpleLog(env=env,message = {
+        "userLinks": {
+            "App": "https://brencher.rudolf.keenetic.link/",
+        }
+    })
+
     return [
         clone,
         checkoutMerged,
@@ -58,6 +70,8 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         dockerSwarmCheck, 
         unmerge,       
         deployDocker,
+        checkPing,
+        logUrls
     ]
 
 brencher: Tuple[Environment, List[AbstractStep]] = (env, create_pipeline(env))
