@@ -68,9 +68,9 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
             raise TypeError(f"Expected dict, got {type(obj).__name__}")
         if "brencher" not in obj or "brencher2" not in obj:
             raise ValueError("Dictionary must contain both 'brencher' and 'brencher2' keys")
-        for k,v in obj['brencher'][1]:
-            if "Exception" in json.dumps(v.status):
-                raise Exception(f"Brencher check failed for key {k}: {v.status}")
+        for v in obj['brencher'][1]:
+            if "Exception" in json.dumps(v):
+                raise Exception(f"Brencher check failed for: {v}")
 
     checkPing = UrlCheck(
         url="https://brencher.rudolf.keenetic.link/state",
@@ -80,6 +80,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
     logUrls = SimpleLog(env=env,message = {
         "userLinks": {
             "App": "https://brencher.rudolf.keenetic.link/",
+            "Status": "https://brencher.rudolf.keenetic.link/state",
         }
     })
 
