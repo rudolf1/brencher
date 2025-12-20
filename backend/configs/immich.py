@@ -46,9 +46,10 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         env=env
     )
     logUrls = SimpleLog(env=env,message = {
-            "Immich": "https://immich.rudolf.keenetic.link",
+        "userLinks": {
+            "App": "https://immich.rudolf.keenetic.link",
         }
-    )
+    })
     return [
         clone,
         checkoutMerged,
