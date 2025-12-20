@@ -42,7 +42,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
 
     checkPing = UrlCheck(
         url="https://immich.rudolf.keenetic.link/api/server/ping",
-        expected = {"res":"pongX"},
+        expected = {"res":"pong"},
         env=env
     )
     logUrls = SimpleLog(env=env,message = {
