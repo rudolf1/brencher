@@ -1,4 +1,4 @@
-from backend.steps.checks import SimpleLog, UrlCheck
+from steps.checks import SimpleLog, UrlCheck
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from enironment import Environment
