@@ -232,9 +232,33 @@ function renderJobs() {
         return;
     }
     jobsList.innerHTML = environmentsRaw.map(([envObj, jobsArr]) => {
+        var linksHtml = ""
+        if (Array.isArray(jobsArr)) {
+            linksHtml = jobsArr.flatMap(job => {
+                const userLinks = [];
+                const extractUserLinks = (obj) => {
+                    if (!obj || typeof obj !== 'object') return;
+                    if (obj.userLinks && typeof obj.userLinks === 'object') {
+                        userLinks.push(...Object.entries(obj.userLinks));
+                    }
+                    for (const key in obj) {
+                        if (typeof obj[key] === 'object') {
+                            extractUserLinks(obj[key]);
+                        }
+                    }
+                };
+                extractUserLinks(job.status);
+                return userLinks.map(([title, url]) => 
+                    `<a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a>`
+                    )
+            })
+            .join(' | ');
+        }
+
         return `
             <div class="env-jobs">
-            <h4>Environment: ${envObj.name || envObj.id || ''}</h4>
+            <h4>Environment: ${envObj.name || envObj.id || ''}</h4> 
+            ${linksHtml ? `<div style="float:right">${linksHtml}</div>` : ''}
             ${Array.isArray(jobsArr) && jobsArr.length > 0
                 ? jobsArr.map(job => {
                 let statusDisplay = `<pre>` + JSON.stringify(job.status, null, 2) + `</pre>`;

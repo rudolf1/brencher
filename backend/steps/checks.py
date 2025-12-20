@@ -14,13 +14,13 @@ import requests
 logger = logging.getLogger(__name__)
 
 class UrlCheck(AbstractStep[str]):
-    def __init__(self, env: Environment, url: str, expected: dict, **kwargs):
+    def __init__(self, env: Environment, url: str, expected: Any, **kwargs):
         super().__init__(env=env, **kwargs)
         self.url = url
         self.expected = expected
 
     def progress(self) -> str:
-        logger.info(f"Checking {self.url}, expected {self.expected}")
+        logger.info(f"Checking {self.url}")
         result = requests.get(self.url)
         if result.status_code != 200:
             raise Exception(f"URL check failed: status code {result.status_code}")
@@ -46,9 +46,10 @@ class UrlCheck(AbstractStep[str]):
             else:
                 if expected != actual:
                     raise Exception(f"URL check failed at {path}: expected {expected}, got {actual}")
-        
-        compare_nested(self.expected, json_result)
-
+        if isinstance(self.expected, dict):
+            compare_nested(self.expected, json_result)
+        elif callable(self.expected):
+            self.expected(json_result)
         return "Ok"
     
 class SimpleLog(AbstractStep[Any]):

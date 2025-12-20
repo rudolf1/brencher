@@ -176,6 +176,10 @@ def get_global_envs_to_emit():
 
 environment_update_event = threading.Event()
 
+@app.route('/state')
+def serve_state():
+    return get_global_envs_to_emit()
+
 class EnvironmentNamespace(Namespace):
 
     def on_connect(self, auth=None):
