@@ -235,6 +235,30 @@ function renderJobs() {
         return `
             <div class="env-jobs">
             <h4>Environment: ${envObj.name || envObj.id || ''}</h4>
+            ${(() => {
+                            const userLinks = [];
+                            if (Array.isArray(jobsArr)) {
+                                jobsArr.forEach(job => {
+                                    const extractUserLinks = (obj) => {
+                                        if (!obj || typeof obj !== 'object') return;
+                                        if (obj.userLinks && typeof obj.userLinks === 'object') {
+                                            userLinks.push(...Object.entries(obj.userLinks));
+                                        }
+                                        for (const key in obj) {
+                                            if (typeof obj[key] === 'object') {
+                                                extractUserLinks(obj[key]);
+                                            }
+                                        }
+                                    };
+                                    extractUserLinks(job.status);
+                                });
+                            }
+                            return userLinks.length > 0
+                                ? `<div style="margin-bottom:8px;">${userLinks.map(([title, url]) => 
+                                    `<a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a>`
+                                  ).join(' | ')}</div>`
+                                : '';
+                        })()}
             ${Array.isArray(jobsArr) && jobsArr.length > 0
                 ? jobsArr.map(job => {
                 let statusDisplay = `<pre>` + JSON.stringify(job.status, null, 2) + `</pre>`;
