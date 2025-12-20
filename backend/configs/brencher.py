@@ -4,7 +4,7 @@ from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from enironment import Environment
 from typing import List, Dict, Any, Optional, Tuple
 from steps.step import AbstractStep
-from brencher2 import checkPingF
+import checkPingF
 
 env = Environment(
     id="brencher",
