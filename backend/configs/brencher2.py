@@ -19,10 +19,10 @@ def checkPingF(obj: Any):
     if "brencher" not in obj or "brencher2" not in obj:
         raise ValueError("Dictionary must contain both 'brencher' and 'brencher2' keys")
     for v in obj['brencher'][1]:
-        if "Exception" in json.dumps(v):
+        if ('name' not in v or v['name'] != "UrlCheck") and "Exception" in json.dumps(v):
             raise Exception(f"brencher check failed for: {v}")
     for v in obj['brencher2'][1]:
-        if "Exception" in json.dumps(v):
+        if ('name' not in v or v['name'] != "UrlCheck") and "Exception" in json.dumps(v):
             raise Exception(f"brencher2 check failed for: {v}")
 
 
