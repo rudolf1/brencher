@@ -3,6 +3,7 @@ from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from enironment import Environment
 from typing import List, Dict, Any, Optional, Tuple
 from steps.step import AbstractStep
+from steps.checks import SimpleLog, UrlCheck
 
 env = Environment(
     id="immich",
@@ -39,12 +40,24 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
     )
     unmerge = GitUnmerge(clone, dockerSwarmCheck, env=env)
 
+    checkPing = UrlCheck(
+        url="https://immich.rudolf.keenetic.link/api/server/ping",
+        expected = {"res":"pong"},
+        env=env
+    )
+    logUrls = SimpleLog(env=env,message = {
+        "userLinks": {
+            "App": "https://immich.rudolf.keenetic.link",
+        }
+    })
     return [
         clone,
         checkoutMerged,
         dockerSwarmCheck, 
         unmerge,       
         deployDocker,
+        checkPing,
+        logUrls
     ]
 
 config: Tuple[Environment, List[AbstractStep]] = (env, create_pipeline(env))

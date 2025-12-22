@@ -1,3 +1,5 @@
+import json
+from steps.checks import SimpleLog, UrlCheck
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from enironment import Environment
@@ -10,6 +12,18 @@ env = Environment(
     dry=False,
     repo="https://github.com/rudolf1/brencher.git",
 )
+
+def checkPingF(obj: Any):
+    if not isinstance(obj, dict):
+        raise TypeError(f"Expected dict, got {type(obj).__name__}")
+    if "brencher" not in obj or "brencher2" not in obj:
+        raise ValueError("Dictionary must contain both 'brencher' and 'brencher2' keys")
+    for v in obj['brencher'][1]:
+        if ('name' not in v or v['name'] != "UrlCheck") and "Exception" in json.dumps(v):
+            raise Exception(f"brencher check failed for: {v}")
+    for v in obj['brencher2'][1]:
+        if ('name' not in v or v['name'] != "UrlCheck") and "Exception" in json.dumps(v):
+            raise Exception(f"brencher2 check failed for: {v}")
 
 
 def create_pipeline(env: Environment) -> List[AbstractStep]:
@@ -61,6 +75,18 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
     )
     unmerge = GitUnmerge(clone, dockerSwarmCheck, env=env)
 
+    checkPing = UrlCheck(
+        url="https://brencher.rudolf.keenetic.link/state",
+        expected = checkPingF,
+        env=env
+    )
+    logUrls = SimpleLog(env=env,message = {
+        "userLinks": {
+            "App": "https://brencher.rudolf.keenetic.link/",
+            "Status": "https://brencher.rudolf.keenetic.link/state",
+        }
+    })
+
     return [
         clone,
         checkoutMerged,
@@ -68,6 +94,8 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         dockerSwarmCheck, 
         unmerge,       
         deployDocker,
+        checkPing,
+        logUrls
     ]
 
 brencher: Tuple[Environment, List[AbstractStep]] = (env, create_pipeline(env))
