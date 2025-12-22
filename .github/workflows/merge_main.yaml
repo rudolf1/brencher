@@ -1,5 +1,10 @@
 name: Merge branches onto main
 
+on:
+  push:
+    branches:
+      - main
+
 concurrency:
   group: rebase-on-main
   cancel-in-progress: true
@@ -47,9 +52,9 @@ jobs:
             # Create/update a local branch from remote
             git checkout -B "$br" "origin/$br"
             # Merge origin/main into branch (non-interactive)
-            if git rebase "origin/$MAIN"; then
+            if git merge --no-edit "origin/$MAIN"; then
               # Push updated branch to remote (no force)
-              if git push origin "$br" --force; then
+              if git push origin "$br"; then
                 echo "Pushed merged $br"
               else
                 echo "Push failed for $br"
