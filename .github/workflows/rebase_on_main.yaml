@@ -1,5 +1,8 @@
 name: Merge branches onto main
 
+on:
+  workflow_dispatch:
+
 concurrency:
   group: rebase-on-main
   cancel-in-progress: true
