@@ -314,6 +314,6 @@ if __name__ == '__main__':
     t.start()
 
     if 'noweb' in sys.argv[1:]:
-        processing.join()
+        socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
     else:
         socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)

@@ -9,6 +9,7 @@ from steps.step import AbstractStep
 import tempfile
 import os
 from enironment import Environment
+import gc
 
 logger = logging.getLogger(__name__)
 
@@ -33,31 +34,43 @@ class GitClone(AbstractStep[str]):
 
         logger.info(f"Cloning repository {self.env.repo} to {self.temp_dir}")
         os.makedirs(self.temp_dir, exist_ok=True)
-        if os.path.exists(os.path.join(self.temp_dir, ".git")):
-            logger.info(f"Repository already cloned at {self.temp_dir}, fetching updates.")
-            with git.Repo(self.temp_dir) as repo:
-                if repo.remotes.origin.url != self._get_auth_git_url(self.env.repo):
-                    repo.remotes.origin.set_url(self._get_auth_git_url(self.env.repo))
-                result = repo.remotes.origin.fetch(prune=True)
-                if not result or any(fetch_info.flags & fetch_info.ERROR for fetch_info in result):
-                    raise BaseException(f"Failed to fetch updates for {self.env.repo}")
-        else:
-            with git.Repo.init(self.temp_dir) as repo:
-                repo.remotes.append(repo.create_remote(
-                    'origin', 
-                    self._get_auth_git_url(self.env.repo)
-                ))
-                if self.branchNamePrefix != "":
-                    repo.config_writer().set_value('remote "origin"',"fetch", f"+refs/heads/{self.branchNamePrefix}/*:refs/remotes/origin/{self.branchNamePrefix}/*").release()
-                repo.remotes.origin.fetch(prune=True)
-                if not os.path.exists(os.path.join(self.temp_dir, ".git")):
-                    raise BaseException(f"Failed to clone repository {self.env.repo} to {self.temp_dir}")
+        try:
+            if os.path.exists(os.path.join(self.temp_dir, ".git")):
+                logger.info(f"Repository already cloned at {self.temp_dir}, fetching updates.")
+                repo = git.Repo(self.temp_dir)
+                try:
+                    if repo.remotes.origin.url != self._get_auth_git_url(self.env.repo):
+                        repo.remotes.origin.set_url(self._get_auth_git_url(self.env.repo))
+                    result = repo.remotes.origin.fetch(prune=True)
+                    if not result or any(fetch_info.flags & fetch_info.ERROR for fetch_info in result):
+                        raise BaseException(f"Failed to fetch updates for {self.env.repo}")
+                finally:
+                    repo.close()
+                    del repo
+            else:
+                repo = git.Repo.init(self.temp_dir)
+                try:
+                    repo.remotes.append(repo.create_remote(
+                        'origin', 
+                        self._get_auth_git_url(self.env.repo)
+                    ))
+                    if self.branchNamePrefix != "":
+                        repo.config_writer().set_value('remote "origin"',"fetch", f"+refs/heads/{self.branchNamePrefix}/*:refs/remotes/origin/{self.branchNamePrefix}/*").release()
+                    repo.remotes.origin.fetch(prune=True)
+                    if not os.path.exists(os.path.join(self.temp_dir, ".git")):
+                        raise BaseException(f"Failed to clone repository {self.env.repo} to {self.temp_dir}")
+                finally:
+                    repo.close()
+                    del repo
+        finally:
+            gc.collect()
         
         return self.temp_dir
     
 
     def get_branches(self) -> Dict[str, List[Any]]:
-        with git.Repo(self.temp_dir) as repo:
+        repo = git.Repo(self.temp_dir)
+        try:
             result = {}
             for ref in repo.refs:
                 if ref.name.startswith('origin/') and not ref.name.startswith('origin/HEAD'):
@@ -75,7 +88,11 @@ class GitClone(AbstractStep[str]):
                                 })
 
                             cmt = [p for c in cmt for p in c.parents]
-        return result
+            return result
+        finally:
+            repo.close()
+            del repo
+            gc.collect()
 
 import hashlib
 
@@ -133,7 +150,8 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
             raise BaseException(f"Empty branches set")
 
         # Open the repository
-        with git.Repo(repo_path) as repo:
+        repo = git.Repo(repo_path)
+        try:
             # Set user email and name for the repo
             with repo.config_writer() as cw:
                 cw.set_value("user", "email", self.git_user_email)
@@ -228,6 +246,10 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
                 logger.info(f"Pushing {auto_branch_hash} to {auto_branch_name}")
                 repo.git.push('-f', 'origin', auto_branch_name)
             return CheckoutAndMergeResult(auto_branch_name,auto_branch_hash, version)
+        finally:
+            repo.close()
+            del repo
+            gc.collect()
 
 
 from steps.docker import DockerSwarmCheckResult, DockerSwarmCheck
@@ -250,7 +272,8 @@ class GitUnmerge(AbstractStep[List[str]]):
         if len(version) != 1:
             raise BaseException(f"Expected exactly one version, got: {version}")
         version = list(version)[0]
-        with git.Repo(wd) as repo:
+        repo = git.Repo(wd)
+        try:
             if 'auto-' in version:
                 version = version[len('auto-'):]
                 version = version.split('-')
@@ -271,4 +294,8 @@ class GitUnmerge(AbstractStep[List[str]]):
             else:
                 version = [version]
             return version
+        finally:
+            repo.close()
+            del repo
+            gc.collect()
 
