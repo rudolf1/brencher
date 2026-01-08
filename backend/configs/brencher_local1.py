@@ -51,7 +51,6 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                             "PROFILES" : "brencher_local1",
                             # "SLAVE_BRENCHER" : "192.169.1.96:5002"
                         },
-                        "ports":["5002:5001"],
                     }
                 }
         },
