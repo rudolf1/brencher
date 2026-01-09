@@ -214,6 +214,23 @@ socketio.on_namespace(EnvironmentNamespace('/ws/environment'))
 socketio.on_namespace(ErrorsNamespace('/ws/errors'))
 
 if __name__ == '__main__':
+    
+    import signal
+    import os
+    import sys
+
+    def sigchld_handler(signum, frame):
+        """Reap zombie processes"""
+        while True:
+            try:
+                pid, status = os.waitpid(-1, os. WNOHANG)
+                if pid == 0:
+                    break
+            except ChildProcessError:
+                break
+
+    # Register the handler
+    signal.signal(signal. SIGCHLD, sigchld_handler)
 
     import configs.brencher
     import configs.brencher2

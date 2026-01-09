@@ -3,7 +3,6 @@ services:
   brencher-backend:
     build: .
     image: registry.rudolf.keenetic.link/brencher:${version}
-    init: true
     user: 1000:137
     extra_hosts:
       - "host.docker.internal:host-gateway"
