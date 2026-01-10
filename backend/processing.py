@@ -1,7 +1,7 @@
 from enironment import Environment
 from steps.step import AbstractStep
 from steps.git import GitUnmerge
-from typing import List, Dict, Any, Optional, Tuple, Callable
+from typing import List, Tuple, Callable
 import logging
 
 logger = logging.getLogger(__name__)

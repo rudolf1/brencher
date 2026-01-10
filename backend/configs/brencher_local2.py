@@ -2,7 +2,7 @@ from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.docker import DockerComposeBuild
 from steps.docker import DockerSwarmDeploy, DockerSwarmCheck
 from enironment import Environment
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Tuple
 from steps.step import AbstractStep
 
 env_local = Environment(

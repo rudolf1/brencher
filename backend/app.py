@@ -1,25 +1,21 @@
-from multiprocessing import Pipe
 import os
 import json
 import time
 import threading
-import hashlib
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, send_from_directory
 from steps.step import AbstractStep
 from flask_socketio import SocketIO, emit
 import socketio as socketio_client
 from dotenv import load_dotenv
-import git
 import enironment
 from steps.git import GitClone
-import tempfile
 import logging
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict
 from typing import List, Dict, Any, Optional, Tuple
-import shutil
-import subprocess
 import traceback
 from typing import TypeVar
+import types
+from flask.json.provider import DefaultJSONProvider
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -29,6 +25,7 @@ logger = logging.getLogger(__name__)
 # Load environment variables from .env file
 load_dotenv("local.env")
 load_dotenv('/run/secrets/brencher-secrets')
+
 
 class DataclassJSONEncoder(json.JSONEncoder):
     def default(self, o: Any) -> Any:
@@ -41,12 +38,11 @@ class DataclassJSONEncoder(json.JSONEncoder):
         except TypeError:
             return str(o)
 
-import types
+
 custom_json = types.SimpleNamespace()
 custom_json.dumps = lambda obj, **kwargs: json.dumps(obj, cls=DataclassJSONEncoder, **kwargs)
 custom_json.loads = json.loads
 
-from flask.json.provider import DefaultJSONProvider
 
 class DataclassJSONProvider(DefaultJSONProvider):
     def dumps(self, obj: Any, **kwargs: Any) -> str:
@@ -76,7 +72,6 @@ def serve_static(path: str) -> Any:
     return send_from_directory(FRONTEND_DIR, path)
 
 # --- WebSocket Endpoints ---
-from flask import copy_current_request_context
 from flask_socketio import Namespace
 
 T = TypeVar('T')
@@ -96,13 +91,12 @@ def merge_dicts(a: Dict[str, T], b: Dict[str, T]) -> Dict[str, T]:
     return result
 
 slave_url = os.getenv('SLAVE_BRENCHER')
-remote_sio: socketio_client.Client | None = None
 if slave_url:
     logger.info(f"SLAVE_BRENCHER set, will connect to master at {slave_url}")
     remote_sio = socketio_client.Client(logger=False, engineio_logger=False)
 
     # Handlers for events from master -> re-emit locally (marked so we don't loop)
-    @remote_sio.on('branches', namespace='/ws/branches')
+    @remote_sio.on('branches', namespace='/ws/branches') # type: ignore[misc]
     def _remote_branches(data: Any) -> None:
         global branches, branches_slaves
         branches_slaves = data
@@ -112,7 +106,7 @@ if slave_url:
         except Exception as e:
             logger.error(f"Error forwarding remote branches locally: {e}")
 
-    @remote_sio.on('environments', namespace='/ws/environment')
+    @remote_sio.on('environments', namespace='/ws/environment') # type: ignore[misc]
     def _remote_environments(data: Any) -> None:
         global environments, environments_slaves
         environments_slaves = data
@@ -121,18 +115,18 @@ if slave_url:
         except Exception as e:
             logger.error(f"Error forwarding remote environments locally: {e}")
 
-    @remote_sio.on('error', namespace='/ws/errors')
+    @remote_sio.on('error', namespace='/ws/errors') # type: ignore[misc]
     def _remote_error(data: Any) -> None:
         try:
             socketio.emit('error', data, namespace='/ws/errors')
         except Exception as e:
             logger.error(f"Error forwarding remote errors locally: {e}")
 
-    @remote_sio.event
+    @remote_sio.event # type: ignore[misc]
     def connect() -> None:
         logger.info("Connected to master brencher (SLAVE mode).")
 
-    @remote_sio.event
+    @remote_sio.event # type: ignore[misc]
     def disconnect() -> None:
         logger.info("Disconnected from master brencher (SLAVE mode).")
 
@@ -177,7 +171,7 @@ def get_global_envs_to_emit() -> Any:
 environment_update_event = threading.Event()
 
 @app.route('/state')
-def serve_state():
+def serve_state() -> Any:
     return get_global_envs_to_emit()
 
 class EnvironmentNamespace(Namespace):
@@ -219,7 +213,7 @@ if __name__ == '__main__':
     import os
     import sys
 
-    def sigchld_handler(signum, frame):
+    def sigchld_handler(signum, frame): # type: ignore[no-untyped-def]
         """Reap zombie processes"""
         while True:
             try:

@@ -6,6 +6,8 @@ docker
 PyYAML
 websocket-client
 mypy
+ty
+
 types-PyYAML
 types-requests
-ty
+types-flask-socketio

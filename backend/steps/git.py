@@ -1,10 +1,9 @@
 import tempfile
 import git
 from git.objects import Commit
-from git.refs import Reference
 import logging
-from dataclasses import dataclass, asdict, field
-from typing import List, Optional, Union, Tuple, Set, Iterator, Dict, Any
+from dataclasses import dataclass
+from typing import List, Optional, Tuple, Dict, Any
 from steps.step import AbstractStep
 import tempfile
 import os
@@ -173,7 +172,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         version = '-'.join([x.hexsha[0:8] for x in sorted_commits])
         if merge_commit is not None:
             for head in repo.branches:
-                if head.is_remote and head.commit.hexsha == merge_commit.hexsha:
+                if head.is_remote() and head.commit.hexsha == merge_commit.hexsha:
                     logger.info(f"Merge commit {merge_commit} corresponds to branch {head}")
                     repo.git.checkout(head.name)
                     return CheckoutAndMergeResult(head.name, merge_commit.hexsha, version)

@@ -2,9 +2,10 @@ import os
 import subprocess
 import logging
 import docker
+from docker import errors as docker_errors
 import yaml
 from dotenv import dotenv_values
-from typing import List, Optional, Dict, Callable, Any
+from typing import List, Dict, Callable, Any
 from dataclasses import dataclass
 from steps.step import AbstractStep
 from steps.git import GitClone
@@ -14,13 +15,13 @@ logger = logging.getLogger(__name__)
 
 class DockerComposeBuild(AbstractStep[List[str]]):
     def __init__(self, 
-                 wd: GitClone, 
-                 docker_repo_username: str, 
-                 docker_repo_password: str, 
-                 docker_compose_path: str, 
-                 docker_repo_url: str,
-                 publish: bool,
-                 envs: Callable[[], Dict[str, Any]], **kwargs: Any) -> None:
+                wd: GitClone, 
+                docker_repo_username: str, 
+                docker_repo_password: str, 
+                docker_compose_path: str, 
+                docker_repo_url: str,
+                publish: bool,
+                envs: Callable[[], Dict[str, Any]], **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.wd = wd
         self.envs = envs
@@ -31,7 +32,6 @@ class DockerComposeBuild(AbstractStep[List[str]]):
         self.publish = publish
 
     def progress(self) -> List[str]:    
-    # def process(self, docker_compose_path: str, docker_repo_url: str, docker_repo_username: str, docker_repo_password: str) -> DockerBuildResult:
         """
         Build and push Docker images defined in a docker-compose file.
         """
@@ -40,7 +40,11 @@ class DockerComposeBuild(AbstractStep[List[str]]):
             # Authenticate to docker repo
             client = docker.DockerClient(base_url='unix://var/run/docker.sock')
             if self.publish:
-                client.login(username=self.docker_repo_username, password=self.docker_repo_password, registry=self.docker_repo_url)
+                client.login(
+                    username=self.docker_repo_username, 
+                    password=self.docker_repo_password, 
+                    registry=self.docker_repo_url
+                )
             env = self.envs()
             # Parse docker-compose file
             docker_compose_absolute_path = os.path.join(self.wd.result, self.docker_compose_path)
@@ -71,7 +75,7 @@ class DockerComposeBuild(AbstractStep[List[str]]):
                         client.images.get(image)
                         logger.info(f"Image {image} already exists locally, skipping build.")
                         continue
-                    except docker.errors.ImageNotFound:
+                    except docker_errors.ImageNotFound:
                         pass
 
                 logger.info(f"Building image {image} from {build_ctx}")
