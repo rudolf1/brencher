@@ -17,10 +17,17 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11"]
+        checker: [
+          "flake8 . --count --select=E9,F63,F7,F82 --ignore=F824 --show-source --statistics",
+          "flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics",
+          "ty check backend",
+          "mypy backend --config-file mypy.ini",
+          "pytest"
+        ]
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python ${{ matrix.python-version }}, ${{ matrix.checker }}"
       uses: actions/setup-python@v3
       with:
         python-version: ${{ matrix.python-version }}
@@ -29,19 +36,4 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install flake8 pytest ty
         pip install -r requirements.txt
-    - name: Lint with flake8
-      run: |
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --ignore=F824 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Type check with ty
-      run: |
-        ty check backend
-    - name: Type check with mypy
-      run: |
-        # Run mypy type checking - enforces type annotations
-        mypy backend --config-file mypy.ini
-    - name: Test with pytest
-      run: |
-        pytest
+        ${{ matrix.checker }}
