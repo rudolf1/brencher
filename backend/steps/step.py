@@ -1,20 +1,17 @@
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import List, Optional, Union, Tuple, Any
 from typing import TypeVar, Generic
+from dataclasses import dataclass, asdict, field
 from enironment import Environment
 import logging
 
 logger = logging.getLogger(__name__)
 
-
 class NotReadyException(Exception):
     def __init__(self, message: str):
         super().__init__(message)
 
-
 T = TypeVar('T')
-
-
 class AbstractStep(ABC, Generic[T]):
 
     env: Environment

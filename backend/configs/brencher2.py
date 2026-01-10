@@ -3,7 +3,7 @@ from steps.checks import SimpleLog, UrlCheck
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from enironment import Environment
-from typing import List, Any, Tuple
+from typing import List, Dict, Any, Optional, Tuple
 from steps.step import AbstractStep
 
 env = Environment(
@@ -13,7 +13,7 @@ env = Environment(
     repo="https://github.com/rudolf1/brencher.git",
 )
 
-def checkPingF(obj: Any) -> None:
+def checkPingF(obj: Any):
     if not isinstance(obj, dict):
         raise TypeError(f"Expected dict, got {type(obj).__name__}")
     if "brencher" not in obj or "brencher2" not in obj:
