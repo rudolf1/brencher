@@ -96,7 +96,7 @@ if slave_url:
     remote_sio = socketio_client.Client(logger=False, engineio_logger=False)
 
     # Handlers for events from master -> re-emit locally (marked so we don't loop)
-    @remote_sio.on('branches', namespace='/ws/branches') # type: ignore[misc]
+    @remote_sio.on('branches', namespace='/ws/branches')
     def _remote_branches(data: Any) -> None:
         global branches, branches_slaves
         branches_slaves = data
@@ -106,7 +106,7 @@ if slave_url:
         except Exception as e:
             logger.error(f"Error forwarding remote branches locally: {e}")
 
-    @remote_sio.on('environments', namespace='/ws/environment') # type: ignore[misc]
+    @remote_sio.on('environments', namespace='/ws/environment')
     def _remote_environments(data: Any) -> None:
         global environments, environments_slaves
         environments_slaves = data
@@ -115,18 +115,18 @@ if slave_url:
         except Exception as e:
             logger.error(f"Error forwarding remote environments locally: {e}")
 
-    @remote_sio.on('error', namespace='/ws/errors') # type: ignore[misc]
+    @remote_sio.on('error', namespace='/ws/errors')
     def _remote_error(data: Any) -> None:
         try:
             socketio.emit('error', data, namespace='/ws/errors')
         except Exception as e:
             logger.error(f"Error forwarding remote errors locally: {e}")
 
-    @remote_sio.event # type: ignore[misc]
+    @remote_sio.event
     def connect() -> None:
         logger.info("Connected to master brencher (SLAVE mode).")
 
-    @remote_sio.event # type: ignore[misc]
+    @remote_sio.event
     def disconnect() -> None:
         logger.info("Disconnected from master brencher (SLAVE mode).")
 
