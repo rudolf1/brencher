@@ -214,6 +214,23 @@ socketio.on_namespace(EnvironmentNamespace('/ws/environment'))
 socketio.on_namespace(ErrorsNamespace('/ws/errors'))
 
 if __name__ == '__main__':
+    
+    import signal
+    import os
+    import sys
+
+    def sigchld_handler(signum, frame):
+        """Reap zombie processes"""
+        while True:
+            try:
+                pid, status = os.waitpid(-1, os. WNOHANG)
+                if pid == 0:
+                    break
+            except ChildProcessError:
+                break
+
+    # Register the handler
+    signal.signal(signal. SIGCHLD, sigchld_handler)
 
     import configs.brencher
     import configs.brencher2
@@ -315,6 +332,6 @@ if __name__ == '__main__':
     t.start()
 
     if 'noweb' in sys.argv[1:]:
-        processing.join()
+        socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
     else:
         socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)
