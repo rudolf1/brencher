@@ -19,6 +19,18 @@ Generate docker compose file to deploy to docker swarm.
 
 python ./backend/app.py brencher_local1 noweb
 
+# Local start
+
+python ./backend/app.py brencher_local1 noweb
+
+## Code Quality
+
+This project enforces type annotations for all Python code using mypy. See [LINTING.md](LINTING.md) for details on:
+- Running type checking and linters locally
+- VSCode integration and recommended extensions
+- Type annotation requirements and best practices
+- CI/CD integration
+
 # Update docker secret
 
 

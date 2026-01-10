@@ -19,7 +19,7 @@ class GradleBuildResult:
     error_message: Optional[str] = None
     
 class GradleBuild:
-    def process(self, checkout_result, task_name: str) -> GradleBuildResult:
+    def process(self, checkout_result: Any, task_name: str) -> GradleBuildResult:
         """
         Build the Gradle project and push Docker images.
         

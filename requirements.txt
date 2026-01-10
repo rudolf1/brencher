@@ -5,3 +5,7 @@ python-dotenv
 docker
 PyYAML
 websocket-client
+mypy
+types-PyYAML
+types-requests
+ty

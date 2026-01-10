@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 def process_all_jobs(
         environemnts: List[Tuple[Environment, List[AbstractStep]]],
         onupdate: Callable[[], None]
-    ):
+    ) -> None:
     for env, pipe in environemnts:
             for step in pipe:
                 try:
@@ -19,7 +19,9 @@ def process_all_jobs(
                         # TODO Move to separate job.
                         # If branches list empty, need to find any brunch which includes commit and add pair (branch, commit)
                         # If branches not empty, need to find most priority branch (project specific) and add (branch, HEAD)
-                        env.branches = [ (b1, c) for c,b in step.result for b1 in b ]
+                        result = step.result
+                        if result and isinstance(result[0], tuple):
+                            env.branches = [ (b1, c) for c, b in result for b1 in b ]
                         logger.error(f"Branches on startup resolved {env.id}, job {step.name}: {env.branches}")
                 except BaseException as e:
                     error_msg = f"Error processing release {env.id}, job {step.name}: {str(e)}"

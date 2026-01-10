@@ -1,0 +1,12 @@
+[project]
+name = "brencher"
+version = "0.1.0"
+description = "Brencher project"
+requires-python = ">=3.9"
+
+[tool.ty]
+# Ty configuration
+# See https://github.com/astral-sh/ty for more options
+# Note: extra-search-path should include your site-packages directory
+# For system Python, this is typically /usr/lib/python3/dist-packages
+# For user installs, this is typically ~/.local/lib/python3.X/site-packages
