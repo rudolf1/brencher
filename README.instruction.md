@@ -23,17 +23,7 @@ python ./backend/app.py brencher_local1 noweb
 
 python ./backend/app.py brencher_local1 noweb
 
-## Code Quality
-
-This project enforces type annotations for all Python code using mypy. See [LINTING.md](LINTING.md) for details on:
-- Running type checking and linters locally
-- VSCode integration and recommended extensions
-- Type annotation requirements and best practices
-- CI/CD integration
-
 # Update docker secret
-
-
 
 docker service scale brencher_brencher-backend=0 brencher2_brencher-backend=0
 docker service update --secret-rm brencher-secrets brencher_brencher-backend
