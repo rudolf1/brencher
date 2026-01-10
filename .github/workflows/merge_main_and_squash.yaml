@@ -1,9 +1,7 @@
-name: Merge branches onto main
+name: Merge main to all and squash
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 concurrency:
   group: rebase-on-main
@@ -52,9 +50,9 @@ jobs:
             # Create/update a local branch from remote
             git checkout -B "$br" "origin/$br"
             # Merge origin/main into branch (non-interactive)
-            if git merge --no-edit "origin/$MAIN"; then
+            if git merge --no-edit --squash "origin/$MAIN"; then
               # Push updated branch to remote (no force)
-              if git push origin "$br"; then
+              if git push origin "$br" --force; then
                 echo "Pushed merged $br"
               else
                 echo "Push failed for $br"
