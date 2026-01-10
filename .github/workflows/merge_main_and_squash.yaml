@@ -52,7 +52,9 @@ jobs:
             # Merge origin/main into branch (non-interactive)
             if git merge --no-edit --squash "origin/$MAIN"; then
               # Push updated branch to remote (no force)
-              if git push origin "$br" --force; then
+              git reset --soft "origin/$MAIN"
+              git commit -m "Squash"
+              if git push origin "$br" --force-with-lease; then
                 echo "Pushed merged $br"
               else
                 echo "Push failed for $br"
