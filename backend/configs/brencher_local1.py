@@ -7,7 +7,7 @@ from steps.step import AbstractStep
 
 env_local = Environment(
     id="brencher_local1",
-    branches=[],
+    branches=[("main", "HEAD")],
     dry=False,
     repo="https://github.com/rudolf1/brencher.git",
 )
@@ -48,14 +48,13 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                     "brencher-backend" :{
                         "user" : "1000:998",
                         "environment": {
-                            "PROFILES" : "brencher_local",
-                            "SLAVE_BRENCHER" : "192.169.1.96:5002"
+                            "PROFILES" : "brencher_local2",
+                            # "SLAVE_BRENCHER" : "192.169.1.96:5002"
                         },
-                        "ports":[]
                     }
                 }
         },
-        stack_name = "brencher_local2",
+        stack_name = "brencher_local1",
         docker_compose_path = "docker-compose.yml", 
         env=env,
     )
