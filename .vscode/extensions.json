@@ -2,7 +2,7 @@
     "recommendations": [
         "ms-python.vscode-pylance",
         "vinirossa.vscode-gitandgithub-pack",
-        "astral-sh.ty"
+        "astral-sh.ty",
         "ms-python.mypy-type-checker",
         "ms-python.python",
         "vinirossa.vscode-gitandgithub-pack"
