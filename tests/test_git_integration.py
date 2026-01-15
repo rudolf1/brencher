@@ -463,13 +463,20 @@ class TestGitIntegration:
         with pytest.raises(BaseException, match="Version format not recognized"):
             git_unmerge.progress()
 
+    @pytest.mark.xfail(reason="GitUnmerge does not yet support finding branches for non-HEAD commits. "
+                               "Implementation needs to search through branch history.")
     def test_git_unmerge_nonhead_commit(self, temp_dirs):
         """Test GitUnmerge when version corresponds to non-HEAD commit in a branch
         
-        This test documents the expected behavior when a commit in the version string
-        is not the HEAD of any branch but exists in a branch's history.
-        According to the requirement, the branch should still be returned with the
-        specified commit.
+        This test verifies the EXPECTED behavior (not current implementation) when a 
+        commit in the version string is not the HEAD of any branch but exists in a 
+        branch's history.
+        
+        EXPECTED: GitUnmerge should return branch1 with commit2, even though commit2 
+        is not the HEAD of branch1.
+        
+        NOTE: This test WILL FAIL until GitUnmerge is updated to search through branch 
+        history to find branches containing non-HEAD commits.
         """
         remote_dir, local_dir = temp_dirs
 
@@ -549,28 +556,18 @@ class TestGitIntegration:
         assert commit4.hexsha in result_dict, f"Expected commit4 {commit4.hexsha} (HEAD of branch2) in results"
         assert result_dict[commit4.hexsha] == "branch2", "branch2 should be associated with commit4"
 
-        # For commit2 (non-HEAD commit in branch1), verify it's handled correctly
-        # Current implementation: only returns branches where commit is HEAD
-        # Expected behavior per requirement: should return branch1 with commit2
-        # 
-        # This test documents the current limitation: commit2 won't have a branch
-        # associated with it in the current implementation because it's not HEAD of any branch.
-        # To meet the requirement, GitUnmerge would need to search through branch history
-        # to find branches containing the commit.
+        # For commit2 (non-HEAD commit in branch1), it SHOULD be returned with branch1
+        # Even though commit2 is not the HEAD of branch1, GitUnmerge should search
+        # through branch history to find branches containing the commit.
+        # This test will fail until GitUnmerge is updated to support non-HEAD commits.
         
-        # For now, we just verify the function completes successfully and returns
-        # at least the branches where commits ARE head (branch2 in this case)
-        assert len(result) > 0, "Should return at least one branch-commit pair"
+        assert commit2.hexsha in result_dict, \
+            f"Expected commit2 {commit2.hexsha} (non-HEAD commit in branch1) to be in results. " \
+            f"GitUnmerge should return branch1 even when commit2 is not HEAD. " \
+            f"Current results: {result}"
         
-        # Document that commit2 is not in results with current implementation
-        # (This is the gap that the user's comment is asking to address)
-        if commit2.hexsha in result_dict:
-            # If implementation is updated to handle non-HEAD commits
-            assert result_dict[commit2.hexsha] == "branch1", "branch1 should be associated with commit2"
-        else:
-            # Current behavior: commit2 not found because it's not HEAD
-            # This is expected with current implementation but not desired per the requirement
-            pass
+        assert result_dict[commit2.hexsha] == "branch1", \
+            f"branch1 should be associated with commit2. Got: {result_dict.get(commit2.hexsha)}"
 
     def test_checkout_merged_empty_branches(self, temp_dirs):
         """Test CheckoutMerged with empty branches list - should fail"""
