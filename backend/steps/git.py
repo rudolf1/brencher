@@ -173,7 +173,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         version = '-'.join([x.hexsha[0:8] for x in sorted_commits])
         if merge_commit1 is not None:
             for head in repo.branches:
-                if head.is_remote and head.commit.hexsha == merge_commit1.hexsha: # type: ignore[truthy-function]
+                if head.is_remote and head.commit.hexsha == merge_commit1.hexsha:
                     logger.info(f"Merge commit {merge_commit1} corresponds to branch {head}")
                     repo.git.checkout(head.name)
                     return CheckoutAndMergeResult(head.name, merge_commit1.hexsha, version)
