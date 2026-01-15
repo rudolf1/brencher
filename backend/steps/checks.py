@@ -1,20 +1,14 @@
-import tempfile
-import git
-from git.objects import Commit
-from git.refs import Reference
 import logging
-from dataclasses import dataclass, asdict, field
-from typing import List, Optional, Union, Tuple, Set, Iterator, Dict, Any
+from typing import Any
 from steps.step import AbstractStep
-import tempfile
-import os
 from enironment import Environment
 import requests
 
 logger = logging.getLogger(__name__)
 
 class UrlCheck(AbstractStep[str]):
-    def __init__(self, env: Environment, url: str, expected: Any, **kwargs):
+    
+    def __init__(self, env: Environment, url: str, expected: Any, **kwargs): # type: ignore[no-untyped-def]
         super().__init__(env=env, **kwargs)
         self.url = url
         self.expected = expected
@@ -53,7 +47,7 @@ class UrlCheck(AbstractStep[str]):
         return "Ok"
     
 class SimpleLog(AbstractStep[Any]):
-    def __init__(self, env: Environment, message: Any, **kwargs):
+    def __init__(self, env: Environment, message: Any, **kwargs):# type: ignore[no-untyped-def]
         super().__init__(env=env, **kwargs)
         self.message = message
         

@@ -19,9 +19,11 @@ Generate docker compose file to deploy to docker swarm.
 
 python ./backend/app.py brencher_local1 noweb
 
+# Local start
+
+python ./backend/app.py brencher_local1 noweb
+
 # Update docker secret
-
-
 
 docker service scale brencher_brencher-backend=0 brencher2_brencher-backend=0
 docker service update --secret-rm brencher-secrets brencher_brencher-backend

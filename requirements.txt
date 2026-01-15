@@ -5,3 +5,9 @@ python-dotenv
 docker
 PyYAML
 websocket-client
+mypy
+ty
+
+types-PyYAML
+types-requests
+types-flask-socketio

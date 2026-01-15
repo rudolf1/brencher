@@ -1,0 +1,13 @@
+[project]
+name = "brencher"
+version = "0.1.0"
+description = "Brencher project"
+requires-python = ">=3.9"
+
+[tool.pyright]
+reportMissingModuleSource = false
+
+[tool.ty]
+# See https://github.com/astral-sh/ty for more options
+
+rules.unused-ignore-comment = "ignore"
