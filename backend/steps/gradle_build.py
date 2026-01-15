@@ -4,10 +4,8 @@ import git
 import logging
 import subprocess
 import tempfile
-import json
-import requests
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Any
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +17,7 @@ class GradleBuildResult:
     error_message: Optional[str] = None
     
 class GradleBuild:
-    def process(self, checkout_result, task_name: str) -> GradleBuildResult:
+    def process(self, checkout_result: Any, task_name: str) -> GradleBuildResult:
         """
         Build the Gradle project and push Docker images.
         
@@ -81,7 +79,7 @@ class GradleBuild:
                     artifact_urls=artifact_urls,
                     success=True
                 )
-                
+
         except Exception as e:
             error_message = f"Gradle build failed: {str(e)}"
             logger.error(error_message)
@@ -118,13 +116,13 @@ class GradleBuild:
             
             with open(properties_file, 'w') as f:
                 f.write(content)
-                
+
             logger.info(f"Updated version to {version} in gradle.properties")
-    
+
     def _extract_docker_images(self, project_dir: str) -> List[str]:
         """Extract Docker image names from Gradle modules"""
         images = []
-        
+
         # Look for build.gradle or build.gradle.kts files
         for root, dirs, files in os.walk(project_dir):
             for file in files:
@@ -140,13 +138,13 @@ class GradleBuild:
                         images.extend(image_matches)
         
         return list(set(images))  # Remove duplicates
-    
+
     def _check_images_exist(self, images: List[str], version: str) -> bool:
         """Check if Docker images with the given version exist in the registry"""
         # For demonstration purposes, we'll assume images don't exist
         # In a real implementation, you would check against your Docker registry
         return False
-    
+
     def _run_gradle_task(self, project_dir: str, task_name: str) -> GradleBuildResult:
         """Run a Gradle task in the project directory"""
         try:
@@ -159,7 +157,7 @@ class GradleBuild:
             else:
                 # Use global gradle
                 gradle_cmd = ['gradle', task_name]
-            
+
             # Run the command
             logger.info(f"Running Gradle command: {' '.join(gradle_cmd)}")
             result = subprocess.run(
@@ -168,15 +166,15 @@ class GradleBuild:
                 capture_output=True,
                 text=True
             )
-            
+
             if result.returncode != 0:
                 return GradleBuildResult(
                     success=False,
                     error_message=f"Gradle task failed: {result.stderr}"
                 )
-            
+
             return GradleBuildResult(success=True)
-            
+
         except Exception as e:
             return GradleBuildResult(
                 success=False,

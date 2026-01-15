@@ -13,7 +13,7 @@ from enironment import Environment
 logger = logging.getLogger(__name__)
 
 class GitClone(AbstractStep[str]):
-    def __init__(self, env: Environment, branchNamePrefix="", credEnvPrefix="GIT", **kwargs):
+    def __init__(self, env: Environment, branchNamePrefix: str="", credEnvPrefix: str="GIT", **kwargs: Any):
         super().__init__(env, **kwargs)
         self.temp_dir = os.path.join(tempfile.gettempdir(), f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
         self.branchNamePrefix = branchNamePrefix
@@ -58,7 +58,7 @@ class GitClone(AbstractStep[str]):
 
     def get_branches(self) -> Dict[str, List[Any]]:
         repo = git.Repo(self.temp_dir)
-        result = {}
+        result: Dict[str, List[Any]] = {}
         for ref in repo.refs:
             if ref.name.startswith('origin/') and not ref.name.startswith('origin/HEAD'):
                 branch_name = ref.name [len('origin/'):]
@@ -89,10 +89,10 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
     wd: GitClone
 
     def __init__(self, wd: GitClone,
-                        git_user_email,
-                        git_user_name,
+                        git_user_email: str,
+                        git_user_name: str,
                         push: bool = True,
-                  **kwargs):
+                  **kwargs: Any):
         super().__init__(**kwargs)
         self.wd = wd
         self.git_user_email = git_user_email
@@ -122,7 +122,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         return visited
 
     def progress(self) -> CheckoutAndMergeResult:
-        if self.wd.result_obj is BaseException:
+        if isinstance(self.wd.result_obj, BaseException):
             raise self.wd.result_obj
 
         repo_path = self.wd.result_obj
@@ -153,7 +153,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 
         tree = self._commits_tree(repo)
 
-        merge_commit = [(c, self._find_merge_childs(tree, c)) for c in commit_ids.keys()]
+        merge_commit: list[tuple[Commit, list[Commit]]] = [(c, self._find_merge_childs(tree, c)) for c in commit_ids.keys()]
         result = set(merge_commit[0][1])
         for c, l in merge_commit[1:]:
             result = set(result).intersection(set(l))
@@ -161,32 +161,32 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
                 break
 
         if len(result) > 0:
-            merge_commit = [c for c in merge_commit[0][1] if c in result][0]
+            merge_commit1 = [c for c in merge_commit[0][1] if c in result][0]
             logger.info(f"Common commit found {merge_commit}")
         else:
-            merge_commit = None
+            merge_commit1 = None
             logger.info(f"Common commit not found")
 
         sorted_commits = sorted(commit_ids.keys(), key=lambda x: x.hexsha)
         auto_branch_hash = hashlib.sha1(''.join([x.hexsha for x in sorted_commits]).encode()).hexdigest()
         auto_branch_name = f"auto/{auto_branch_hash}"
         version = '-'.join([x.hexsha[0:8] for x in sorted_commits])
-        if merge_commit is not None:
+        if merge_commit1 is not None:
             for head in repo.branches:
-                if head.is_remote and head.commit.hexsha == merge_commit.hexsha:
-                    logger.info(f"Merge commit {merge_commit} corresponds to branch {head}")
+                if head.is_remote and head.commit.hexsha == merge_commit1.hexsha: # type: ignore[truthy-function]
+                    logger.info(f"Merge commit {merge_commit1} corresponds to branch {head}")
                     repo.git.checkout(head.name)
-                    return CheckoutAndMergeResult(head.name, merge_commit.hexsha, version)
+                    return CheckoutAndMergeResult(head.name, merge_commit1.hexsha, version)
 
 
-        if merge_commit is not None:
-            repo.git.branch('-f', auto_branch_name, merge_commit.hexsha)
+        if merge_commit1 is not None:
+            repo.git.branch('-f', auto_branch_name, merge_commit1.hexsha)
             repo.git.checkout(auto_branch_name)
             logger.info(f"Head is {repo.head.commit}")
             if self.push:
                 repo.git.push('-f', 'origin', auto_branch_name)
                 logger.info(f"Pushed {merge_commit} to {auto_branch_name}")
-            return CheckoutAndMergeResult(auto_branch_name, merge_commit.hexsha, version)
+            return CheckoutAndMergeResult(auto_branch_name, merge_commit1.hexsha, version)
         
         logger.info(f"Looking for existing auto branch: {auto_branch_name}")
         
@@ -233,30 +233,33 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 
 from steps.docker import DockerSwarmCheckResult, DockerSwarmCheck
 
-class GitUnmerge(AbstractStep[List[str]]):
+class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
     wd: GitClone
 
     def __init__(self, wd: GitClone,
                  check: DockerSwarmCheck,
-                  **kwargs):
+                  **kwargs: Any):
         super().__init__(**kwargs)
         self.wd = wd
         self.check = check
 
-    def progress(self) -> List[str]:
+    def progress(self) -> List[Tuple[str, str]]:
         wd = self.wd.result
         deployState: Dict[str, DockerSwarmCheckResult] = self.check.result
 
-        version = set([it.version for it in deployState.values()])
-        if len(version) != 1:
-            raise BaseException(f"Expected exactly one version, got: {version}")
-        version = list(version)[0]
+        versions = set([it.version for it in deployState.values()])
+        if len(versions) != 1:
+            raise BaseException(f"Expected exactly one version, got: {versions}")
+
+        version = list(versions)[0]
+        if version is None:
+            raise BaseException(f"Expected exactly one version, got: {versions}")
         repo = git.Repo(wd)
         if 'auto-' in version:
-            version = version[len('auto-'):].split('-')
+            version_parts = version[len('auto-'):].split('-')
 
-            commits = []
-            for v in version:
+            commits: List[Tuple[str, str]] = []
+            for v in version_parts:
                 commit = repo.commit(v)
                 # branches = [head.name for head in repo.heads if head.commit.hexsha == commit.hexsha]
                 branches = [ref.name for ref in repo.remotes.origin.refs if ref.commit.hexsha == commit.hexsha]
@@ -266,10 +269,10 @@ class GitUnmerge(AbstractStep[List[str]]):
                 #     # Find all parent commits of the given commit
                 #     parents = [parent for parent in commit.parents]
                 #     branches = [head.name for head in repo.heads for commit in parents if head.commit.hexsha == commit.hexsha]
-                commits.append((commit.hexsha, branches))
+                for b in branches:
+                    commits.append((b, commit.hexsha))
 
-            version = commits
+            return commits
         else:
-            version = [version]
-        return version
+            raise BaseException(f"Version format not recognized: {version}")
 
