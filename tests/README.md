@@ -6,6 +6,20 @@ This directory contains integration tests for the `CheckoutMerged` and `GitUnmer
 
 The integration tests simulate real git operations in isolated temporary directories to ensure the git merge and unmerge functionality works correctly in various scenarios without affecting the host environment.
 
+## Test Structure
+
+The tests are organized into two files:
+
+- **`test_git_integration.py`** - Main integration tests for CheckoutMerged and GitUnmerge
+- **`test_remote_repo.py`** - Helper classes and utilities for creating test repositories and mock objects
+
+### Helper Classes
+
+The `test_remote_repo.py` file provides:
+- `RemoteRepoHelper` - Manages creation and cleanup of temporary test repositories
+- `MockGitClone` - Mock GitClone object for testing
+- `MockDockerSwarmCheck` - Mock DockerSwarmCheck object with configurable version strings
+
 ## Test Coverage
 
 ### CheckoutMerged Class Tests
@@ -17,11 +31,22 @@ The integration tests simulate real git operations in isolated temporary directo
 5. **test_checkout_merged_existing_auto_branch** - Tests that existing auto branches are reused
 6. **test_checkout_merged_empty_branches** - Tests that empty branch lists are rejected
 
-### GitUnmerge Class Tests
+### Combined CheckoutMerged and GitUnmerge Tests
 
-1. **test_git_unmerge_valid_version** - Tests extracting branch information from valid version strings
-2. **test_git_unmerge_invalid_version** - Tests handling of invalid version formats
-3. **test_git_unmerge_nonhead_commit** - Tests behavior when version corresponds to non-HEAD commit in a branch
+1. **test_checkout_merged_and_unmerge_valid_version** - Tests merging branches and then extracting branch information from version string
+
+### GitUnmerge-Specific Tests
+
+1. **test_git_unmerge_invalid_version** - Tests handling of invalid version formats
+2. **test_git_unmerge_nonhead_commit** - Tests behavior when version corresponds to non-HEAD commit in a branch (expected to fail)
+
+## Test Improvements
+
+Recent refactoring improvements:
+- Centralized repository setup code in `RemoteRepoHelper` class
+- Single instances of `MockGitClone` and `MockDockerSwarmCheck` defined in helper file
+- Enhanced assertions that check actual field values (not just "is not None")
+- Merged GitUnmerge tests with CheckoutMerged tests where they share scenarios
 
 ## Running the Tests
 
