@@ -4,31 +4,27 @@ Integration tests for git.py classes: CheckoutMerged and GitUnmerge
 These tests run in a Docker-like isolated environment to avoid harming the host system.
 They simulate remote and local git repositories and test various merge scenarios.
 """
-import sys
-from pathlib import Path
-import pytest
+import pytest  # type: ignore
+from typing import Generator
 
-# Add backend to path so we can import modules
-backend_path = Path(__file__).parent.parent / "backend"
-sys.path.insert(0, str(backend_path))
 
 from steps.git import CheckoutMerged, GitUnmerge, CheckoutAndMergeResult
 from enironment import Environment
-from test_remote_repo import RemoteRepoHelper, MockGitClone, MockDockerSwarmCheck
+from tests.test_remote_repo import RemoteRepoHelper, MockGitClone, MockDockerSwarmCheck
 
 
 class TestGitIntegration:
     """Integration tests for git operations"""
 
     @pytest.fixture
-    def repo_helper(self):
+    def repo_helper(self) -> Generator[RemoteRepoHelper, None, None]:
         """Create a repository helper instance"""
         helper = RemoteRepoHelper()
         remote_dir, local_dir = helper.setup()
         yield helper
         helper.teardown()
 
-    def test_checkout_merged_two_branches(self, repo_helper):
+    def test_checkout_merged_two_branches(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging two branches successfully"""
         remote_dir = repo_helper.remote_dir
         local_dir = repo_helper.local_dir
@@ -83,7 +79,7 @@ class TestGitIntegration:
         assert "-" in result.version, f"Version should contain '-': {result.version}"
         assert len(result.version.split("-")) == 2, f"Version should have 2 parts: {result.version}"
 
-    def test_checkout_merged_three_branches(self, repo_helper):
+    def test_checkout_merged_three_branches(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging three branches successfully"""
         remote_dir = repo_helper.remote_dir
         local_dir = repo_helper.local_dir
@@ -142,7 +138,7 @@ class TestGitIntegration:
         assert result.commit_hash.isalnum(), f"Commit hash should be alphanumeric: {result.commit_hash}"
         assert len(result.version.split("-")) == 3, f"Version should have 3 parts for 3 branches: {result.version}"
 
-    def test_checkout_merged_fast_forward(self, repo_helper):
+    def test_checkout_merged_fast_forward(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging with fast-forward (linear history)"""
         remote_dir = repo_helper.remote_dir
         local_dir = repo_helper.local_dir
@@ -188,7 +184,7 @@ class TestGitIntegration:
         assert len(result.commit_hash) == 40, f"Invalid commit hash length: {result.commit_hash}"
         assert result.commit_hash.isalnum(), f"Commit hash should be alphanumeric: {result.commit_hash}"
 
-    def test_checkout_merged_conflicting_branches(self, repo_helper):
+    def test_checkout_merged_conflicting_branches(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging conflicting branches - should fail gracefully"""
         remote_dir = repo_helper.remote_dir
         local_dir = repo_helper.local_dir
@@ -236,7 +232,7 @@ class TestGitIntegration:
         with pytest.raises(BaseException, match="Merge conflict"):
             checkout_merged.progress()
 
-    def test_checkout_merged_existing_auto_branch(self, repo_helper):
+    def test_checkout_merged_existing_auto_branch(self, repo_helper: RemoteRepoHelper) -> None:
         """Test that existing auto branch is reused"""
         remote_dir = repo_helper.remote_dir
         local_dir = repo_helper.local_dir
@@ -299,7 +295,7 @@ class TestGitIntegration:
         assert result2.commit_hash == result1.commit_hash, f"Expected {result1.commit_hash}, got {result2.commit_hash}"
         assert len(result2.commit_hash) == 40, f"Invalid commit hash length: {result2.commit_hash}"
 
-    def test_checkout_merged_and_unmerge_valid_version(self, repo_helper):
+    def test_checkout_merged_and_unmerge_valid_version(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging branches and then unmerging with valid version string"""
         remote_dir = repo_helper.remote_dir
         local_dir = repo_helper.local_dir
@@ -348,7 +344,7 @@ class TestGitIntegration:
         # Verify result contains branch information with specific value checks
         assert isinstance(result, list), "Result should be a list"
         assert len(result) > 0, "Result should not be empty"
-        
+
         for branch_name, commit_hash in result:
             assert isinstance(branch_name, str), f"Branch name should be string, got {type(branch_name)}"
             assert len(branch_name) > 0, "Branch name should not be empty"
@@ -356,7 +352,7 @@ class TestGitIntegration:
             assert len(commit_hash) == 40, f"Commit hash should be 40 chars, got {len(commit_hash)}: {commit_hash}"
             assert commit_hash.isalnum(), f"Commit hash should be alphanumeric: {commit_hash}"
 
-    def test_git_unmerge_invalid_version(self, repo_helper):
+    def test_git_unmerge_invalid_version(self, repo_helper: RemoteRepoHelper) -> None:
         """Test GitUnmerge with invalid version format"""
         remote_dir = repo_helper.remote_dir
         local_dir = repo_helper.local_dir
@@ -389,19 +385,20 @@ class TestGitIntegration:
         with pytest.raises(BaseException, match="Version format not recognized"):
             git_unmerge.progress()
 
-    @pytest.mark.xfail(reason="GitUnmerge does not yet support finding branches for non-HEAD commits. "
-                               "Implementation needs to search through branch history.")
-    def test_git_unmerge_nonhead_commit(self, repo_helper):
+    @pytest.mark.xfail(
+        reason="GitUnmerge does not yet support finding branches for non-HEAD commits. "
+               "Implementation needs to search through branch history.")
+    def test_git_unmerge_nonhead_commit(self, repo_helper: RemoteRepoHelper) -> None:
         """Test GitUnmerge when version corresponds to non-HEAD commit in a branch
-        
-        This test verifies the EXPECTED behavior (not current implementation) when a 
-        commit in the version string is not the HEAD of any branch but exists in a 
+
+        This test verifies the EXPECTED behavior (not current implementation) when a
+        commit in the version string is not the HEAD of any branch but exists in a
         branch's history.
-        
-        EXPECTED: GitUnmerge should return branch1 with commit2, even though commit2 
+
+        EXPECTED: GitUnmerge should return branch1 with commit2, even though commit2
         is not the HEAD of branch1.
-        
-        NOTE: This test WILL FAIL until GitUnmerge is updated to search through branch 
+
+        NOTE: This test WILL FAIL until GitUnmerge is updated to search through branch
         history to find branches containing non-HEAD commits.
         """
         remote_dir = repo_helper.remote_dir
@@ -468,16 +465,16 @@ class TestGitIntegration:
         # Even though commit2 is not the HEAD of branch1, GitUnmerge should search
         # through branch history to find branches containing the commit.
         # This test will fail until GitUnmerge is updated to support non-HEAD commits.
-        
+
         assert commit2.hexsha in result_dict, \
             f"Expected commit2 {commit2.hexsha} (non-HEAD commit in branch1) to be in results. " \
             f"GitUnmerge should return branch1 even when commit2 is not HEAD. " \
             f"Current results: {result}"
-        
+
         assert result_dict[commit2.hexsha] == "branch1", \
             f"branch1 should be associated with commit2. Got: {result_dict.get(commit2.hexsha)}"
 
-    def test_checkout_merged_empty_branches(self, repo_helper):
+    def test_checkout_merged_empty_branches(self, repo_helper: RemoteRepoHelper) -> None:
         """Test CheckoutMerged with empty branches list - should fail"""
         remote_dir = repo_helper.remote_dir
         local_dir = repo_helper.local_dir
