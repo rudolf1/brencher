@@ -21,6 +21,7 @@ The integration tests simulate real git operations in isolated temporary directo
 
 1. **test_git_unmerge_valid_version** - Tests extracting branch information from valid version strings
 2. **test_git_unmerge_invalid_version** - Tests handling of invalid version formats
+3. **test_git_unmerge_nonhead_commit** - Tests behavior when version corresponds to non-HEAD commit in a branch
 
 ## Running the Tests
 
