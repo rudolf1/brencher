@@ -35,7 +35,7 @@ class TestGitIntegration:
         shutil.rmtree(local_dir, ignore_errors=True)
 
     def setup_remote_repo(self, repo_path: str) -> git.Repo:
-        """Initialize a bare remote repository"""
+        """Initialize a remote repository (non-bare for testing purposes)"""
         repo = git.Repo.init(repo_path, bare=False)
         # Configure git user
         with repo.config_writer() as cw:
