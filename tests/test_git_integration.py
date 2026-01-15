@@ -73,7 +73,7 @@ class TestGitIntegration:
         commit3 = self.create_commit(remote_repo, "file3.txt", "content3", "Branch2 commit")  # noqa: F841
 
         # Create a GitClone-like working directory
-        clone_repo = git.Repo.clone_from(remote_dir, local_dir)  # noqa: F841
+        clone_repo = git.Repo.clone_from(remote_dir, local_dir)
         clone_repo.remotes.origin.fetch()
 
         # Create environment
@@ -137,7 +137,7 @@ class TestGitIntegration:
         commit4 = self.create_commit(remote_repo, "file4.txt", "content4", "Branch3 commit")  # noqa: F841
 
         # Clone repository
-        clone_repo = git.Repo.clone_from(remote_dir, local_dir)  # noqa: F841
+        clone_repo = git.Repo.clone_from(remote_dir, local_dir)
         clone_repo.remotes.origin.fetch()
 
         # Create environment with 3 branches
@@ -188,7 +188,7 @@ class TestGitIntegration:
         commit3 = self.create_commit(remote_repo, "file3.txt", "content3", "Branch1 commit 2")  # noqa: F841
 
         # Clone repository
-        clone_repo = git.Repo.clone_from(remote_dir, local_dir)  # noqa: F841
+        clone_repo = git.Repo.clone_from(remote_dir, local_dir)
         clone_repo.remotes.origin.fetch()
 
         # Create environment - trying to merge main and branch1 (fast-forward possible)
@@ -243,7 +243,7 @@ class TestGitIntegration:
         commit3 = self.create_commit(remote_repo, "file1.txt", "branch2 content", "Branch2 change")  # noqa: F841
 
         # Clone repository
-        clone_repo = git.Repo.clone_from(remote_dir, local_dir)  # noqa: F841
+        clone_repo = git.Repo.clone_from(remote_dir, local_dir)
         clone_repo.remotes.origin.fetch()
 
         # Create environment
@@ -296,7 +296,7 @@ class TestGitIntegration:
         commit3 = self.create_commit(remote_repo, "file3.txt", "content3", "Branch2 commit")  # noqa: F841
 
         # Clone repository
-        clone_repo = git.Repo.clone_from(remote_dir, local_dir)  # noqa: F841
+        clone_repo = git.Repo.clone_from(remote_dir, local_dir)
         clone_repo.remotes.origin.fetch()
 
         # Create environment
@@ -360,7 +360,7 @@ class TestGitIntegration:
         commit3 = self.create_commit(remote_repo, "file3.txt", "content3", "Branch2 commit")  # noqa: F841
 
         # Clone repository
-        clone_repo = git.Repo.clone_from(remote_dir, local_dir)  # noqa: F841
+        clone_repo = git.Repo.clone_from(remote_dir, local_dir)
         clone_repo.remotes.origin.fetch()
 
         # Create environment
@@ -421,7 +421,7 @@ class TestGitIntegration:
         commit1 = self.create_commit(remote_repo, "file1.txt", "content1", "Initial commit")  # noqa: F841
 
         # Clone repository
-        clone_repo = git.Repo.clone_from(remote_dir, local_dir)  # noqa: F841
+        clone_repo = git.Repo.clone_from(remote_dir, local_dir)
 
         # Create environment
         env = Environment(
@@ -472,7 +472,7 @@ class TestGitIntegration:
         commit1 = self.create_commit(remote_repo, "file1.txt", "content1", "Initial commit")  # noqa: F841
 
         # Clone repository
-        clone_repo = git.Repo.clone_from(remote_dir, local_dir)  # noqa: F841
+        clone_repo = git.Repo.clone_from(remote_dir, local_dir)
 
         # Create environment with empty branches
         env = Environment(
