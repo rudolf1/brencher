@@ -44,8 +44,21 @@ class RemoteRepoHelper:
             cw.set_value("user", "name", "Test User")
         return repo
 
-    def create_commit(self, repo: git.Repo, filename: str, content: str, message: str) -> git.Commit:  # type: ignore
-        """Create a commit in the repository"""
+    def create_commit(self, repo: git.Repo, from_branch: str, to_branch: str, filename: str, content: str, message: str) -> git.Commit:  # type: ignore
+        """Create a commit in the repository
+        
+        If to_branch doesn't exist, it will be created from from_branch and checked out.
+        """
+        if from_branch in [head.name for head in repo.heads]:
+            repo.heads[from_branch].checkout()
+        if from_branch != to_branch:
+            if to_branch not in [head.name for head in repo.heads]:
+                new_branch = repo.create_head(to_branch)
+                new_branch.checkout()
+            else:
+                raise BaseException("Target branch already exists.")
+        
+        # Create commit
         file_path = os.path.join(repo.working_dir, filename)
         with open(file_path, 'w') as f:
             f.write(content)

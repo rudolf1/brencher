@@ -8,7 +8,7 @@ import pytest  # type: ignore
 from typing import Generator
 
 
-from steps.git import CheckoutMerged, GitUnmerge, CheckoutAndMergeResult
+from steps.git import CheckoutMerged, GitUnmerge, CheckoutAndMergeResult, GitClone
 from enironment import Environment
 from tests.test_remote_repo import RemoteRepoHelper, MockGitClone, MockDockerSwarmCheck
 
@@ -33,18 +33,9 @@ class TestGitIntegration:
         remote_repo = repo_helper.setup_remote_repo(remote_dir)
 
         # Create main branch with initial commit
-        commit1 = repo_helper.create_commit(remote_repo, "file1.txt", "content1", "Initial commit")  # noqa: F841
-
-        # Create branch1 from main
-        branch1 = remote_repo.create_head("branch1")
-        branch1.checkout()
-        commit2 = repo_helper.create_commit(remote_repo, "file2.txt", "content2", "Branch1 commit")  # noqa: F841
-
-        # Switch to main and create branch2
-        remote_repo.heads.master.checkout()
-        branch2 = remote_repo.create_head("branch2")
-        branch2.checkout()
-        commit3 = repo_helper.create_commit(remote_repo, "file3.txt", "content3", "Branch2 commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit2 = repo_helper.create_commit(remote_repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit")  # noqa: F841
+        commit3 = repo_helper.create_commit(remote_repo, "master", "branch2", "file3.txt", "content3", "Branch2 commit")  # noqa: F841
 
         # Create a GitClone-like working directory
         repo_helper.clone_repo(remote_dir, local_dir)
@@ -56,8 +47,7 @@ class TestGitIntegration:
             dry=False,
             repo=remote_dir
         )
-
-        # Create mock GitClone object
+        
         mock_wd = MockGitClone(local_dir, env)
 
         # Test CheckoutMerged
@@ -88,24 +78,12 @@ class TestGitIntegration:
         remote_repo = repo_helper.setup_remote_repo(remote_dir)
 
         # Create main branch with initial commit
-        commit1 = repo_helper.create_commit(remote_repo, "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
 
-        # Create branch1
-        branch1 = remote_repo.create_head("branch1")
-        branch1.checkout()
-        commit2 = repo_helper.create_commit(remote_repo, "file2.txt", "content2", "Branch1 commit")  # noqa: F841
-
-        # Create branch2 from main
-        remote_repo.heads.master.checkout()
-        branch2 = remote_repo.create_head("branch2")
-        branch2.checkout()
-        commit3 = repo_helper.create_commit(remote_repo, "file3.txt", "content3", "Branch2 commit")  # noqa: F841
-
-        # Create branch3 from main
-        remote_repo.heads.master.checkout()
-        branch3 = remote_repo.create_head("branch3")
-        branch3.checkout()
-        commit4 = repo_helper.create_commit(remote_repo, "file4.txt", "content4", "Branch3 commit")  # noqa: F841
+        # Create branch1, branch2, and branch3
+        commit2 = repo_helper.create_commit(remote_repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit")  # noqa: F841
+        commit3 = repo_helper.create_commit(remote_repo, "master", "branch2", "file3.txt", "content3", "Branch2 commit")  # noqa: F841
+        commit4 = repo_helper.create_commit(remote_repo, "master", "branch3", "file4.txt", "content4", "Branch3 commit")  # noqa: F841
 
         # Clone repository
         repo_helper.clone_repo(remote_dir, local_dir)
@@ -147,13 +125,11 @@ class TestGitIntegration:
         remote_repo = repo_helper.setup_remote_repo(remote_dir)
 
         # Create main branch with initial commit
-        commit1 = repo_helper.create_commit(remote_repo, "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
 
-        # Create branch1 from main
-        branch1 = remote_repo.create_head("branch1")
-        branch1.checkout()
-        commit2 = repo_helper.create_commit(remote_repo, "file2.txt", "content2", "Branch1 commit 1")  # noqa: F841
-        commit3 = repo_helper.create_commit(remote_repo, "file3.txt", "content3", "Branch1 commit 2")  # noqa: F841
+        # Create branch1 from main with multiple commits
+        commit2 = repo_helper.create_commit(remote_repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit 1")  # noqa: F841
+        commit3 = repo_helper.create_commit(remote_repo, "branch1", "branch1", "file3.txt", "content3", "Branch1 commit 2")  # noqa: F841
 
         # Clone repository
         repo_helper.clone_repo(remote_dir, local_dir)
@@ -193,18 +169,11 @@ class TestGitIntegration:
         remote_repo = repo_helper.setup_remote_repo(remote_dir)
 
         # Create main branch with initial commit
-        commit1 = repo_helper.create_commit(remote_repo, "file1.txt", "initial content", "Initial commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "initial content", "Initial commit")  # noqa: F841
 
-        # Create branch1 and modify file1.txt
-        branch1 = remote_repo.create_head("branch1")
-        branch1.checkout()
-        commit2 = repo_helper.create_commit(remote_repo, "file1.txt", "branch1 content", "Branch1 change")  # noqa: F841
-
-        # Create branch2 from main and modify the same file differently
-        remote_repo.heads.master.checkout()
-        branch2 = remote_repo.create_head("branch2")
-        branch2.checkout()
-        commit3 = repo_helper.create_commit(remote_repo, "file1.txt", "branch2 content", "Branch2 change")  # noqa: F841
+        # Create branch1 and branch2 with conflicting changes to same file
+        commit2 = repo_helper.create_commit(remote_repo, "master", "branch1", "file1.txt", "branch1 content", "Branch1 change")  # noqa: F841
+        commit3 = repo_helper.create_commit(remote_repo, "master", "branch2", "file1.txt", "branch2 content", "Branch2 change")  # noqa: F841
 
         # Clone repository
         repo_helper.clone_repo(remote_dir, local_dir)
@@ -241,18 +210,11 @@ class TestGitIntegration:
         remote_repo = repo_helper.setup_remote_repo(remote_dir)
 
         # Create main branch with initial commit
-        commit1 = repo_helper.create_commit(remote_repo, "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
 
-        # Create branch1
-        branch1 = remote_repo.create_head("branch1")
-        branch1.checkout()
-        commit2 = repo_helper.create_commit(remote_repo, "file2.txt", "content2", "Branch1 commit")  # noqa: F841
-
-        # Create branch2 from main
-        remote_repo.heads.master.checkout()
-        branch2 = remote_repo.create_head("branch2")
-        branch2.checkout()
-        commit3 = repo_helper.create_commit(remote_repo, "file3.txt", "content3", "Branch2 commit")  # noqa: F841
+        # Create branch1 and branch2
+        commit2 = repo_helper.create_commit(remote_repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit")  # noqa: F841
+        commit3 = repo_helper.create_commit(remote_repo, "master", "branch2", "file3.txt", "content3", "Branch2 commit")  # noqa: F841
 
         # Clone repository
         repo_helper.clone_repo(remote_dir, local_dir)
@@ -304,15 +266,9 @@ class TestGitIntegration:
         remote_repo = repo_helper.setup_remote_repo(remote_dir)
 
         # Create commits
-        commit1 = repo_helper.create_commit(remote_repo, "file1.txt", "content1", "Initial commit")  # noqa: F841
-        branch1 = remote_repo.create_head("branch1")
-        branch1.checkout()
-        commit2 = repo_helper.create_commit(remote_repo, "file2.txt", "content2", "Branch1 commit")
-
-        remote_repo.heads.master.checkout()
-        branch2 = remote_repo.create_head("branch2")
-        branch2.checkout()
-        commit3 = repo_helper.create_commit(remote_repo, "file3.txt", "content3", "Branch2 commit")
+        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit2 = repo_helper.create_commit(remote_repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit")
+        commit3 = repo_helper.create_commit(remote_repo, "master", "branch2", "file3.txt", "content3", "Branch2 commit")
 
         # Clone repository
         repo_helper.clone_repo(remote_dir, local_dir)
@@ -359,7 +315,7 @@ class TestGitIntegration:
 
         # Setup remote repository
         remote_repo = repo_helper.setup_remote_repo(remote_dir)
-        commit1 = repo_helper.create_commit(remote_repo, "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
 
         # Clone repository
         repo_helper.clone_repo(remote_dir, local_dir)
@@ -408,19 +364,12 @@ class TestGitIntegration:
         remote_repo = repo_helper.setup_remote_repo(remote_dir)
 
         # Create initial commit
-        commit1 = repo_helper.create_commit(remote_repo, "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
 
-        # Create branch1 with multiple commits
-        branch1 = remote_repo.create_head("branch1")
-        branch1.checkout()
-        commit2 = repo_helper.create_commit(remote_repo, "file2.txt", "content2", "Branch1 commit 1")
-        commit3 = repo_helper.create_commit(remote_repo, "file3.txt", "content3", "Branch1 commit 2")  # noqa: F841
-
-        # Create branch2 from master
-        remote_repo.heads.master.checkout()
-        branch2 = remote_repo.create_head("branch2")
-        branch2.checkout()
-        commit4 = repo_helper.create_commit(remote_repo, "file4.txt", "content4", "Branch2 commit")
+        # Create branch1 with multiple commits and branch2
+        commit2 = repo_helper.create_commit(remote_repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit 1")
+        commit3 = repo_helper.create_commit(remote_repo, "branch1", "branch1", "file3.txt", "content3", "Branch1 commit 2")  # noqa: F841
+        commit4 = repo_helper.create_commit(remote_repo, "master", "branch2", "file4.txt", "content4", "Branch2 commit")
 
         # Clone repository
         repo_helper.clone_repo(remote_dir, local_dir)
@@ -481,7 +430,7 @@ class TestGitIntegration:
 
         # Setup remote repository
         remote_repo = repo_helper.setup_remote_repo(remote_dir)
-        commit1 = repo_helper.create_commit(remote_repo, "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
 
         # Clone repository
         repo_helper.clone_repo(remote_dir, local_dir)
