@@ -1,0 +1,20 @@
+{
+  "include": [
+    "backend",
+    "tests"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/.venv",
+    "**/.pytest_cache"
+  ],
+  "extraPaths": [
+    "backend"
+  ],
+  "pythonVersion": "3.11",
+  "pythonPlatform": "Linux",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "reportImportCycles": false
+}
