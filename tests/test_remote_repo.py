@@ -10,23 +10,40 @@ import os
 from typing import Tuple, Optional, TYPE_CHECKING
 import git  # type: ignore
 
-if TYPE_CHECKING:
-    from steps.docker import DockerSwarmCheckResult  # noqa: F401
-    from enironment import Environment
+from steps.docker import DockerSwarmCheckResult  # noqa: F811
+from steps.git import CheckoutMerged, GitUnmerge, GitClone  # noqa: F401
+from enironment import Environment
 
+
+class MockDockerSwarmCheck:
+    """Mock DockerSwarmCheck object for testing"""
+
+    def __init__(self, version: str) -> None:
+        self.result = {
+            "service1": DockerSwarmCheckResult(
+                name="service1",
+                version=version,
+                image="test:latest",
+                stack="test-stack"
+            )
+        }
 
 class RemoteRepoHelper:
     """Helper class for creating and managing test git repositories"""
+    env: Environment
+    checkout_merged: CheckoutMerged
+    git_clone: GitClone
+    git_unmerge :GitUnmerge
+    mock_check: MockDockerSwarmCheck
 
     def __init__(self) -> None:
-        self.remote_dir: Optional[str] = None
-        self.local_dir: Optional[str] = None
-
-    def setup(self) -> Tuple[str, str]:
-        """Create temporary directories for remote and local repos"""
         self.remote_dir = tempfile.mkdtemp(prefix="test_remote_")
         self.local_dir = tempfile.mkdtemp(prefix="test_local_")
-        return self.remote_dir, self.local_dir
+        self.repo = git.Repo.init(self.remote_dir, bare=False)
+        # Configure git user
+        with self.repo.config_writer() as cw:
+            cw.set_value("user", "email", "test@example.com")
+            cw.set_value("user", "name", "Test User")
 
     def teardown(self) -> None:
         """Clean up temporary directories"""
@@ -34,15 +51,6 @@ class RemoteRepoHelper:
             shutil.rmtree(self.remote_dir, ignore_errors=True)
         if self.local_dir:
             shutil.rmtree(self.local_dir, ignore_errors=True)
-
-    def setup_remote_repo(self, repo_path: str) -> git.Repo:  # type: ignore
-        """Initialize a remote repository (non-bare for testing purposes)"""
-        repo = git.Repo.init(repo_path, bare=False)
-        # Configure git user
-        with repo.config_writer() as cw:
-            cw.set_value("user", "email", "test@example.com")
-            cw.set_value("user", "name", "Test User")
-        return repo
 
     def create_commit(self, repo: git.Repo, from_branch: str, to_branch: str, filename: str, content: str, message: str) -> git.Commit:  # type: ignore
         """Create a commit in the repository
@@ -65,32 +73,9 @@ class RemoteRepoHelper:
         repo.index.add([filename])
         return repo.index.commit(message)
 
-    def clone_repo(self, remote_dir: str, local_dir: str) -> git.Repo:  # type: ignore
+    def clone_repo(self) -> git.Repo:  # type: ignore
         """Clone the remote repository to local directory"""
-        clone_repo = git.Repo.clone_from(remote_dir, local_dir)
+        clone_repo = git.Repo.clone_from(self.remote_dir, self.local_dir)
         clone_repo.remotes.origin.fetch()
         return clone_repo
 
-
-class MockGitClone:
-    """Mock GitClone object for testing"""
-
-    def __init__(self, result_path: str, env: 'Environment') -> None:
-        self.result = result_path
-        self.result_obj = result_path
-        self.env = env
-
-
-class MockDockerSwarmCheck:
-    """Mock DockerSwarmCheck object for testing"""
-
-    def __init__(self, version: str) -> None:
-        from steps.docker import DockerSwarmCheckResult  # noqa: F811
-        self.result = {
-            "service1": DockerSwarmCheckResult(
-                name="service1",
-                version=version,
-                image="test:latest",
-                stack="test-stack"
-            )
-        }

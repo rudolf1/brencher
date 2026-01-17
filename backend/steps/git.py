@@ -122,10 +122,8 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         return visited
 
     def progress(self) -> CheckoutAndMergeResult:
-        if isinstance(self.wd.result_obj, BaseException):
-            raise self.wd.result_obj
 
-        repo_path = self.wd.result_obj
+        repo_path = self.wd.result
         if not isinstance(repo_path, str):
             raise BaseException(f"Unknown repo path {repo_path}")
         

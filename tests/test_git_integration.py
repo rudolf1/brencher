@@ -4,13 +4,13 @@ Integration tests for git.py classes: CheckoutMerged and GitUnmerge
 These tests run in a Docker-like isolated environment to avoid harming the host system.
 They simulate remote and local git repositories and test various merge scenarios.
 """
-import pytest  # type: ignore
+import pytest
 from typing import Generator
 
 
 from steps.git import CheckoutMerged, GitUnmerge, CheckoutAndMergeResult, GitClone
 from enironment import Environment
-from tests.test_remote_repo import RemoteRepoHelper, MockGitClone, MockDockerSwarmCheck
+from tests.test_remote_repo import RemoteRepoHelper, MockDockerSwarmCheck
 
 
 class TestGitIntegration:
@@ -20,46 +20,46 @@ class TestGitIntegration:
     def repo_helper(self) -> Generator[RemoteRepoHelper, None, None]:
         """Create a repository helper instance"""
         helper = RemoteRepoHelper()
-        remote_dir, local_dir = helper.setup()
+        helper.env = Environment(
+            id="test1",
+            branches=[],
+            dry=False,
+            repo=helper.remote_dir
+        )
+        
+        # mock_wd = MockGitClone(repo_helper.local_dir, env)
+        helper.git_clone = GitClone(helper.env)
+        helper.mock_check = MockDockerSwarmCheck("invalid-version-format")
+        # Test CheckoutMerged
+        helper.checkout_merged = CheckoutMerged(
+            wd=helper.git_clone,
+            git_user_email="test@example.com",
+            git_user_name="Test User",
+            push=False,
+            env=helper.env
+        )
+        helper.git_unmerge = GitUnmerge(
+            wd=helper.git_clone,
+            check=helper.mock_check,
+            env=helper.env
+        )
+
         yield helper
         helper.teardown()
 
     def test_checkout_merged_two_branches(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging two branches successfully"""
-        remote_dir = repo_helper.remote_dir
-        local_dir = repo_helper.local_dir
 
-        # Setup remote repository
-        remote_repo = repo_helper.setup_remote_repo(remote_dir)
 
         # Create main branch with initial commit
-        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
-        commit2 = repo_helper.create_commit(remote_repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit")  # noqa: F841
-        commit3 = repo_helper.create_commit(remote_repo, "master", "branch2", "file3.txt", "content3", "Branch2 commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit")  # noqa: F841
+        commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file3.txt", "content3", "Branch2 commit")  # noqa: F841
 
         # Create a GitClone-like working directory
-        repo_helper.clone_repo(remote_dir, local_dir)
-
-        # Create environment
-        env = Environment(
-            id="test1",
-            branches=[("branch1", "HEAD"), ("branch2", "HEAD")],
-            dry=False,
-            repo=remote_dir
-        )
-        
-        mock_wd = MockGitClone(local_dir, env)
-
-        # Test CheckoutMerged
-        checkout_merged = CheckoutMerged(
-            wd=mock_wd,
-            git_user_email="test@example.com",
-            git_user_name="Test User",
-            push=False,
-            env=env
-        )
-
-        result = checkout_merged.progress()
+        repo_helper.clone_repo()
+        repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD")]   
+        result = repo_helper.checkout_merged.progress()
 
         # Verify result with specific field checks
         assert isinstance(result, CheckoutAndMergeResult)
@@ -71,40 +71,29 @@ class TestGitIntegration:
 
     def test_checkout_merged_three_branches(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging three branches successfully"""
-        remote_dir = repo_helper.remote_dir
-        local_dir = repo_helper.local_dir
 
-        # Setup remote repository
-        remote_repo = repo_helper.setup_remote_repo(remote_dir)
 
         # Create main branch with initial commit
-        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
 
         # Create branch1, branch2, and branch3
-        commit2 = repo_helper.create_commit(remote_repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit")  # noqa: F841
-        commit3 = repo_helper.create_commit(remote_repo, "master", "branch2", "file3.txt", "content3", "Branch2 commit")  # noqa: F841
-        commit4 = repo_helper.create_commit(remote_repo, "master", "branch3", "file4.txt", "content4", "Branch3 commit")  # noqa: F841
+        commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit")  # noqa: F841
+        commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file3.txt", "content3", "Branch2 commit")  # noqa: F841
+        commit4 = repo_helper.create_commit(repo_helper.repo, "master", "branch3", "file4.txt", "content4", "Branch3 commit")  # noqa: F841
 
         # Clone repository
-        repo_helper.clone_repo(remote_dir, local_dir)
+        repo_helper.clone_repo()
 
         # Create environment with 3 branches
-        env = Environment(
-            id="test2",
-            branches=[("branch1", "HEAD"), ("branch2", "HEAD"), ("branch3", "HEAD")],
-            dry=False,
-            repo=remote_dir
-        )
-
-        mock_wd = MockGitClone(local_dir, env)
+        repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD"), ("branch3", "HEAD")]
 
         # Test CheckoutMerged
         checkout_merged = CheckoutMerged(
-            wd=mock_wd,
+            wd=repo_helper.git_clone,
             git_user_email="test@example.com",
             git_user_name="Test User",
             push=False,
-            env=env
+            env=repo_helper.env
         )
 
         result = checkout_merged.progress()
@@ -118,42 +107,21 @@ class TestGitIntegration:
 
     def test_checkout_merged_fast_forward(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging with fast-forward (linear history)"""
-        remote_dir = repo_helper.remote_dir
-        local_dir = repo_helper.local_dir
-
-        # Setup remote repository
-        remote_repo = repo_helper.setup_remote_repo(remote_dir)
 
         # Create main branch with initial commit
-        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
 
         # Create branch1 from main with multiple commits
-        commit2 = repo_helper.create_commit(remote_repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit 1")  # noqa: F841
-        commit3 = repo_helper.create_commit(remote_repo, "branch1", "branch1", "file3.txt", "content3", "Branch1 commit 2")  # noqa: F841
-
+        commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit 1")  # noqa: F841
+        commit3 = repo_helper.create_commit(repo_helper.repo, "branch1", "branch1", "file3.txt", "content3", "Branch1 commit 2")  # noqa: F841
         # Clone repository
-        repo_helper.clone_repo(remote_dir, local_dir)
+        repo_helper.clone_repo()
 
         # Create environment - trying to merge main and branch1 (fast-forward possible)
-        env = Environment(
-            id="test3",
-            branches=[("master", "HEAD"), ("branch1", "HEAD")],
-            dry=False,
-            repo=remote_dir
-        )
+        repo_helper.env.branches =[("master", "HEAD"), ("branch1", "HEAD")]
 
-        mock_wd = MockGitClone(local_dir, env)
 
-        # Test CheckoutMerged
-        checkout_merged = CheckoutMerged(
-            wd=mock_wd,
-            git_user_email="test@example.com",
-            git_user_name="Test User",
-            push=False,
-            env=env
-        )
-
-        result = checkout_merged.progress()
+        result = repo_helper.checkout_merged.progress()
 
         # Verify result - should find existing branch or create merge
         assert isinstance(result, CheckoutAndMergeResult)
@@ -162,92 +130,50 @@ class TestGitIntegration:
 
     def test_checkout_merged_conflicting_branches(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging conflicting branches - should fail gracefully"""
-        remote_dir = repo_helper.remote_dir
-        local_dir = repo_helper.local_dir
 
-        # Setup remote repository
-        remote_repo = repo_helper.setup_remote_repo(remote_dir)
 
         # Create main branch with initial commit
-        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "initial content", "Initial commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "initial content", "Initial commit")  # noqa: F841
 
         # Create branch1 and branch2 with conflicting changes to same file
-        commit2 = repo_helper.create_commit(remote_repo, "master", "branch1", "file1.txt", "branch1 content", "Branch1 change")  # noqa: F841
-        commit3 = repo_helper.create_commit(remote_repo, "master", "branch2", "file1.txt", "branch2 content", "Branch2 change")  # noqa: F841
+        commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file1.txt", "branch1 content", "Branch1 change")  # noqa: F841
+        commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file1.txt", "branch2 content", "Branch2 change")  # noqa: F841
 
         # Clone repository
-        repo_helper.clone_repo(remote_dir, local_dir)
+        repo_helper.clone_repo()
 
         # Create environment
-        env = Environment(
-            id="test4",
-            branches=[("branch1", "HEAD"), ("branch2", "HEAD")],
-            dry=False,
-            repo=remote_dir
-        )
-
-        mock_wd = MockGitClone(local_dir, env)
-
-        # Test CheckoutMerged - should raise exception on conflict
-        checkout_merged = CheckoutMerged(
-            wd=mock_wd,
-            git_user_email="test@example.com",
-            git_user_name="Test User",
-            push=False,
-            env=env
-        )
+        repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD")]
 
         # Expect merge conflict to be raised as BaseException
         with pytest.raises(BaseException, match="Merge conflict"):
-            checkout_merged.progress()
+            repo_helper.checkout_merged.progress()
 
     def test_checkout_merged_existing_auto_branch(self, repo_helper: RemoteRepoHelper) -> None:
         """Test that existing auto branch is reused"""
-        remote_dir = repo_helper.remote_dir
-        local_dir = repo_helper.local_dir
-
-        # Setup remote repository
-        remote_repo = repo_helper.setup_remote_repo(remote_dir)
 
         # Create main branch with initial commit
-        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
 
         # Create branch1 and branch2
-        commit2 = repo_helper.create_commit(remote_repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit")  # noqa: F841
-        commit3 = repo_helper.create_commit(remote_repo, "master", "branch2", "file3.txt", "content3", "Branch2 commit")  # noqa: F841
+        commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit")  # noqa: F841
+        commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file3.txt", "content3", "Branch2 commit")  # noqa: F841
 
         # Clone repository
-        repo_helper.clone_repo(remote_dir, local_dir)
+        repo_helper.clone_repo()
 
         # Create environment
-        env = Environment(
-            id="test5",
-            branches=[("branch1", "HEAD"), ("branch2", "HEAD")],
-            dry=False,
-            repo=remote_dir
-        )
-
-        mock_wd = MockGitClone(local_dir, env)
-
-        # First merge - creates auto branch
-        checkout_merged1 = CheckoutMerged(
-            wd=mock_wd,
-            git_user_email="test@example.com",
-            git_user_name="Test User",
-            push=False,
-            env=env
-        )
-
-        result1 = checkout_merged1.progress()
+        repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD")]
+        result1 = repo_helper.checkout_merged.progress()
         auto_branch_name = result1.branch_name
 
         # Second merge with same branches - should reuse existing auto branch
         checkout_merged2 = CheckoutMerged(
-            wd=mock_wd,
+            wd=repo_helper.git_clone,
             git_user_email="test@example.com",
             git_user_name="Test User",
             push=False,
-            env=env
+            env=repo_helper.env
         )
 
         result2 = checkout_merged2.progress()
@@ -259,43 +185,27 @@ class TestGitIntegration:
 
     def test_checkout_merged_and_unmerge_valid_version(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging branches and then unmerging with valid version string"""
-        remote_dir = repo_helper.remote_dir
-        local_dir = repo_helper.local_dir
 
-        # Setup remote repository
-        remote_repo = repo_helper.setup_remote_repo(remote_dir)
 
         # Create commits
-        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
-        commit2 = repo_helper.create_commit(remote_repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit")
-        commit3 = repo_helper.create_commit(remote_repo, "master", "branch2", "file3.txt", "content3", "Branch2 commit")
+        commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit")
+        commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file3.txt", "content3", "Branch2 commit")
 
         # Clone repository
-        repo_helper.clone_repo(remote_dir, local_dir)
+        repo_helper.clone_repo()
 
         # Create environment
-        env = Environment(
-            id="test6",
-            branches=[],
-            dry=False,
-            repo=remote_dir
-        )
+        repo_helper.env.branches = []
 
-        # Mock GitClone
-        mock_wd = MockGitClone(local_dir, env)
 
         # Mock DockerSwarmCheck with version string
         version_str = f"auto-{commit2.hexsha[:8]}-{commit3.hexsha[:8]}"
-        mock_check = MockDockerSwarmCheck(version_str)
+        repo_helper.mock_check = MockDockerSwarmCheck(version_str)
+        repo_helper.git_unmerge.check = repo_helper.mock_check
 
         # Test GitUnmerge
-        git_unmerge = GitUnmerge(
-            wd=mock_wd,
-            check=mock_check,
-            env=env
-        )
-
-        result = git_unmerge.progress()
+        result = repo_helper.git_unmerge.progress()
 
         # Verify result contains branch information with specific value checks
         assert isinstance(result, list), "Result should be a list"
@@ -310,36 +220,21 @@ class TestGitIntegration:
 
     def test_git_unmerge_invalid_version(self, repo_helper: RemoteRepoHelper) -> None:
         """Test GitUnmerge with invalid version format"""
-        remote_dir = repo_helper.remote_dir
-        local_dir = repo_helper.local_dir
 
-        # Setup remote repository
-        remote_repo = repo_helper.setup_remote_repo(remote_dir)
-        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
 
         # Clone repository
-        repo_helper.clone_repo(remote_dir, local_dir)
+        repo_helper.clone_repo()
 
         # Create environment
-        env = Environment(
-            id="test7",
-            branches=[],
-            dry=False,
-            repo=remote_dir
-        )
-
-        mock_wd = MockGitClone(local_dir, env)
-        mock_check = MockDockerSwarmCheck("invalid-version-format")
-
-        # Test GitUnmerge - should raise exception
-        git_unmerge = GitUnmerge(
-            wd=mock_wd,
-            check=mock_check,
-            env=env
-        )
+        repo_helper.env.branches = []
+        # Mock DockerSwarmCheck with version string
+        version_str = "invalid-version-format"
+        repo_helper.mock_check = MockDockerSwarmCheck(version_str)
+        repo_helper.git_unmerge.check = repo_helper.mock_check
 
         with pytest.raises(BaseException, match="Version format not recognized"):
-            git_unmerge.progress()
+            repo_helper.git_unmerge.progress()
 
     @pytest.mark.xfail(
         reason="GitUnmerge does not yet support finding branches for non-HEAD commits. "
@@ -357,47 +252,30 @@ class TestGitIntegration:
         NOTE: This test WILL FAIL until GitUnmerge is updated to search through branch
         history to find branches containing non-HEAD commits.
         """
-        remote_dir = repo_helper.remote_dir
-        local_dir = repo_helper.local_dir
 
-        # Setup remote repository
-        remote_repo = repo_helper.setup_remote_repo(remote_dir)
 
         # Create initial commit
-        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
 
         # Create branch1 with multiple commits and branch2
-        commit2 = repo_helper.create_commit(remote_repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit 1")
-        commit3 = repo_helper.create_commit(remote_repo, "branch1", "branch1", "file3.txt", "content3", "Branch1 commit 2")  # noqa: F841
-        commit4 = repo_helper.create_commit(remote_repo, "master", "branch2", "file4.txt", "content4", "Branch2 commit")
+        commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit 1")
+        commit3 = repo_helper.create_commit(repo_helper.repo, "branch1", "branch1", "file3.txt", "content3", "Branch1 commit 2")  # noqa: F841
+        commit4 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file4.txt", "content4", "Branch2 commit")
 
         # Clone repository
-        repo_helper.clone_repo(remote_dir, local_dir)
+        repo_helper.clone_repo()
 
         # Create environment
-        env = Environment(
-            id="test_nonhead",
-            branches=[],
-            dry=False,
-            repo=remote_dir
-        )
+        repo_helper.env.branches = []
 
-        # Mock GitClone
-        mock_wd = MockGitClone(local_dir, env)
 
         # Mock DockerSwarmCheck with version string using non-HEAD commit from branch1
         # commit2 is NOT the HEAD of branch1 (commit3 is), but it exists in branch1's history
         version_str = f"auto-{commit2.hexsha[:8]}-{commit4.hexsha[:8]}"
-        mock_check = MockDockerSwarmCheck(version_str)
+        repo_helper.mock_check = MockDockerSwarmCheck(version_str)
 
-        # Test GitUnmerge
-        git_unmerge = GitUnmerge(
-            wd=mock_wd,
-            check=mock_check,
-            env=env
-        )
 
-        result = git_unmerge.progress()
+        result = repo_helper.git_unmerge.progress()
 
         # Verify result contains branch information
         assert isinstance(result, list)
@@ -425,37 +303,18 @@ class TestGitIntegration:
 
     def test_checkout_merged_empty_branches(self, repo_helper: RemoteRepoHelper) -> None:
         """Test CheckoutMerged with empty branches list - should fail"""
-        remote_dir = repo_helper.remote_dir
-        local_dir = repo_helper.local_dir
 
-        # Setup remote repository
-        remote_repo = repo_helper.setup_remote_repo(remote_dir)
-        commit1 = repo_helper.create_commit(remote_repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
 
         # Clone repository
-        repo_helper.clone_repo(remote_dir, local_dir)
+        repo_helper.clone_repo()
 
         # Create environment with empty branches
-        env = Environment(
-            id="test8",
-            branches=[],
-            dry=False,
-            repo=remote_dir
-        )
+        repo_helper.env.branches = []
 
-        mock_wd = MockGitClone(local_dir, env)
-
-        # Test CheckoutMerged - should raise exception
-        checkout_merged = CheckoutMerged(
-            wd=mock_wd,
-            git_user_email="test@example.com",
-            git_user_name="Test User",
-            push=False,
-            env=env
-        )
 
         with pytest.raises(BaseException, match="Empty branches set"):
-            checkout_merged.progress()
+            repo_helper.checkout_merged.progress()
 
 
 if __name__ == "__main__":
