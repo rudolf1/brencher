@@ -65,7 +65,7 @@ This script will:
 
 ### Option 2: Run Locally
 
-If you prefer to run tests locally (requires Python 3.11+ and git):
+If you prefer to run tests locally (requires Python 3.12.3+ and git):
 
 ```bash
 # Install dependencies
@@ -108,7 +108,7 @@ These tests are integrated into the CI pipeline through the `python-package.yml`
 
 ## Dependencies
 
-- Python 3.11+
+- Python 3.12.3+
 - pytest
 - gitpython
 - git (system package)
