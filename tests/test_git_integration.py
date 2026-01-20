@@ -4,13 +4,15 @@ Integration tests for git.py classes: CheckoutMerged and GitUnmerge
 These tests run in a Docker-like isolated environment to avoid harming the host system.
 They simulate remote and local git repositories and test various merge scenarios.
 """
+import os
 import pytest
-from typing import Generator
+from typing import Generator, List, Tuple
 
 
 from steps.git import CheckoutMerged, GitUnmerge, CheckoutAndMergeResult, GitClone
 from enironment import Environment
 from tests.test_remote_repo import RemoteRepoHelper, MockDockerSwarmCheck
+
 
 
 class TestGitIntegration:
@@ -45,7 +47,38 @@ class TestGitIntegration:
         )
 
         yield helper
+        print(f"Repo {helper.remote_dir}")
         helper.teardown()
+
+    def test_checkout_merged_one_branch(self, repo_helper: RemoteRepoHelper) -> None:
+        # Create main branch with initial commit
+        commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
+        commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit")  # noqa: F841
+        commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file3.txt", "content3", "Branch2 commit")  # noqa: F841
+
+        repo_helper.clone_repo()
+        repo_helper.env.branches = [("branch1", "HEAD")]   
+        result = repo_helper.checkout_merged.progress()
+
+        assert isinstance(result, CheckoutAndMergeResult)
+        assert result.commit_hash == commit1.hexsha, f"Invalid commit"
+        
+        repo_helper.verify_working_directory_files([
+            ('file1.txt', 'content1'),
+            ('file2.txt', 'content2'),
+        ])
+
+        repo_helper.env.branches = [("branch2", "HEAD")]   
+        result = repo_helper.checkout_merged.progress()
+
+        assert isinstance(result, CheckoutAndMergeResult)
+        assert result.commit_hash == commit2.hexsha, f"Invalid commit"
+        
+        repo_helper.verify_working_directory_files([
+            ('file1.txt', 'content1'),
+            ('file3.txt', 'content3'),
+        ])
+
 
     def test_checkout_merged_two_branches(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging two branches successfully"""
@@ -68,6 +101,13 @@ class TestGitIntegration:
         assert result.commit_hash.isalnum(), f"Commit hash should be alphanumeric: {result.commit_hash}"
         assert "-" in result.version, f"Version should contain '-': {result.version}"
         assert len(result.version.split("-")) == 2, f"Version should have 2 parts: {result.version}"
+        
+        # Verify file content and existence in working directory
+        repo_helper.verify_working_directory_files([
+            ('file1.txt', 'content1'),
+            ('file2.txt', 'content2'),
+            ('file3.txt', 'content3')
+        ])
 
     def test_checkout_merged_three_branches(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging three branches successfully"""
@@ -104,12 +144,13 @@ class TestGitIntegration:
         assert len(result.commit_hash) == 40, f"Invalid commit hash length: {result.commit_hash}"
         assert result.commit_hash.isalnum(), f"Commit hash should be alphanumeric: {result.commit_hash}"
         assert len(result.version.split("-")) == 3, f"Version should have 3 parts for 3 branches: {result.version}"
-
-    def test_checkout_merged_fast_forward(self, repo_helper: RemoteRepoHelper) -> None:
-        """Test merging with fast-forward (linear history)"""
-
-        # Create main branch with initial commit
-        commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
+        
+        repo_helper.verify_working_directory_files([
+            ('file1.txt', 'content1'),
+            ('file2.txt', 'content2'),
+            ('file3.txt', 'content3'),
+            ('file4.txt', 'content4')
+        ])
 
         # Create branch1 from main with multiple commits
         commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit 1")  # noqa: F841
@@ -125,15 +166,15 @@ class TestGitIntegration:
 
         # Verify result - should find existing branch or create merge
         assert isinstance(result, CheckoutAndMergeResult)
-        assert len(result.commit_hash) == 40, f"Invalid commit hash length: {result.commit_hash}"
-        assert result.commit_hash.isalnum(), f"Commit hash should be alphanumeric: {result.commit_hash}"
-
-    def test_checkout_merged_conflicting_branches(self, repo_helper: RemoteRepoHelper) -> None:
-        """Test merging conflicting branches - should fail gracefully"""
-
-
-        # Create main branch with initial commit
-        commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "initial content", "Initial commit")  # noqa: F841
+        assert result.branch_name == "auto/" +"-".join(sorted([commit3.hexsha[:8],commit1.hexsha[:8]])), f"Invalid branch name"
+        assert result.version == "-".join(sorted([commit3.hexsha[:8],commit1.hexsha[:8]])), f"Invalid version"
+        # assert result.commit_hash == commit3.hexsha, f"Invalid commit hash"
+        
+        repo_helper.verify_working_directory_files([
+            ('file1.txt', 'content1'),
+            ('file2.txt', 'content2'),
+            ('file3.txt', 'content3')
+        ])
 
         # Create branch1 and branch2 with conflicting changes to same file
         commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file1.txt", "branch1 content", "Branch1 change")  # noqa: F841
@@ -182,6 +223,12 @@ class TestGitIntegration:
         assert result2.branch_name == auto_branch_name, f"Expected {auto_branch_name}, got {result2.branch_name}"
         assert result2.commit_hash == result1.commit_hash, f"Expected {result1.commit_hash}, got {result2.commit_hash}"
         assert len(result2.commit_hash) == 40, f"Invalid commit hash length: {result2.commit_hash}"
+        
+        repo_helper.verify_working_directory_files([
+            ('file1.txt', 'content1'),
+            ('file2.txt', 'content2'),
+            ('file3.txt', 'content3')
+        ])
 
     def test_checkout_merged_and_unmerge_valid_version(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging branches and then unmerging with valid version string"""

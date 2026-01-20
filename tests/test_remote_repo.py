@@ -7,7 +7,7 @@ git operations in an isolated environment.
 import tempfile
 import shutil
 import os
-from typing import Tuple, Optional, TYPE_CHECKING
+from typing import Tuple, Optional, TYPE_CHECKING, List
 import git  # type: ignore
 
 from steps.docker import DockerSwarmCheckResult  # noqa: F811
@@ -78,4 +78,20 @@ class RemoteRepoHelper:
         clone_repo = git.Repo.clone_from(self.remote_dir, self.local_dir)
         clone_repo.remotes.origin.fetch()
         return clone_repo
+
+    def verify_working_directory_files(self, expected_files: List[Tuple[str, str]]) -> None:
+        """Verify that working directory contains exactly the expected files with correct content.
+        
+        Args:
+            directory: Path to the working directory to verify
+            expected_files: List of tuples (filename, expected_content)
+        """
+        files_in_wd = set(os.listdir(self.local_dir)) - {'.git'}
+        expected_filenames = {filename for filename, _ in expected_files}
+        assert files_in_wd == expected_filenames, f"Expected files {expected_filenames}, got {files_in_wd}"
+        
+        for filename, expected_content in expected_files:
+            with open(os.path.join(self.local_dir, filename)) as f:
+                actual_content = f.read()
+                assert actual_content == expected_content, f"{filename} has incorrect content. Expected '{expected_content}', got '{actual_content}'"
 
