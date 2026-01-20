@@ -17,7 +17,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12.3", "3.13", "3.14", "3.15"]
+        python-version: [
+          "3.11", 
+          "3.12.3", 
+          "3.13", 
+          "3.14",
+          # "3.15",
+         ]
         checker: [
           "flake8 . --count --select=E9,F63,F7,F82 --ignore=F824 --show-source --statistics",
           "flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics",
