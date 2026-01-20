@@ -1,4 +1,4 @@
-import tempfile
+import hashlib
 import git
 from git.objects import Commit
 from git.refs import Reference
@@ -77,7 +77,6 @@ class GitClone(AbstractStep[str]):
                         cmt = [p for c in cmt for p in c.parents]
         return result
 
-import hashlib
 
 @dataclass
 class CheckoutAndMergeResult:
@@ -167,8 +166,8 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 
         sorted_commits = sorted(commit_ids.keys(), key=lambda x: x.hexsha)
         auto_branch_hash = hashlib.sha1(''.join([x.hexsha for x in sorted_commits]).encode()).hexdigest()
-        auto_branch_name = f"auto/{auto_branch_hash}"
         version = '-'.join([x.hexsha[0:8] for x in sorted_commits])
+        auto_branch_name = f"auto/{version}"
         if merge_commit1 is not None:
             for head in repo.branches:
                 if head.is_remote and head.commit.hexsha == merge_commit1.hexsha: # type: ignore[truthy-function]
