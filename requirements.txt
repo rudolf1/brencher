@@ -6,6 +6,7 @@ docker
 PyYAML
 websocket-client
 
+pytest
 mypy
 ty
 types-PyYAML
