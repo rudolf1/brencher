@@ -17,12 +17,12 @@ RUN uv venv .venv && \
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 
-# Expose port for Flask
+# Expose port for the web server
 EXPOSE 5001
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Start the Flask app
+# Start the app with uvicorn
 CMD ["python3", "backend/app.py"]
