@@ -1,16 +1,13 @@
-flask
-flask-socketio
+fastapi
 uvicorn[standard]
-asgiref
+websockets
 gitpython
 python-dotenv
 docker
 PyYAML
-websocket-client
 
 pytest
 mypy
 ty
 types-PyYAML
 types-requests
-types-flask-socketio
