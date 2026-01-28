@@ -1,5 +1,7 @@
 flask
 flask-socketio
+uvicorn
+asgiref
 gitpython
 python-dotenv
 docker

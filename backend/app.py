@@ -19,7 +19,6 @@ from flask.json.provider import DefaultJSONProvider
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logging.getLogger('werkzeug').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
@@ -325,7 +324,13 @@ if __name__ == '__main__':
     t = threading.Thread(target=_connect_remote, daemon=True)
     t.start()
 
+    # Get the WSGI app and wrap it with ASGI for uvicorn
+    from asgiref.wsgi import WsgiToAsgi
+    asgi_app = WsgiToAsgi(app)
+    
     if 'noweb' in sys.argv[1:]:
-        socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+        import uvicorn
+        uvicorn.run(asgi_app, host='0.0.0.0', port=5000, log_level='info')
     else:
-        socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)
+        import uvicorn
+        uvicorn.run(asgi_app, host='0.0.0.0', port=5001, log_level='info')
