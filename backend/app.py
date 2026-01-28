@@ -51,7 +51,7 @@ class DataclassJSONProvider(DefaultJSONProvider):
 
 app = Flask(__name__, static_folder='frontend')
 app.json = DataclassJSONProvider(app)
-socketio = SocketIO(app, cors_allowed_origins="*", json=custom_json)
+socketio = SocketIO(app, cors_allowed_origins="*", json=custom_json, async_mode='threading')
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
 
@@ -326,11 +326,10 @@ if __name__ == '__main__':
 
     # Get the WSGI app and wrap it with ASGI for uvicorn
     from asgiref.wsgi import WsgiToAsgi
-    asgi_app = WsgiToAsgi(app)
+    import uvicorn
+    asgi_app = WsgiToAsgi(app.wsgi_app)
     
     if 'noweb' in sys.argv[1:]:
-        import uvicorn
         uvicorn.run(asgi_app, host='0.0.0.0', port=5000, log_level='info')
     else:
-        import uvicorn
         uvicorn.run(asgi_app, host='0.0.0.0', port=5001, log_level='info')

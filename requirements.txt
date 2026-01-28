@@ -1,6 +1,6 @@
 flask
 flask-socketio
-uvicorn
+uvicorn[standard]
 asgiref
 gitpython
 python-dotenv
