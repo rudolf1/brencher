@@ -84,6 +84,8 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         "userLinks": {
             "App": "https://brencher.rudolf.keenetic.link/",
             "Status": "https://brencher.rudolf.keenetic.link/state",
+            "App100": "http://100.70.193.97:5002/",
+            "Status100": "http://100.70.193.97:5002/state",
         }
     })
 
