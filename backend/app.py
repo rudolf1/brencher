@@ -232,6 +232,7 @@ if __name__ == '__main__':
     import configs.brencher_local1
     import configs.torrserv_proxy
     import configs.immich
+    import configs.backups_helper
     environments_l = [
         configs.brencher.brencher, 
         configs.brencher2.brencher,
@@ -239,6 +240,7 @@ if __name__ == '__main__':
         configs.brencher_local1.brencher_local,
         configs.torrserv_proxy.config,
         configs.immich.config,
+        configs.backups_helper.config,
     ]
     environments = {e[0].id: e for e in environments_l}
 
