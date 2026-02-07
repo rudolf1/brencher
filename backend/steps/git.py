@@ -98,7 +98,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         self.git_user_name = git_user_name
         self.push = push
 
-    def _commits_tree(self, repo: git.Repo) -> Dict[Commit, List[Commit]]:
+    def _commits_childs(self, repo: git.Repo) -> Dict[Commit, List[Commit]]:
         childs: Dict[Commit, List[Commit]] = {}
         for c in list(repo.iter_commits('--all')):
             for p in c.parents:
@@ -120,22 +120,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
                 
         return visited
 
-    def progress(self) -> CheckoutAndMergeResult:
-
-        repo_path = self.wd.result
-        if not isinstance(repo_path, str):
-            raise BaseException(f"Unknown repo path {repo_path}")
-        
-        if len(self.env.branches) == 0:
-            raise BaseException(f"Empty branches set")
-
-        # Open the repository
-        repo = git.Repo(repo_path)
-        # Set user email and name for the repo
-        with repo.config_writer() as cw:
-            cw.set_value("user", "email", self.git_user_email)
-            cw.set_value("user", "name", self.git_user_name)
-        logger.info(f"Selected branches: {self.env.branches}")
+    def find_desired_commits(self, repo: git.Repo) -> Dict[Commit, str]:
         # Extract commit ids for the selected branches
         commit_ids: Dict[Commit, str] = {}
         for branch_pair in self.env.branches:
@@ -145,24 +130,36 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
             else:
                 commit = repo.commit(desired_commit)
             commit_ids[commit] = branch_name
+        return commit_ids
 
+    def progress(self) -> CheckoutAndMergeResult:
+
+        repo_path = self.wd.result
+
+        # Open the repository
+        repo = git.Repo(repo_path)
+        # Set user email and name for the repo
+        with repo.config_writer() as cw:
+            cw.set_value("user", "email", self.git_user_email)
+            cw.set_value("user", "name", self.git_user_name)
+
+        logger.info(f"Selected branches: {self.env.branches}")
+
+        commit_ids = self.find_desired_commits(repo)
         logger.info(f"Commit ids for branches: {commit_ids}")
 
-        tree = self._commits_tree(repo)
-
-        merge_commit: list[tuple[Commit, list[Commit]]] = [(c, self._find_merge_childs(tree, c)) for c in commit_ids.keys()]
-        result = set(merge_commit[0][1])
-        for c, l in merge_commit[1:]:
-            result = set(result).intersection(set(l))
-            if len(result) == 0:
-                break
-
-        if len(result) > 0:
-            merge_commit1 = [c for c in merge_commit[0][1] if c in result][0]
-            logger.info(f"Common commit found {merge_commit}")
-        else:
-            merge_commit1 = None
-            logger.info(f"Common commit not found")
+        childs = self._commits_childs(repo)
+        def find_common_merge_commits() -> Set[Commit]:
+            merge_commit: list[tuple[Commit, list[Commit]]] = [(c, self._find_merge_childs(childs, c)) for c in commit_ids.keys()]
+            legal_merge_commits = [set(l) for c, l in merge_commit]
+            result = legal_merge_commits[0]
+            for l in legal_merge_commits[1:]:
+                result = result.intersection(l)
+            return result
+        merge_commits = find_common_merge_commits()
+        if len(merge_commits) > 0:
+            merge_commit1 = merge_commits.pop()
+            logger.info(f"Common commit found {merge_commits}")
 
         sorted_commits = sorted(commit_ids.keys(), key=lambda x: x.hexsha)
         auto_branch_hash = hashlib.sha1(''.join([x.hexsha for x in sorted_commits]).encode()).hexdigest()

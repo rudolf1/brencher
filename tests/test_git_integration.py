@@ -32,6 +32,7 @@ class TestGitIntegration:
         # mock_wd = MockGitClone(repo_helper.local_dir, env)
         helper.git_clone = GitClone(helper.env)
         helper.mock_check = MockDockerSwarmCheck("invalid-version-format")
+        print(f"Cloning repo from {helper.remote_dir} to {helper.local_dir}")
         # Test CheckoutMerged
         helper.checkout_merged = CheckoutMerged(
             wd=helper.git_clone,
