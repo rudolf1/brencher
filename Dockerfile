@@ -4,8 +4,8 @@ FROM python:3.12.3-alpine
 # Install uv (if not present)
 RUN pip install uv
 # Install git
-RUN apt-get update && apt-get upgrade -y 
-RUN apt-get install -y git docker.io && rm -rf /var/lib/apt/lists/*
+RUN apk update && apk upgrade
+RUN apk add --no-cache git docker-cli
 # Set workdir
 WORKDIR /app
 
