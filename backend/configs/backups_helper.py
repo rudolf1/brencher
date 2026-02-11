@@ -6,7 +6,7 @@ from steps.step import AbstractStep
 from steps.checks import SimpleLog, UrlCheck
 
 env = Environment(
-    id="immich",
+    id="backupsHelper",
     branches=[("photosHelper/master", "HEAD")],
     dry=False,
     repo="https://github.com/rudolf1/uber_backup.git",
