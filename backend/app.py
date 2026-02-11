@@ -191,7 +191,7 @@ class EnvironmentNamespace(Namespace):
 
         environment_update_event.set()
 
-        if remote_sio is not None and remote_sio.connected:
+        if remote_sio and remote_sio is not None and remote_sio.connected:
             remote_sio.emit('update', data, namespace='/ws/environment')
             logger.info(f"Updated slave")
 
