@@ -91,6 +91,7 @@ def merge_dicts(a: Dict[str, T], b: Dict[str, T]) -> Dict[str, T]:
     return result
 
 slave_url = os.getenv('SLAVE_BRENCHER')
+remote_sio: Optional[socketio_client.Client] = None
 if slave_url:
     logger.info(f"SLAVE_BRENCHER set, will connect to master at {slave_url}")
     remote_sio = socketio_client.Client(logger=False, engineio_logger=False)
@@ -191,7 +192,7 @@ class EnvironmentNamespace(Namespace):
 
         environment_update_event.set()
 
-        if remote_sio and remote_sio is not None and remote_sio.connected:
+        if remote_sio is not None and remote_sio.connected:
             remote_sio.emit('update', data, namespace='/ws/environment')
             logger.info(f"Updated slave")
 
