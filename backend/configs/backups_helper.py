@@ -39,14 +39,14 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
     )
     unmerge = GitUnmerge(clone, dockerSwarmCheck, env=env)
 
-    # checkPing = UrlCheck(
-    #     url="https://backup.rudolf.keenetic.link/api/server/ping",
-    #     expected = {"res":"pong"},
-    #     env=env
-    # )
+    checkPing = UrlCheck(
+        url="https://backuper.rudolf.keenetic.link/api/server/ping",
+        expected = {"res":"pong"},
+        env=env
+    )
     logUrls = SimpleLog(env=env,message = {
         "userLinks": {
-            "App": "https://backup.rudolf.keenetic.link",
+            "App": "https://backuper.rudolf.keenetic.link",
         }
     })
     return [
@@ -55,7 +55,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         dockerSwarmCheck, 
         unmerge,       
         deployDocker,
-        # checkPing,
+        checkPing,
         logUrls
     ]
 
