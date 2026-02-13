@@ -21,7 +21,9 @@ class DockerComposeBuild(AbstractStep[List[str]]):
                 docker_compose_path: str, 
                 docker_repo_url: str,
                 publish: bool,
-                envs: Callable[[], Dict[str, Any]], **kwargs: Any) -> None:
+                envs: Callable[[], Dict[str, Any]],
+                disable_cache: bool = False,
+                **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.wd = wd
         self.envs = envs
@@ -30,6 +32,7 @@ class DockerComposeBuild(AbstractStep[List[str]]):
         self.docker_compose_path = docker_compose_path
         self.docker_repo_url = docker_repo_url
         self.publish = publish
+        self.disable_cache = disable_cache
 
     def progress(self) -> List[str]:    
         """
@@ -79,7 +82,7 @@ class DockerComposeBuild(AbstractStep[List[str]]):
                         pass
 
                 logger.info(f"Building image {image} from {build_ctx}")
-                client.images.build(path=build_ctx, tag=image, nocache=True, rm=True)
+                client.images.build(path=build_ctx, tag=image, nocache=self.disable_cache, rm=True)
 
                 if self.publish:
                     logger.info(f"Pushing image {image}")
