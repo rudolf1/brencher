@@ -7,10 +7,10 @@ git operations in an isolated environment.
 import tempfile
 import shutil
 import os
-from typing import Tuple, Optional, TYPE_CHECKING, List
+from typing import Protocol, Tuple, Optional, TYPE_CHECKING, List
 import git  # type: ignore
 
-from steps.docker import DockerSwarmCheckResult  # noqa: F811
+from steps.docker import DockerSwarmCheck, DockerSwarmCheckResult  # noqa: F811
 from steps.git import CheckoutMerged, GitUnmerge, GitClone  # noqa: F401
 from enironment import Environment
 

@@ -30,7 +30,7 @@ class TestGitIntegration:
         )
         
         # mock_wd = MockGitClone(repo_helper.local_dir, env)
-        helper.git_clone = GitClone(helper.env)
+        helper.git_clone = GitClone(helper.env, path=helper.local_dir)
         helper.mock_check = MockDockerSwarmCheck("invalid-version-format")
         print(f"Cloning repo from {helper.remote_dir} to {helper.local_dir}")
         # Test CheckoutMerged
@@ -48,7 +48,6 @@ class TestGitIntegration:
         )
 
         yield helper
-        print(f"Repo {helper.remote_dir}")
         helper.teardown()
 
     def test_checkout_merged_one_branch(self, repo_helper: RemoteRepoHelper) -> None:
@@ -62,7 +61,7 @@ class TestGitIntegration:
         result = repo_helper.checkout_merged.progress()
 
         assert isinstance(result, CheckoutAndMergeResult)
-        assert result.commit_hash == commit1.hexsha, f"Invalid commit"
+        assert result.commit_hash == commit2.hexsha, f"Invalid commit"
         
         repo_helper.verify_working_directory_files([
             ('file1.txt', 'content1'),
@@ -73,7 +72,7 @@ class TestGitIntegration:
         result = repo_helper.checkout_merged.progress()
 
         assert isinstance(result, CheckoutAndMergeResult)
-        assert result.commit_hash == commit2.hexsha, f"Invalid commit"
+        assert result.commit_hash == commit3.hexsha, f"Invalid commit"
         
         repo_helper.verify_working_directory_files([
             ('file1.txt', 'content1'),
@@ -152,8 +151,11 @@ class TestGitIntegration:
             ('file3.txt', 'content3'),
             ('file4.txt', 'content4')
         ])
+    def test_checkout_merged_fast_forward(self, repo_helper: RemoteRepoHelper) -> None:
+        """Test merging fast forward"""
 
         # Create branch1 from main with multiple commits
+        commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
         commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit 1")  # noqa: F841
         commit3 = repo_helper.create_commit(repo_helper.repo, "branch1", "branch1", "file3.txt", "content3", "Branch1 commit 2")  # noqa: F841
         # Clone repository
@@ -177,7 +179,11 @@ class TestGitIntegration:
             ('file3.txt', 'content3')
         ])
 
+
+    def test_checkout_conflict(self, repo_helper: RemoteRepoHelper) -> None:
+
         # Create branch1 and branch2 with conflicting changes to same file
+        commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1", "Initial commit")  # noqa: F841
         commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file1.txt", "branch1 content", "Branch1 change")  # noqa: F841
         commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file1.txt", "branch2 content", "Branch2 change")  # noqa: F841
 

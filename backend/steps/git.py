@@ -13,9 +13,9 @@ from enironment import Environment
 logger = logging.getLogger(__name__)
 
 class GitClone(AbstractStep[str]):
-    def __init__(self, env: Environment, branchNamePrefix: str="", credEnvPrefix: str="GIT", **kwargs: Any):
+    def __init__(self, env: Environment, path: str | None = None, branchNamePrefix: str = "", credEnvPrefix: str = "GIT", **kwargs: Any):
         super().__init__(env, **kwargs)
-        self.temp_dir = os.path.join(tempfile.gettempdir(), f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
+        self.temp_dir = path or os.path.join(tempfile.gettempdir(), f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
         self.branchNamePrefix = branchNamePrefix
         self.credEnvPrefix = credEnvPrefix
 
@@ -143,7 +143,11 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
             cw.set_value("user", "email", self.git_user_email)
             cw.set_value("user", "name", self.git_user_name)
 
+        if len(self.env.branches) == 0:
+            raise BaseException(f"Empty branches set")
+
         logger.info(f"Selected branches: {self.env.branches}")
+
 
         commit_ids = self.find_desired_commits(repo)
         logger.info(f"Commit ids for branches: {commit_ids}")
@@ -157,6 +161,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
                 result = result.intersection(l)
             return result
         merge_commits = find_common_merge_commits()
+        merge_commit1 = None
         if len(merge_commits) > 0:
             merge_commit1 = merge_commits.pop()
             logger.info(f"Common commit found {merge_commits}")
@@ -179,7 +184,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
             logger.info(f"Head is {repo.head.commit}")
             if self.push:
                 repo.git.push('-f', 'origin', auto_branch_name)
-                logger.info(f"Pushed {merge_commit} to {auto_branch_name}")
+                logger.info(f"Pushed {merge_commit1} to {auto_branch_name}")
             return CheckoutAndMergeResult(auto_branch_name, merge_commit1.hexsha, version)
         
         logger.info(f"Looking for existing auto branch: {auto_branch_name}")
