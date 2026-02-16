@@ -4,10 +4,11 @@ Helper classes and utilities for git integration tests.
 This module provides reusable test fixtures and mock objects for testing
 git operations in an isolated environment.
 """
+from curses import version
 import tempfile
 import shutil
 import os
-from typing import Protocol, Tuple, Optional, TYPE_CHECKING, List
+from typing import Dict, Protocol, Tuple, Optional, TYPE_CHECKING, List, Callable
 import git  # type: ignore
 
 from steps.docker import DockerSwarmCheck, DockerSwarmCheckResult  # noqa: F811
@@ -15,14 +16,18 @@ from steps.git import CheckoutMerged, GitUnmerge, GitClone  # noqa: F401
 from enironment import Environment
 
 
-class MockDockerSwarmCheck:
+class MockDockerSwarmCheck(DockerSwarmCheck):
     """Mock DockerSwarmCheck object for testing"""
 
-    def __init__(self, version: str) -> None:
-        self.result = {
+    def __init__(self, version: Callable[[], str]) -> None:
+        self.version = version
+
+    @property
+    def result(self) -> Dict[str, DockerSwarmCheckResult]:
+        return {
             "service1": DockerSwarmCheckResult(
                 name="service1",
-                version=version,
+                version=self.version(),
                 image="test:latest",
                 stack="test-stack"
             )
