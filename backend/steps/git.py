@@ -1,4 +1,4 @@
-import tempfile
+import hashlib
 import git
 from git.objects import Commit
 from git.refs import Reference
@@ -13,9 +13,9 @@ from enironment import Environment
 logger = logging.getLogger(__name__)
 
 class GitClone(AbstractStep[str]):
-    def __init__(self, env: Environment, branchNamePrefix: str="", credEnvPrefix: str="GIT", **kwargs: Any):
+    def __init__(self, env: Environment, path: str | None = None, branchNamePrefix: str = "", credEnvPrefix: str = "GIT", **kwargs: Any):
         super().__init__(env, **kwargs)
-        self.temp_dir = os.path.join(tempfile.gettempdir(), f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
+        self.temp_dir = path or os.path.join(tempfile.gettempdir(), f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
         self.branchNamePrefix = branchNamePrefix
         self.credEnvPrefix = credEnvPrefix
 
@@ -77,7 +77,6 @@ class GitClone(AbstractStep[str]):
                         cmt = [p for c in cmt for p in c.parents]
         return result
 
-import hashlib
 
 @dataclass
 class CheckoutAndMergeResult:
@@ -99,7 +98,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         self.git_user_name = git_user_name
         self.push = push
 
-    def _commits_tree(self, repo: git.Repo) -> Dict[Commit, List[Commit]]:
+    def _commits_childs(self, repo: git.Repo) -> Dict[Commit, List[Commit]]:
         childs: Dict[Commit, List[Commit]] = {}
         for c in list(repo.iter_commits('--all')):
             for p in c.parents:
@@ -121,22 +120,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
                 
         return visited
 
-    def progress(self) -> CheckoutAndMergeResult:
-
-        repo_path = self.wd.result
-        if not isinstance(repo_path, str):
-            raise BaseException(f"Unknown repo path {repo_path}")
-        
-        if len(self.env.branches) == 0:
-            raise BaseException(f"Empty branches set")
-
-        # Open the repository
-        repo = git.Repo(repo_path)
-        # Set user email and name for the repo
-        with repo.config_writer() as cw:
-            cw.set_value("user", "email", self.git_user_email)
-            cw.set_value("user", "name", self.git_user_name)
-        logger.info(f"Selected branches: {self.env.branches}")
+    def find_desired_commits(self, repo: git.Repo) -> Dict[Commit, str]:
         # Extract commit ids for the selected branches
         commit_ids: Dict[Commit, str] = {}
         for branch_pair in self.env.branches:
@@ -146,29 +130,46 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
             else:
                 commit = repo.commit(desired_commit)
             commit_ids[commit] = branch_name
+        return commit_ids
 
+    def progress(self) -> CheckoutAndMergeResult:
+
+        repo_path = self.wd.result
+
+        # Open the repository
+        repo = git.Repo(repo_path)
+        # Set user email and name for the repo
+        with repo.config_writer() as cw:
+            cw.set_value("user", "email", self.git_user_email)
+            cw.set_value("user", "name", self.git_user_name)
+
+        if len(self.env.branches) == 0:
+            raise BaseException(f"Empty branches set")
+
+        logger.info(f"Selected branches: {self.env.branches}")
+
+
+        commit_ids = self.find_desired_commits(repo)
         logger.info(f"Commit ids for branches: {commit_ids}")
 
-        tree = self._commits_tree(repo)
-
-        merge_commit: list[tuple[Commit, list[Commit]]] = [(c, self._find_merge_childs(tree, c)) for c in commit_ids.keys()]
-        result = set(merge_commit[0][1])
-        for c, l in merge_commit[1:]:
-            result = set(result).intersection(set(l))
-            if len(result) == 0:
-                break
-
-        if len(result) > 0:
-            merge_commit1 = [c for c in merge_commit[0][1] if c in result][0]
-            logger.info(f"Common commit found {merge_commit}")
-        else:
-            merge_commit1 = None
-            logger.info(f"Common commit not found")
+        childs = self._commits_childs(repo)
+        def find_common_merge_commits() -> Set[Commit]:
+            merge_commit: list[tuple[Commit, list[Commit]]] = [(c, self._find_merge_childs(childs, c)) for c in commit_ids.keys()]
+            legal_merge_commits = [set(l) for c, l in merge_commit]
+            result = legal_merge_commits[0]
+            for l in legal_merge_commits[1:]:
+                result = result.intersection(l)
+            return result
+        merge_commits = find_common_merge_commits()
+        merge_commit1 = None
+        if len(merge_commits) > 0:
+            merge_commit1 = merge_commits.pop()
+            logger.info(f"Common commit found {merge_commits}")
 
         sorted_commits = sorted(commit_ids.keys(), key=lambda x: x.hexsha)
         auto_branch_hash = hashlib.sha1(''.join([x.hexsha for x in sorted_commits]).encode()).hexdigest()
-        auto_branch_name = f"auto/{auto_branch_hash}"
         version = '-'.join([x.hexsha[0:8] for x in sorted_commits])
+        auto_branch_name = f"auto/{version}"
         if merge_commit1 is not None:
             for head in repo.branches:
                 if head.is_remote and head.commit.hexsha == merge_commit1.hexsha: # type: ignore[truthy-function]
@@ -183,7 +184,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
             logger.info(f"Head is {repo.head.commit}")
             if self.push:
                 repo.git.push('-f', 'origin', auto_branch_name)
-                logger.info(f"Pushed {merge_commit} to {auto_branch_name}")
+                logger.info(f"Pushed {merge_commit1} to {auto_branch_name}")
             return CheckoutAndMergeResult(auto_branch_name, merge_commit1.hexsha, version)
         
         logger.info(f"Looking for existing auto branch: {auto_branch_name}")
