@@ -7,10 +7,6 @@ They simulate remote and local git repositories and test various merge scenarios
 import os
 import pytest
 from typing import Generator, List, Tuple
-
-
-from steps.git import CheckoutMerged, GitUnmerge, CheckoutAndMergeResult, GitClone
-from enironment import Environment
 from tests.test_remote_repo import RemoteRepoHelper, MockDockerSwarmCheck
 
 
@@ -22,31 +18,7 @@ class TestGitIntegration:
     def repo_helper(self) -> Generator[RemoteRepoHelper, None, None]:
         """Create a repository helper instance"""
         helper = RemoteRepoHelper()
-        helper.env = Environment(
-            id="test1",
-            branches=[],
-            dry=False,
-            repo=helper.remote_dir
-        )
-        
-        # mock_wd = MockGitClone(repo_helper.local_dir, env)
-        helper.git_clone = GitClone(helper.env, path=helper.local_dir)
-        helper.mock_check = MockDockerSwarmCheck(lambda: helper.checkout_merged.result.version)
-        print(f"Cloning repo from {helper.remote_dir} to {helper.local_dir}")
-        # Test CheckoutMerged
-        helper.checkout_merged = CheckoutMerged(
-            wd=helper.git_clone,
-            git_user_email="test@example.com",
-            git_user_name="Test User",
-            push=False,
-            env=helper.env
-        )
-        helper.git_unmerge = GitUnmerge(
-            wd=helper.git_clone,
-            check=helper.mock_check,
-            env=helper.env
-        )
-
+   
         yield helper
         helper.teardown()
 
@@ -67,7 +39,7 @@ class TestGitIntegration:
             ('file1.txt', 'content1'),
             ('file2.txt', 'content2'),
         ])
-        # assert repo_helper.git_unmerge.progress() == [()], f"Invalid Unmerge result"
+        assert repo_helper.git_unmerge.progress() == [()], f"Invalid Unmerge result"
 
         repo_helper.env.branches = [("branch2", "HEAD")]   
         result = repo_helper.checkout_merged.progress()
@@ -79,7 +51,7 @@ class TestGitIntegration:
             ('file1.txt', 'content1'),
             ('file3.txt', 'content3'),
         ])
-        # assert repo_helper.git_unmerge.progress() == [()], f"Invalid Unmerge result"
+        assert repo_helper.git_unmerge.progress() == [()], f"Invalid Unmerge result"
 
 
     def test_checkout_merged_two_branches(self, repo_helper: RemoteRepoHelper) -> None:

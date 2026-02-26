@@ -11,8 +11,8 @@ import os
 from typing import Dict, Protocol, Tuple, Optional, TYPE_CHECKING, List, Callable
 import git  # type: ignore
 
+from steps.git import CheckoutMerged, GitUnmerge, CheckoutAndMergeResult, GitClone  # noqa: F401
 from steps.docker import DockerSwarmCheck, DockerSwarmCheckResult  # noqa: F811
-from steps.git import CheckoutMerged, GitUnmerge, GitClone  # noqa: F401
 from enironment import Environment
 
 
@@ -49,6 +49,32 @@ class RemoteRepoHelper:
         with self.repo.config_writer() as cw:
             cw.set_value("user", "email", "test@example.com")
             cw.set_value("user", "name", "Test User")
+
+        self.env = Environment(
+            id="test1",
+            branches=[],
+            dry=False,
+            repo=self.remote_dir
+        )
+        
+        # mock_wd = MockGitClone(repo_helper.local_dir, env)
+        self.git_clone = GitClone(self.env, path=self.local_dir)
+        self.mock_check = MockDockerSwarmCheck(lambda: self.checkout_merged.result.version)
+        print(f"Cloning repo from {self.remote_dir} to {self.local_dir}")
+        # Test CheckoutMerged
+        self.checkout_merged = CheckoutMerged(
+            wd=self.git_clone,
+            git_user_email="test@example.com",
+            git_user_name="Test User",
+            push=False,
+            env=self.env
+        )
+        self.git_unmerge = GitUnmerge(
+            wd=self.git_clone,
+            check=self.mock_check,
+            env=self.env
+        )
+
 
     def teardown(self) -> None:
         """Clean up temporary directories"""
