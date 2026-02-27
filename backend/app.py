@@ -145,16 +145,17 @@ def get_local_envs_to_emit() -> Dict[str, Tuple[Dict[str, Any], List[Dict[str, A
             env_result = asdict(replace(env, pipeline=[]))
             res: List[Dict[str, Any]] = []
             for r in env.pipeline:
-                if isinstance(r.progress(), BaseException): 
-                    stack = traceback.format_exception(type(r.progress()), r.progress(), r.progress().__traceback__)
+                try:
+                    result = r.progress()
                     res.append({
                         "name": r.name,
-                        "status": [str(r.progress()), stack],
+                        "status": result,
                     })
-                else:
+                except BaseException as e:
+                    stack = traceback.format_exception(type(e), e, e.__traceback__)
                     res.append({
-                        "name":r.name, 
-                        "status": r.progress()
+                        "name": r.name,
+                        "status": [str(e), stack],
                     })
             env_dtos[env.id] = (env_result, res)
         return env_dtos

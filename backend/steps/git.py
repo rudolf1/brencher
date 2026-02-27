@@ -201,7 +201,10 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
                 return CheckoutAndMergeResult(auto_branch_name, auto_branch_hash, version)
 
         if auto_branch_name in repo.branches:
-            repo.git.branch('-D', auto_branch_name)
+            try:
+                repo.git.branch('-D', auto_branch_name)
+            except git.GitCommandError as e:
+                logger.warning(f"Could not delete local branch {auto_branch_name}: {e}")
         # Auto branch doesn't exist, create it
         logger.info(f"Creating new auto branch: {auto_branch_name}")
         
