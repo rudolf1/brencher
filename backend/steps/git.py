@@ -83,6 +83,13 @@ class CheckoutAndMergeResult:
     commit_hash: str
     version: str
 
+def _commits_childs(repo: git.Repo) -> Dict[Commit, List[Commit]]:
+    childs: Dict[Commit, List[Commit]] = {}
+    for c in list(repo.iter_commits('--all')):
+        for p in c.parents:
+            childs.setdefault(p, []).append(c)
+    return childs
+
 class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
     wd: GitClone
 
@@ -97,12 +104,6 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         self.git_user_name = git_user_name
         self.push = push
 
-    def _commits_childs(self, repo: git.Repo) -> Dict[Commit, List[Commit]]:
-        childs: Dict[Commit, List[Commit]] = {}
-        for c in list(repo.iter_commits('--all')):
-            for p in c.parents:
-                childs.setdefault(p, []).append(c)
-        return childs
 
     def _find_merge_childs(self, tree: Dict[Commit, List[Commit]], commit: Commit) -> List[Commit]:
 
@@ -151,7 +152,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         commit_ids = self.find_desired_commits(repo)
         logger.info(f"Commit ids for branches: {commit_ids}")
 
-        childs = self._commits_childs(repo)
+        childs = _commits_childs(repo)
         def find_common_merge_commits() -> Set[Commit]:
             merge_commit: list[tuple[Commit, list[Commit]]] = [(c, self._find_merge_childs(childs, c)) for c in commit_ids.keys()]
             legal_merge_commits = [set(l) for c, l in merge_commit]
@@ -253,6 +254,7 @@ class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
         if version is None:
             raise BaseException(f"Expected exactly one version, got: {versions}")
         repo = git.Repo(wd)
+        childs:Dict[Commit, List[Commit]] | None = None
         if 'auto-' in version:
             version_parts = version[len('auto-'):].split('-')
 
@@ -263,10 +265,20 @@ class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
                 branches = [ref.name for ref in repo.remotes.origin.refs if ref.commit.hexsha == commit.hexsha]
                 branches = [b[len('origin/'):] for b in branches if b.startswith('origin/') and not b.startswith('origin/HEAD')]
                 
-                # if len(branches) == 0 or branches[0].startswith('auto/'):
-                #     # Find all parent commits of the given commit
-                #     parents = [parent for parent in commit.parents]
-                #     branches = [head.name for head in repo.heads for commit in parents if head.commit.hexsha == commit.hexsha]
+                if len(branches) == 0 or branches[0].startswith('auto/'):
+                    if childs is None:
+                        childs = _commits_childs(repo)
+                    commitsSet = set([commit])
+                    while len(commitsSet) > 0:
+                        current = commitsSet.pop()
+                        for child in childs.get(current, []):
+                            branches = [ref.name for ref in repo.remotes.origin.refs if ref.commit.hexsha == child.hexsha]
+                            branches = [b[len('origin/'):] for b in branches if b.startswith('origin/') and not b.startswith('origin/HEAD')]
+
+                            if len(branches) > 0:
+                                commitsSet = set()
+                            else:
+                                commitsSet.add(child)
                 for b in branches:
                     commits.append((b, commit.hexsha))
 

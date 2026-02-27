@@ -106,12 +106,6 @@ class RemoteRepoHelper:
         repo.index.add([filename])
         return repo.index.commit(message)
 
-    def clone_repo(self) -> git.Repo:
-        """Clone the remote repository to local directory"""
-        clone_repo = git.Repo.clone_from(self.remote_dir, self.local_dir)
-        clone_repo.remotes.origin.fetch()
-        return clone_repo
-
     def verify_working_directory_files(self, expected_files: List[Tuple[str, str]]) -> None:
         """Verify that working directory contains exactly the expected files with correct content.
         
