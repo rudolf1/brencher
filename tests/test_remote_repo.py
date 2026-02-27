@@ -21,9 +21,9 @@ class MockDockerSwarmCheck(DockerSwarmCheck):
 
     def __init__(self, version: Callable[[], str]) -> None:
         self.version = version
+        self.stack_name = "test_stack"
 
-    @property
-    def result(self) -> Dict[str, DockerSwarmCheckResult]:
+    def progress(self) -> Dict[str, DockerSwarmCheckResult]:
         return {
             "service1": DockerSwarmCheckResult(
                 name="service1",
@@ -58,7 +58,7 @@ class RemoteRepoHelper:
         
         # mock_wd = MockGitClone(repo_helper.local_dir, env)
         self.git_clone = GitClone(self.env, path=self.local_dir)
-        self.mock_check = MockDockerSwarmCheck(lambda: f"auto-{self.checkout_merged.result.version}")
+        self.mock_check = MockDockerSwarmCheck(lambda: f"auto-{self.checkout_merged.progress().version}")
         print(f"Cloning repo from {self.remote_dir} to {self.local_dir}")
         # Test CheckoutMerged
         self.checkout_merged = CheckoutMerged(

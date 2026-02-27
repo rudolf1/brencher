@@ -32,7 +32,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         buildDocker=None,
         stackChecker=dockerSwarmCheck,
         envs = lambda: { 
-            "version": "auto-" + checkoutMerged.result.version
+            "version": "auto-" + checkoutMerged.progress().version
        },
         stack_name = "immich",
         docker_compose_path = "poc/immich/stack-compose.yml", 

@@ -47,7 +47,7 @@ class DockerComposeBuild(AbstractStep[List[str]]):
                 )
             env = self.envs()
             # Parse docker-compose file
-            docker_compose_absolute_path = os.path.join(self.wd.result, self.docker_compose_path)
+            docker_compose_absolute_path = os.path.join(self.wd.progress(), self.docker_compose_path)
             with open(docker_compose_absolute_path, 'r') as f:
                 content = f.read()
                 content = re.sub(r'\$\{([^}]+)\}', lambda m: env[m.group(1)], content)
@@ -147,12 +147,10 @@ class DockerSwarmDeploy(AbstractStep[str]):
         """
         Deploys to Docker Swarm using the specified docker-compose.yaml.
         """
-        if isinstance(self.wd.result, BaseException):
-            raise self.wd.result
-        if self.buildDocker is not None and isinstance(self.buildDocker.result, BaseException):
-            raise self.buildDocker.result
-        if isinstance(self.stackChecker.result, BaseException):
-            raise self.stackChecker.result
+        self.wd.progress()
+        if self.buildDocker is not None:
+            self.buildDocker.progress()
+        self.stackChecker.progress()
 
 
         def merge_dicts(a: Dict[str, Any], b: Dict[str, Any]) -> None:
@@ -167,7 +165,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
                     a[k] = v
         env = self.envs()
         # Prepare docker-compose file with env substitution
-        docker_compose_absolute_path = os.path.join(self.wd.result, self.docker_compose_path)
+        docker_compose_absolute_path = os.path.join(self.wd.progress(), self.docker_compose_path)
         with open(docker_compose_absolute_path, 'r') as f:
             content = f.read()
             content = re.sub(r'\$\{([^}]+)\}', lambda m: env.get(m.group(1), ""), content)
@@ -182,7 +180,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
             # logger.info(f"Final compose: {compose}")
             content = yaml.safe_dump(compose)
 
-        current_services = self.stackChecker.result
+        current_services = self.stackChecker.progress()
         expected_services = compose.get("services", {})
         diffs = []
         ok = []

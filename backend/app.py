@@ -3,7 +3,7 @@ import json
 import time
 import threading
 from flask import Flask, send_from_directory
-from steps.step import AbstractStep
+from steps.step import AbstractStep, CachingStep
 from flask_socketio import SocketIO, emit
 import socketio as socketio_client
 from dotenv import load_dotenv
@@ -143,16 +143,16 @@ def get_local_envs_to_emit() -> Dict[str, Tuple[Dict[str, Any], List[Dict[str, A
             env = asdict(e)
             res: List[Dict[str, Any]] = []
             for r in p:
-                if isinstance(r.result_obj, BaseException): 
-                    stack = traceback.format_exception(type(r.result_obj), r.result_obj, r.result_obj.__traceback__)
+                if isinstance(r.progress(), BaseException): 
+                    stack = traceback.format_exception(type(r.progress()), r.progress(), r.progress().__traceback__)
                     res.append({
                         "name": r.name,
-                        "status": [str(r.result_obj), stack],
+                        "status": [str(r.progress()), stack],
                     })
                 else:
                     res.append({
                         "name":r.name, 
-                        "status": r.result_obj
+                        "status": r.progress()
                     })
             env_dtos[env['id']] = (env, res)
         return env_dtos
@@ -268,7 +268,9 @@ if __name__ == '__main__':
             e[0].dry = True
 
     logger.info(f"Resulting profiles {environments.keys()}")        
-    
+
+    environments = {id: (e[0], [CachingStep(step) for step in e[1]]) for id, e in environments.items()}
+
     # Background thread to refresh branches every 5 minutes
     def emit_fresh_branches() -> None:
         global branches, branches_slaves, environments

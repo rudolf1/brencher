@@ -134,7 +134,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 
     def progress(self) -> CheckoutAndMergeResult:
 
-        repo_path = self.wd.result
+        repo_path = self.wd.progress()
 
         # Open the repository
         repo = git.Repo(repo_path)
@@ -243,8 +243,8 @@ class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
         self.check = check
 
     def progress(self) -> List[Tuple[str, str]]:
-        wd = self.wd.result
-        deployState: Dict[str, DockerSwarmCheckResult] = self.check.result
+        wd = self.wd.progress()
+        deployState: Dict[str, DockerSwarmCheckResult] = self.check.progress()
 
         versions = set([it.version for it in deployState.values()])
         if len(versions) != 1:

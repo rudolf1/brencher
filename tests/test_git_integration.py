@@ -46,7 +46,6 @@ class TestGitIntegration:
         assert repo_helper.git_unmerge.progress() == [('branch1', commit2.hexsha)], f"Invalid Unmerge result"
 
         repo_helper.env.branches = [("branch2", "HEAD")]  
-        repo_helper.checkout_merged._result = None # TODO Rework caches
         result = repo_helper.checkout_merged.progress()
 
         assert isinstance(result, CheckoutAndMergeResult)

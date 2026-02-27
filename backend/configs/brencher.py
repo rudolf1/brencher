@@ -29,7 +29,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
                         docker_repo_url="https://registry.rudolf.keenetic.link", 
                         publish=False,
                         envs = lambda: { 
-                            "version": "auto-" + checkoutMerged.result.version,
+                            "version": "auto-" + checkoutMerged.progress().version,
                             "user_group" : "1000:137" 
                         },
                         env=env
@@ -45,7 +45,7 @@ def create_pipeline(env: Environment) -> List[AbstractStep]:
         buildDocker=buildDocker,
         stackChecker=dockerSwarmCheck,
         envs = lambda: { 
-            "version": "auto-" + checkoutMerged.result.version,
+            "version": "auto-" + checkoutMerged.progress().version,
        },
         stack_name = "brencher",
         docker_compose_path = "docker-compose.yml", 
