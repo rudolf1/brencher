@@ -282,6 +282,8 @@ class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
                 for b in branches:
                     commits.append((b, commit.hexsha))
 
+            if len(commits) == 0:
+                raise BaseException(f"Unable to unmerge version: {version}")
             return commits
         else:
             raise BaseException(f"Version format not recognized: {version}")
