@@ -7,7 +7,7 @@ import yaml
 from dotenv import dotenv_values
 from typing import List, Dict, Callable, Any
 from dataclasses import dataclass
-from steps.step import AbstractStep
+from enironment import AbstractStep
 from steps.git import GitClone
 import re
 

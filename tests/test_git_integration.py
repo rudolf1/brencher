@@ -106,16 +106,7 @@ class TestGitIntegration:
         # Create environment with 3 branches
         repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD"), ("branch3", "HEAD")]
 
-        # Test CheckoutMerged
-        checkout_merged = CheckoutMerged(
-            wd=repo_helper.git_clone,
-            git_user_email="test@example.com",
-            git_user_name="Test User",
-            push=False,
-            env=repo_helper.env
-        )
-
-        result = checkout_merged.progress()
+        result = repo_helper.checkout_merged.progress()
 
         # Verify result with specific field checks
         assert isinstance(result, CheckoutAndMergeResult)
@@ -130,6 +121,7 @@ class TestGitIntegration:
             ('file3.txt', 'content3'),
             ('file4.txt', 'content4')
         ])
+
     def test_checkout_merged_fast_forward(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging fast forward"""
 
@@ -194,16 +186,8 @@ class TestGitIntegration:
         result1 = repo_helper.checkout_merged.progress()
         auto_branch_name = result1.branch_name
 
-        # Second merge with same branches - should reuse existing auto branch
-        checkout_merged2 = CheckoutMerged(
-            wd=repo_helper.git_clone,
-            git_user_email="test@example.com",
-            git_user_name="Test User",
-            push=False,
-            env=repo_helper.env
-        )
 
-        result2 = checkout_merged2.progress()
+        result2 = repo_helper.checkout_merged.progress()
 
         # Verify same auto branch is used with actual value checks
         assert result2.branch_name == auto_branch_name, f"Expected {auto_branch_name}, got {result2.branch_name}"
@@ -263,7 +247,7 @@ class TestGitIntegration:
         repo_helper.env.branches = []
         # Mock DockerSwarmCheck with version string
         version_str = "invalid-version-format"
-        repo_helper.mock_check = MockDockerSwarmCheck(version_str)
+        repo_helper.mock_check = MockDockerSwarmCheck(lambda: version_str)
         repo_helper.git_unmerge.check = repo_helper.mock_check
 
         # with pytest.raises(BaseException, match="Version format not recognized"):
@@ -305,7 +289,7 @@ class TestGitIntegration:
         # Mock DockerSwarmCheck with version string using non-HEAD commit from branch1
         # commit2 is NOT the HEAD of branch1 (commit3 is), but it exists in branch1's history
         version_str = f"auto-{commit2.hexsha[:8]}-{commit4.hexsha[:8]}"
-        repo_helper.mock_check = MockDockerSwarmCheck(version_str)
+        repo_helper.mock_check = MockDockerSwarmCheck(lambda: version_str)
 
 
         result = repo_helper.git_unmerge.progress()

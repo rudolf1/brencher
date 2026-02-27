@@ -5,16 +5,15 @@ from git.refs import Reference
 import logging
 from dataclasses import dataclass, asdict, field
 from typing import List, Optional, Union, Tuple, Set, Iterator, Dict, Any
-from steps.step import AbstractStep
 import tempfile
 import os
-from enironment import Environment
+from enironment import Environment, AbstractStep
 
 logger = logging.getLogger(__name__)
 
 class GitClone(AbstractStep[str]):
-    def __init__(self, env: Environment, path: str | None = None, branchNamePrefix: str = "", credEnvPrefix: str = "GIT", **kwargs: Any):
-        super().__init__(env, **kwargs)
+    def __init__(self, path: str | None = None, branchNamePrefix: str = "", credEnvPrefix: str = "GIT", **kwargs: Any):
+        super().__init__(**kwargs)
         self.temp_dir = path or os.path.join(tempfile.gettempdir(), f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
         self.branchNamePrefix = branchNamePrefix
         self.credEnvPrefix = credEnvPrefix

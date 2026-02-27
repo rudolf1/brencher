@@ -1,5 +1,5 @@
 from enironment import Environment
-from steps.step import AbstractStep, CachingStep
+from steps.step import CachingStep
 from steps.git import GitUnmerge
 from typing import List, Tuple, Callable
 import logging
@@ -7,11 +7,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 def process_all_jobs(
-        environemnts: List[Tuple[Environment, List[AbstractStep]]],
+        environemnts: List[Environment],
         onupdate: Callable[[], None]
     ) -> None:
-    for env, pipe in environemnts:
-            for step in pipe:
+    for env in environemnts:
+            for step in env.pipeline:
                 try:
                     if isinstance(step, CachingStep):
                          step.reset()

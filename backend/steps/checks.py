@@ -1,15 +1,14 @@
 import logging
 from typing import Any
-from steps.step import AbstractStep
-from enironment import Environment
+from enironment import Environment, AbstractStep
 import requests
 
 logger = logging.getLogger(__name__)
 
 class UrlCheck(AbstractStep[str]):
     
-    def __init__(self, env: Environment, url: str, expected: Any, **kwargs): # type: ignore[no-untyped-def]
-        super().__init__(env=env, **kwargs)
+    def __init__(self, url: str, expected: Any, **kwargs): # type: ignore[no-untyped-def]
+        super().__init__(**kwargs)
         self.url = url
         self.expected = expected
 
@@ -47,8 +46,8 @@ class UrlCheck(AbstractStep[str]):
         return "Ok"
     
 class SimpleLog(AbstractStep[Any]):
-    def __init__(self, env: Environment, message: Any, **kwargs):# type: ignore[no-untyped-def]
-        super().__init__(env=env, **kwargs)
+    def __init__(self, message: Any, **kwargs):# type: ignore[no-untyped-def]
+        super().__init__(**kwargs)
         self.message = message
         
     def progress(self) -> Any:
