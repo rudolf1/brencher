@@ -12,9 +12,9 @@ from enironment import Environment, AbstractStep
 logger = logging.getLogger(__name__)
 
 class GitClone(AbstractStep[str]):
-    def __init__(self, path: str | None = None, branchNamePrefix: str = "", credEnvPrefix: str = "GIT", **kwargs: Any):
+    def __init__(self, repo_path: str | None = None, branchNamePrefix: str = "", credEnvPrefix: str = "GIT", **kwargs: Any):
         super().__init__(**kwargs)
-        self.temp_dir = path or os.path.join(tempfile.gettempdir(), f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
+        self.repo_path = repo_path
         self.branchNamePrefix = branchNamePrefix
         self.credEnvPrefix = credEnvPrefix
 
@@ -27,21 +27,22 @@ class GitClone(AbstractStep[str]):
             return f"{protocol}://{username}:{password}@{rest}"
         
         return url
-
+    
     def progress(self) -> str:
 
-        logger.info(f"Cloning repository {self.env.repo} to {self.temp_dir}")
-        os.makedirs(self.temp_dir, exist_ok=True)
-        if os.path.exists(os.path.join(self.temp_dir, ".git")):
-            logger.info(f"Repository already cloned at {self.temp_dir}, fetching updates.")
-            repo = git.Repo(self.temp_dir)
+        self.repo_path = self.repo_path or os.path.join(tempfile.gettempdir(), f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
+        logger.info(f"Cloning repository {self.env.repo} to {self.repo_path}")
+        os.makedirs(self.repo_path, exist_ok=True)
+        if os.path.exists(os.path.join(self.repo_path, ".git")):
+            logger.info(f"Repository already cloned at {self.repo_path}, fetching updates.")
+            repo = git.Repo(self.repo_path)
             if repo.remotes.origin.url != self._get_auth_git_url(self.env.repo):
                 repo.remotes.origin.set_url(self._get_auth_git_url(self.env.repo))
             result = repo.remotes.origin.fetch(prune=True)
             if not result or any(fetch_info.flags & fetch_info.ERROR for fetch_info in result):
                 raise BaseException(f"Failed to fetch updates for {self.env.repo}")
         else:
-            repo = git.Repo.init(self.temp_dir)
+            repo = git.Repo.init(self.repo_path)
             repo.remotes.append(repo.create_remote(
                 'origin', 
                 self._get_auth_git_url(self.env.repo)
@@ -49,14 +50,14 @@ class GitClone(AbstractStep[str]):
             if self.branchNamePrefix != "":
                 repo.config_writer().set_value('remote "origin"',"fetch", f"+refs/heads/{self.branchNamePrefix}/*:refs/remotes/origin/{self.branchNamePrefix}/*").release()
             repo.remotes.origin.fetch(prune=True)
-            if not os.path.exists(os.path.join(self.temp_dir, ".git")):
-                raise BaseException(f"Failed to clone repository {self.env.repo} to {self.temp_dir}")
+            if not os.path.exists(os.path.join(self.repo_path, ".git")):
+                raise BaseException(f"Failed to clone repository {self.env.repo} to {self.repo_path}")
         
-        return self.temp_dir
+        return self.repo_path
     
 
     def get_branches(self) -> Dict[str, List[Any]]:
-        repo = git.Repo(self.temp_dir)
+        repo = git.Repo(self.repo_path)
         result: Dict[str, List[Any]] = {}
         for ref in repo.refs:
             if ref.name.startswith('origin/') and not ref.name.startswith('origin/HEAD'):

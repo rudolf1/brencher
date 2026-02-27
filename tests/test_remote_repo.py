@@ -51,7 +51,7 @@ class RemoteRepoHelper:
         with self.repo.config_writer() as cw:
             cw.set_value("user", "email", "test@example.com")
             cw.set_value("user", "name", "Test User")
-        self.git_clone = GitClone(path=self.local_dir)
+        self.git_clone = GitClone(repo_path=self.local_dir)
         self.checkout_merged=CheckoutMerged(
             wd=self.git_clone,
             git_user_email="test@example.com",
