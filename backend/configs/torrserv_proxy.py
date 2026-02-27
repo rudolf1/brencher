@@ -38,7 +38,8 @@ deployDocker = DockerSwarmDeploy(
 )
 unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
-config = Environment(
+__all__ = ["torrserv_proxy"]
+torrserv_proxy = Environment(
     id="torrserv_proxy",
     branches=[],
     dry=False,

@@ -38,8 +38,8 @@ logUrls = SimpleLog(message = {
     }
 })
 
-
-config = Environment(
+__all__ = ["immich"]
+immich = Environment(
     id="immich",
     branches=[("ansible/master", "HEAD")],
     dry=False,

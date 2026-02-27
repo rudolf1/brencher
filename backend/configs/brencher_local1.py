@@ -49,7 +49,8 @@ deployDocker = DockerSwarmDeploy(
 )
 unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
-brencher_local = Environment(
+__all__ = ["brencher_local1"]
+brencher_local1 = Environment(
     id="brencher_local1",
     branches=[("main", "HEAD")],
     dry=False,

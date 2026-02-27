@@ -79,7 +79,7 @@ logUrls = SimpleLog(message = {
 
 __all__ = ["brencher2"]
 
-brencher = Environment(
+brencher2 = Environment(
     id="brencher2",
     branches=[],
     dry=False,

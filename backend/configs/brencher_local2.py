@@ -49,7 +49,11 @@ deployDocker = DockerSwarmDeploy(
     docker_compose_path = "docker-compose.yml", 
 )
 unmerge = GitUnmerge(clone, dockerSwarmCheck)
-brencher_local = Environment(
+
+
+
+__all__ = ["brencher_local2"]
+brencher_local2 = Environment(
     id="brencher_local2",
     branches=[],
     dry=False,

@@ -236,11 +236,11 @@ if __name__ == '__main__':
     import configs.immich
     environments_l: List[Environment] = [
         configs.brencher.brencher, 
-        configs.brencher2.brencher,
-        configs.brencher_local2.brencher_local,
-        configs.brencher_local1.brencher_local,
-        # configs.torrserv_proxy.config,
-        # configs.immich.config,
+        configs.brencher2.brencher2,
+        configs.brencher_local2.brencher_local2,
+        configs.brencher_local1.brencher_local1,
+        configs.torrserv_proxy.torrserv_proxy,
+        configs.immich.immich,
     ]
     environments = {e.id: e for e in environments_l}
 
