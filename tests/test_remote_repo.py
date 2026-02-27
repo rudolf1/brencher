@@ -58,7 +58,7 @@ class RemoteRepoHelper:
         
         # mock_wd = MockGitClone(repo_helper.local_dir, env)
         self.git_clone = GitClone(self.env, path=self.local_dir)
-        self.mock_check = MockDockerSwarmCheck(lambda: self.checkout_merged.result.version)
+        self.mock_check = MockDockerSwarmCheck(lambda: f"auto-{self.checkout_merged.result.version}")
         print(f"Cloning repo from {self.remote_dir} to {self.local_dir}")
         # Test CheckoutMerged
         self.checkout_merged = CheckoutMerged(
