@@ -9,7 +9,7 @@ import tempfile
 import shutil
 import os
 from typing import Dict, Protocol, Tuple, Optional, TYPE_CHECKING, List, Callable
-import git  # type: ignore
+import git
 
 from steps.docker import DockerSwarmCheck, DockerSwarmCheckResult  # noqa: F811
 from steps.git import CheckoutMerged, GitUnmerge, GitClone  # noqa: F401
@@ -21,9 +21,9 @@ class MockDockerSwarmCheck(DockerSwarmCheck):
 
     def __init__(self, version: Callable[[], str]) -> None:
         self.version = version
+        self.stack_name = "test_stack"
 
-    @property
-    def result(self) -> Dict[str, DockerSwarmCheckResult]:
+    def progress(self) -> Dict[str, DockerSwarmCheckResult]:
         return {
             "service1": DockerSwarmCheckResult(
                 name="service1",
@@ -33,6 +33,7 @@ class MockDockerSwarmCheck(DockerSwarmCheck):
             )
         }
 
+
 class RemoteRepoHelper:
     """Helper class for creating and managing test git repositories"""
     env: Environment
@@ -40,6 +41,7 @@ class RemoteRepoHelper:
     git_clone: GitClone
     git_unmerge :GitUnmerge
     mock_check: MockDockerSwarmCheck
+
 
     def __init__(self) -> None:
         self.remote_dir = tempfile.mkdtemp(prefix="test_remote_")
@@ -49,6 +51,32 @@ class RemoteRepoHelper:
         with self.repo.config_writer() as cw:
             cw.set_value("user", "email", "test@example.com")
             cw.set_value("user", "name", "Test User")
+        self.git_clone = GitClone(repo_path=self.local_dir)
+        self.checkout_merged=CheckoutMerged(
+            wd=self.git_clone,
+            git_user_email="test@example.com",
+            git_user_name="Test User",
+            push=False,
+        )
+        self.mock_check = MockDockerSwarmCheck(lambda: f"auto-{self.checkout_merged.progress().version}")
+        self.git_unmerge = GitUnmerge(
+            wd=self.git_clone,
+            check=self.mock_check,
+        )
+        self.env = Environment(
+            id="test1",
+            branches=[],
+            dry=False,
+            repo=self.remote_dir,
+            pipeline=[
+                self.git_clone,
+                self.checkout_merged,
+                self.mock_check,
+                self.git_unmerge
+            ]
+        )
+        
+
 
     def teardown(self) -> None:
         """Clean up temporary directories"""
@@ -57,7 +85,7 @@ class RemoteRepoHelper:
         if self.local_dir:
             shutil.rmtree(self.local_dir, ignore_errors=True)
 
-    def create_commit(self, repo: git.Repo, from_branch: str, to_branch: str, filename: str, content: str, message: str) -> git.Commit:  # type: ignore
+    def create_commit(self, repo: git.Repo, from_branch: str, to_branch: str, filename: str, content: str, message: str) -> git.Commit:
         """Create a commit in the repository
         
         If to_branch doesn't exist, it will be created from from_branch and checked out.
@@ -77,12 +105,6 @@ class RemoteRepoHelper:
             f.write(content)
         repo.index.add([filename])
         return repo.index.commit(message)
-
-    def clone_repo(self) -> git.Repo:  # type: ignore
-        """Clone the remote repository to local directory"""
-        clone_repo = git.Repo.clone_from(self.remote_dir, self.local_dir)
-        clone_repo.remotes.origin.fetch()
-        return clone_repo
 
     def verify_working_directory_files(self, expected_files: List[Tuple[str, str]]) -> None:
         """Verify that working directory contains exactly the expected files with correct content.

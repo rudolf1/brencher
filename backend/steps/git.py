@@ -5,17 +5,16 @@ from git.refs import Reference
 import logging
 from dataclasses import dataclass, asdict, field
 from typing import List, Optional, Union, Tuple, Set, Iterator, Dict, Any
-from steps.step import AbstractStep
 import tempfile
 import os
-from enironment import Environment
+from enironment import Environment, AbstractStep
 
 logger = logging.getLogger(__name__)
 
 class GitClone(AbstractStep[str]):
-    def __init__(self, env: Environment, path: str | None = None, branchNamePrefix: str = "", credEnvPrefix: str = "GIT", **kwargs: Any):
-        super().__init__(env, **kwargs)
-        self.temp_dir = path or os.path.join(tempfile.gettempdir(), f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
+    def __init__(self, repo_path: str | None = None, branchNamePrefix: str = "", credEnvPrefix: str = "GIT", **kwargs: Any):
+        super().__init__(**kwargs)
+        self.repo_path = repo_path
         self.branchNamePrefix = branchNamePrefix
         self.credEnvPrefix = credEnvPrefix
 
@@ -28,21 +27,22 @@ class GitClone(AbstractStep[str]):
             return f"{protocol}://{username}:{password}@{rest}"
         
         return url
-
+    
     def progress(self) -> str:
 
-        logger.info(f"Cloning repository {self.env.repo} to {self.temp_dir}")
-        os.makedirs(self.temp_dir, exist_ok=True)
-        if os.path.exists(os.path.join(self.temp_dir, ".git")):
-            logger.info(f"Repository already cloned at {self.temp_dir}, fetching updates.")
-            repo = git.Repo(self.temp_dir)
+        self.repo_path = self.repo_path or os.path.join(tempfile.gettempdir(), f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
+        logger.info(f"Cloning repository {self.env.repo} to {self.repo_path}")
+        os.makedirs(self.repo_path, exist_ok=True)
+        if os.path.exists(os.path.join(self.repo_path, ".git")):
+            logger.info(f"Repository already cloned at {self.repo_path}, fetching updates.")
+            repo = git.Repo(self.repo_path)
             if repo.remotes.origin.url != self._get_auth_git_url(self.env.repo):
                 repo.remotes.origin.set_url(self._get_auth_git_url(self.env.repo))
             result = repo.remotes.origin.fetch(prune=True)
             if not result or any(fetch_info.flags & fetch_info.ERROR for fetch_info in result):
                 raise BaseException(f"Failed to fetch updates for {self.env.repo}")
         else:
-            repo = git.Repo.init(self.temp_dir)
+            repo = git.Repo.init(self.repo_path)
             repo.remotes.append(repo.create_remote(
                 'origin', 
                 self._get_auth_git_url(self.env.repo)
@@ -50,14 +50,14 @@ class GitClone(AbstractStep[str]):
             if self.branchNamePrefix != "":
                 repo.config_writer().set_value('remote "origin"',"fetch", f"+refs/heads/{self.branchNamePrefix}/*:refs/remotes/origin/{self.branchNamePrefix}/*").release()
             repo.remotes.origin.fetch(prune=True)
-            if not os.path.exists(os.path.join(self.temp_dir, ".git")):
-                raise BaseException(f"Failed to clone repository {self.env.repo} to {self.temp_dir}")
+            if not os.path.exists(os.path.join(self.repo_path, ".git")):
+                raise BaseException(f"Failed to clone repository {self.env.repo} to {self.repo_path}")
         
-        return self.temp_dir
+        return self.repo_path
     
 
     def get_branches(self) -> Dict[str, List[Any]]:
-        repo = git.Repo(self.temp_dir)
+        repo = git.Repo(self.repo_path)
         result: Dict[str, List[Any]] = {}
         for ref in repo.refs:
             if ref.name.startswith('origin/') and not ref.name.startswith('origin/HEAD'):
@@ -84,6 +84,13 @@ class CheckoutAndMergeResult:
     commit_hash: str
     version: str
 
+def _commits_childs(repo: git.Repo) -> Dict[Commit, List[Commit]]:
+    childs: Dict[Commit, List[Commit]] = {}
+    for c in list(repo.iter_commits('--all')):
+        for p in c.parents:
+            childs.setdefault(p, []).append(c)
+    return childs
+
 class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
     wd: GitClone
 
@@ -98,12 +105,6 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         self.git_user_name = git_user_name
         self.push = push
 
-    def _commits_childs(self, repo: git.Repo) -> Dict[Commit, List[Commit]]:
-        childs: Dict[Commit, List[Commit]] = {}
-        for c in list(repo.iter_commits('--all')):
-            for p in c.parents:
-                childs.setdefault(p, []).append(c)
-        return childs
 
     def _find_merge_childs(self, tree: Dict[Commit, List[Commit]], commit: Commit) -> List[Commit]:
 
@@ -134,7 +135,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 
     def progress(self) -> CheckoutAndMergeResult:
 
-        repo_path = self.wd.result
+        repo_path = self.wd.progress()
 
         # Open the repository
         repo = git.Repo(repo_path)
@@ -152,7 +153,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         commit_ids = self.find_desired_commits(repo)
         logger.info(f"Commit ids for branches: {commit_ids}")
 
-        childs = self._commits_childs(repo)
+        childs = _commits_childs(repo)
         def find_common_merge_commits() -> Set[Commit]:
             merge_commit: list[tuple[Commit, list[Commit]]] = [(c, self._find_merge_childs(childs, c)) for c in commit_ids.keys()]
             legal_merge_commits = [set(l) for c, l in merge_commit]
@@ -200,7 +201,10 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
                 return CheckoutAndMergeResult(auto_branch_name, auto_branch_hash, version)
 
         if auto_branch_name in repo.branches:
-            repo.git.branch('-D', auto_branch_name)
+            try:
+                repo.git.branch('-D', auto_branch_name)
+            except git.GitCommandError as e:
+                logger.warning(f"Could not delete local branch {auto_branch_name}: {e}")
         # Auto branch doesn't exist, create it
         logger.info(f"Creating new auto branch: {auto_branch_name}")
         
@@ -243,8 +247,8 @@ class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
         self.check = check
 
     def progress(self) -> List[Tuple[str, str]]:
-        wd = self.wd.result
-        deployState: Dict[str, DockerSwarmCheckResult] = self.check.result
+        wd = self.wd.progress()
+        deployState: Dict[str, DockerSwarmCheckResult] = self.check.progress()
 
         versions = set([it.version for it in deployState.values()])
         if len(versions) != 1:
@@ -254,6 +258,7 @@ class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
         if version is None:
             raise BaseException(f"Expected exactly one version, got: {versions}")
         repo = git.Repo(wd)
+        childs:Dict[Commit, List[Commit]] | None = None
         if 'auto-' in version:
             version_parts = version[len('auto-'):].split('-')
 
@@ -264,13 +269,25 @@ class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
                 branches = [ref.name for ref in repo.remotes.origin.refs if ref.commit.hexsha == commit.hexsha]
                 branches = [b[len('origin/'):] for b in branches if b.startswith('origin/') and not b.startswith('origin/HEAD')]
                 
-                # if len(branches) == 0 or branches[0].startswith('auto/'):
-                #     # Find all parent commits of the given commit
-                #     parents = [parent for parent in commit.parents]
-                #     branches = [head.name for head in repo.heads for commit in parents if head.commit.hexsha == commit.hexsha]
+                if len(branches) == 0 or branches[0].startswith('auto/'):
+                    if childs is None:
+                        childs = _commits_childs(repo)
+                    commitsSet = set([commit])
+                    while len(commitsSet) > 0:
+                        current = commitsSet.pop()
+                        for child in childs.get(current, []):
+                            branches = [ref.name for ref in repo.remotes.origin.refs if ref.commit.hexsha == child.hexsha]
+                            branches = [b[len('origin/'):] for b in branches if b.startswith('origin/') and not b.startswith('origin/HEAD')]
+
+                            if len(branches) > 0:
+                                commitsSet = set()
+                            else:
+                                commitsSet.add(child)
                 for b in branches:
                     commits.append((b, commit.hexsha))
 
+            if len(commits) == 0:
+                raise BaseException(f"Unable to unmerge version: {version}")
             return commits
         else:
             raise BaseException(f"Version format not recognized: {version}")

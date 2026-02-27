@@ -4,14 +4,6 @@ from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from enironment import Environment
 from typing import List, Any, Tuple
-from steps.step import AbstractStep
-
-env = Environment(
-    id="brencher2",
-    branches=[],
-    dry=False,
-    repo="https://github.com/rudolf1/brencher.git",
-)
 
 def checkPingF(obj: Any) -> None:
     if not isinstance(obj, dict):
@@ -26,79 +18,83 @@ def checkPingF(obj: Any) -> None:
             raise Exception(f"brencher2 check failed for: {v}")
 
 
-def create_pipeline(env: Environment) -> List[AbstractStep]:
-    clone = GitClone(env)
-    checkoutMerged = CheckoutMerged(clone, env=env,
-                        push = False,
-                        git_user_email="rudolfss13@gmail.com",
-                        git_user_name="brencher_bot"
-            )
-    
-    buildDocker = DockerComposeBuild(clone,
-                        docker_repo_username = "", 
-                        docker_repo_password = "", 
-                        docker_compose_path = "docker-compose.yml", 
-                        docker_repo_url="https://registry.rudolf.keenetic.link", 
-                        publish=False,
-                        envs = lambda: { 
-                            "version": "auto-" + checkoutMerged.result.version,
-                            "user_group" : "1000:137" 
-                        },
-                        env=env
-                    )
-    
 
-    dockerSwarmCheck = DockerSwarmCheck(
-        stack_name = "brencher2",
-        env=env, 
-    )
-    deployDocker = DockerSwarmDeploy(
-        wd=clone,
-        buildDocker=buildDocker,
-        stackChecker=dockerSwarmCheck,
-        envs = lambda: { 
-            "version": "auto-" + checkoutMerged.result.version,
-            "services": {
-                "brencher-backend" :{
-                    "environment": {
-                        "PROFILES" : "brencher"
+clone = GitClone()
+checkoutMerged = CheckoutMerged(clone,
+                    push = False,
+                    git_user_email="rudolfss13@gmail.com",
+                    git_user_name="brencher_bot"
+        )
+
+buildDocker = DockerComposeBuild(clone,
+                    docker_repo_username = "", 
+                    docker_repo_password = "", 
+                    docker_compose_path = "docker-compose.yml", 
+                    docker_repo_url="https://registry.rudolf.keenetic.link", 
+                    publish=False,
+                    envs = lambda: { 
+                        "version": "auto-" + checkoutMerged.progress().version,
+                        "user_group" : "1000:137" 
                     },
-                    "ports": [
-                        "5002:5001"
-                    ]
-                }
+                )
+
+
+dockerSwarmCheck = DockerSwarmCheck(
+    stack_name = "brencher2",
+)
+deployDocker = DockerSwarmDeploy(
+    wd=clone,
+    buildDocker=buildDocker,
+    stackChecker=dockerSwarmCheck,
+    envs = lambda: { 
+        "version": "auto-" + checkoutMerged.progress().version,
+        "services": {
+            "brencher-backend" :{
+                "environment": {
+                    "PROFILES" : "brencher"
+                },
+                "ports": [
+                    "5002:5001"
+                ]
             }
-       },
-        stack_name = "brencher2",
-        docker_compose_path = "docker-compose.yml", 
-        env=env, 
-    )
-    unmerge = GitUnmerge(clone, dockerSwarmCheck, env=env)
-
-    checkPing = UrlCheck(
-        url="https://brencher.rudolf.keenetic.link/state",
-        expected = checkPingF,
-        env=env
-    )
-    logUrls = SimpleLog(env=env,message = {
-        "userLinks": {
-            "App": "https://brencher.rudolf.keenetic.link/",
-            "Status": "https://brencher.rudolf.keenetic.link/state",
-            "App100": "http://100.70.193.97:5002/",
-            "Status100": "http://100.70.193.97:5002/state",
         }
-    })
+    },
+    stack_name = "brencher2",
+    docker_compose_path = "docker-compose.yml", 
+)
+unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
-    return [
+checkPing = UrlCheck(
+    url="https://brencher.rudolf.keenetic.link/state",
+    expected = checkPingF,
+)
+logUrls = SimpleLog(message = {
+    "userLinks": {
+        "App": "https://brencher.rudolf.keenetic.link/",
+        "Status": "https://brencher.rudolf.keenetic.link/state",
+        "App100": "http://100.70.193.97:5002/",
+        "Status100": "http://100.70.193.97:5002/state",
+    }
+})
+
+__all__ = ["brencher2"]
+
+brencher2 = Environment(
+    id="brencher2",
+    branches=[],
+    dry=False,
+    repo="https://github.com/rudolf1/brencher.git",
+    pipeline=[
         clone,
         checkoutMerged,
         buildDocker,
-        dockerSwarmCheck, 
-        unmerge,       
+        dockerSwarmCheck,
+        unmerge,
         deployDocker,
         checkPing,
         logUrls
     ]
+)
 
-brencher: Tuple[Environment, List[AbstractStep]] = (env, create_pipeline(env))
+
 

@@ -1,9 +1,10 @@
+from dataclasses import dataclass, replace
 import os
 import json
 import time
 import threading
 from flask import Flask, send_from_directory
-from steps.step import AbstractStep
+from steps.step import  CachingStep
 from flask_socketio import SocketIO, emit
 import socketio as socketio_client
 from dotenv import load_dotenv
@@ -16,6 +17,7 @@ import traceback
 from typing import TypeVar
 import types
 from flask.json.provider import DefaultJSONProvider
+from enironment import Environment, AbstractStep
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -57,8 +59,8 @@ socketio = SocketIO(app, cors_allowed_origins="*", json=custom_json)
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
 
 # In-memory state
-environments: Dict[str, Tuple[enironment.Environment, List[AbstractStep]]] = {}
-environments_slaves: Dict[str, Tuple[enironment.Environment, List[AbstractStep]]] = {}
+environments: Dict[str, Environment] = {}
+environments_slaves: Dict[str, Environment] = {}
 branches: Dict[str, Dict[str, Any]] = {}
 branches_slaves: Dict[str, Dict[str, Any]] = {}
 state_lock = threading.Lock()
@@ -139,22 +141,23 @@ class BranchesNamespace(Namespace):
 
 def get_local_envs_to_emit() -> Dict[str, Tuple[Dict[str, Any], List[Dict[str, Any]]]]:
         env_dtos: Dict[str, Tuple[Dict[str, Any], List[Dict[str, Any]]]] = {}
-        for e, p in environments.values():
-            env = asdict(e)
+        for env in environments.values():
+            env_result = asdict(replace(env, pipeline=[]))
             res: List[Dict[str, Any]] = []
-            for r in p:
-                if isinstance(r.result_obj, BaseException): 
-                    stack = traceback.format_exception(type(r.result_obj), r.result_obj, r.result_obj.__traceback__)
+            for r in env.pipeline:
+                try:
+                    result = r.progress()
                     res.append({
                         "name": r.name,
-                        "status": [str(r.result_obj), stack],
+                        "status": result,
                     })
-                else:
+                except BaseException as e:
+                    stack = traceback.format_exception(type(e), e, e.__traceback__)
                     res.append({
-                        "name":r.name, 
-                        "status": r.result_obj
+                        "name": r.name,
+                        "status": [str(e), stack],
                     })
-            env_dtos[env['id']] = (env, res)
+            env_dtos[env.id] = (env_result, res)
         return env_dtos
 
 def get_global_envs_to_emit() -> Any:
@@ -184,10 +187,10 @@ class EnvironmentNamespace(Namespace):
 
         logger.info(f"Received environment update: {data}")
 
-        for e, _ in environments.values():
-            if e.id == data.get('id'):
-                e.branches = data.get('branches', e.branches)
-                logger.info(f"Updated environment {e.id} branches to {e.branches}")
+        for env in environments.values():
+            if env.id == data.get('id'):
+                env.branches = data.get('branches', env.branches)
+                logger.info(f"Updated environment {env.id} branches to {env.branches}")
 
         environment_update_event.set()
 
@@ -232,15 +235,15 @@ if __name__ == '__main__':
     import configs.brencher_local1
     import configs.torrserv_proxy
     import configs.immich
-    environments_l = [
+    environments_l: List[Environment] = [
         configs.brencher.brencher, 
-        configs.brencher2.brencher,
-        configs.brencher_local2.brencher_local,
-        configs.brencher_local1.brencher_local,
-        configs.torrserv_proxy.config,
-        configs.immich.config,
+        configs.brencher2.brencher2,
+        configs.brencher_local2.brencher_local2,
+        configs.brencher_local1.brencher_local1,
+        configs.torrserv_proxy.torrserv_proxy,
+        configs.immich.immich,
     ]
-    environments = {e[0].id: e for e in environments_l}
+    environments = {e.id: e for e in environments_l}
 
     import sys
     cli_env_ids_list = sys.argv[1:]
@@ -265,17 +268,18 @@ if __name__ == '__main__':
 
     if 'dry' in sys.argv[1:]:
         for id, e in environments.items():
-            e[0].dry = True
+            e.dry = True
 
     logger.info(f"Resulting profiles {environments.keys()}")        
-    
+
+    environments = {id: replace(e, pipeline=[CachingStep(step) for step in e.pipeline]) for id, e in environments.items()}
+
     # Background thread to refresh branches every 5 minutes
     def emit_fresh_branches() -> None:
         global branches, branches_slaves, environments
-        for k, e in environments.items():
-            env, pipe = e
+        for k, env in environments.items():
             branches[k] = {}
-            for step in pipe:
+            for step in env.pipeline:
                 try:
                     if not isinstance(step, GitClone):
                         continue
