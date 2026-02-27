@@ -11,8 +11,8 @@ import os
 from typing import Dict, Protocol, Tuple, Optional, TYPE_CHECKING, List, Callable
 import git  # type: ignore
 
-from steps.git import CheckoutMerged, GitUnmerge, CheckoutAndMergeResult, GitClone  # noqa: F401
 from steps.docker import DockerSwarmCheck, DockerSwarmCheckResult  # noqa: F811
+from steps.git import CheckoutMerged, GitUnmerge, GitClone  # noqa: F401
 from enironment import Environment
 
 
@@ -49,7 +49,6 @@ class RemoteRepoHelper:
         with self.repo.config_writer() as cw:
             cw.set_value("user", "email", "test@example.com")
             cw.set_value("user", "name", "Test User")
-
         self.env = Environment(
             id="test1",
             branches=[],
