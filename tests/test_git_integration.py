@@ -37,7 +37,9 @@ class TestGitIntegration:
 
         assert isinstance(result, CheckoutAndMergeResult)
         assert result.commit_hash == commit2.hexsha, f"Invalid commit"
-        
+        assert result.remote_branch_name == "branch1", f"Remote branch incorrect"
+        assert result.version == commit2.hexsha[:8], f"Incorrect version"
+
         repo_helper.verify_working_directory_files([
             ('file1.txt', 'content1'),
             ('file2.txt', 'content2'),
@@ -49,7 +51,9 @@ class TestGitIntegration:
 
         assert isinstance(result, CheckoutAndMergeResult)
         assert result.commit_hash == commit3.hexsha, f"Invalid commit"
-        
+        assert result.remote_branch_name == "branch2", f"Remote branch incorrect"
+        assert result.version == commit3.hexsha[:8], f"Incorrect version"
+
         repo_helper.verify_working_directory_files([
             ('file1.txt', 'content1'),
             ('file3.txt', 'content3'),
@@ -73,7 +77,7 @@ class TestGitIntegration:
 
         # Verify result with specific field checks
         assert isinstance(result, CheckoutAndMergeResult)
-        assert result.branch_name.startswith("auto/"), f"Expected auto branch, got {result.branch_name}"
+        assert result.remote_branch_name is None, f"Remote branch should be empty"
         assert len(result.commit_hash) == 40, f"Invalid commit hash length: {result.commit_hash}"
         assert result.commit_hash.isalnum(), f"Commit hash should be alphanumeric: {result.commit_hash}"
         assert "-" in result.version, f"Version should contain '-': {result.version}"
@@ -104,7 +108,7 @@ class TestGitIntegration:
 
         # Verify result with specific field checks
         assert isinstance(result, CheckoutAndMergeResult)
-        assert result.branch_name.startswith("auto/"), f"Expected auto branch, got {result.branch_name}"
+        assert result.remote_branch_name is None, f"Expected auto branch, got {result.remote_branch_name}"
         assert len(result.commit_hash) == 40, f"Invalid commit hash length: {result.commit_hash}"
         assert result.commit_hash.isalnum(), f"Commit hash should be alphanumeric: {result.commit_hash}"
         assert len(result.version.split("-")) == 3, f"Version should have 3 parts for 3 branches: {result.version}"
@@ -115,6 +119,17 @@ class TestGitIntegration:
             ('file3.txt', 'content3'),
             ('file4.txt', 'content4')
         ])
+
+        repo_helper.checkout_merged.push = True
+        result = repo_helper.checkout_merged.progress()
+
+        # Verify result with specific field checks
+        assert isinstance(result, CheckoutAndMergeResult)
+        expected_version = "-".join(sorted([commit2.hexsha[:8],commit3.hexsha[:8],commit4.hexsha[:8]]))
+        assert result.version == expected_version, f"Invalid version"
+        assert result.remote_branch_name == f"auto-{expected_version}", f"Expected auto branch, got {result.remote_branch_name}"
+        assert len(result.commit_hash) == 40, f"Invalid commit hash length: {result.commit_hash}"
+        assert result.commit_hash.isalnum(), f"Commit hash should be alphanumeric: {result.commit_hash}"
 
     def test_checkout_merged_fast_forward(self, repo_helper: RemoteRepoHelper) -> None:
         """Test merging fast forward"""
@@ -131,9 +146,9 @@ class TestGitIntegration:
 
         # Verify result - should find existing branch or create merge
         assert isinstance(result, CheckoutAndMergeResult)
-        assert result.branch_name == "auto/" +"-".join(sorted([commit3.hexsha[:8],commit1.hexsha[:8]])), f"Invalid branch name"
+        assert result.remote_branch_name == "branch1", f"Invalid branch name"
         assert result.version == "-".join(sorted([commit3.hexsha[:8],commit1.hexsha[:8]])), f"Invalid version"
-        # assert result.commit_hash == commit3.hexsha, f"Invalid commit hash"
+        assert result.commit_hash == commit3.hexsha, f"Invalid commit hash"
         
         repo_helper.verify_working_directory_files([
             ('file1.txt', 'content1'),
@@ -168,13 +183,13 @@ class TestGitIntegration:
 
         repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD")]
         result1 = repo_helper.checkout_merged.progress()
-        auto_branch_name = result1.branch_name
+        auto_branch_name = result1.remote_branch_name
 
 
         result2 = repo_helper.checkout_merged.progress()
 
         # Verify same auto branch is used with actual value checks
-        assert result2.branch_name == auto_branch_name, f"Expected {auto_branch_name}, got {result2.branch_name}"
+        assert result2.remote_branch_name == auto_branch_name, f"Expected {auto_branch_name}, got {result2.remote_branch_name}"
         assert result2.commit_hash == result1.commit_hash, f"Expected {result1.commit_hash}, got {result2.commit_hash}"
         assert len(result2.commit_hash) == 40, f"Invalid commit hash length: {result2.commit_hash}"
         
@@ -223,8 +238,8 @@ class TestGitIntegration:
         version_str = "invalid-version-format"
         repo_helper.mock_check.version = lambda: version_str
 
-        # with pytest.raises(BaseException, match="Version format not recognized"):
-        #     repo_helper.git_unmerge.progress()
+        with pytest.raises(BaseException, match="Version format not recognized"):
+            repo_helper.git_unmerge.progress()
 
     def test_git_unmerge_nonhead_commit(self, repo_helper: RemoteRepoHelper) -> None:
 

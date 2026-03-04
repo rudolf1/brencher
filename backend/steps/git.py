@@ -80,7 +80,7 @@ class GitClone(AbstractStep[str]):
 
 @dataclass
 class CheckoutAndMergeResult:
-    branch_name: str
+    remote_branch_name: str | None
     commit_hash: str
     version: str
 
@@ -149,7 +149,6 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 
         logger.info(f"Selected branches: {self.env.branches}")
 
-
         commit_ids = self.find_desired_commits(repo)
         logger.info(f"Commit ids for branches: {commit_ids}")
 
@@ -161,77 +160,55 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
             for l in legal_merge_commits[1:]:
                 result = result.intersection(l)
             return result
+
         merge_commits = find_common_merge_commits()
-        merge_commit1 = None
+        commit_resulting = None
         if len(merge_commits) > 0:
-            merge_commit1 = merge_commits.pop()
+            commit_resulting = merge_commits.pop()
             logger.info(f"Common commit found {merge_commits}")
 
+        if commit_resulting is None:
+            logger.info(f"Merging commits")
+            # Merge the rest of the branches
+            commits = list(commit_ids.keys())
+            repo.git.checkout(commits[0].hexsha, detach=True)
+            for commit in commits[1:]:
+                try:
+                    logger.info(f"Merging commit: {commit}")
+                    repo.git.merge(commit)
+                except git.GitCommandError as e:
+                    # Handle merge conflicts according to predefined rules
+                    # For now, we'll abort the merge and report failure
+                    repo.git.merge('--abort')
+                    error_message = f"Merge conflict when merging {commit}: {str(e)}"
+                    logger.error(error_message)
+                    
+                    raise BaseException(error_message)
+            commit_resulting = repo.head.commit
+        
+        repo.git.checkout(commit_resulting.hexsha, detach=True)
+        remote_branch_name = None
         sorted_commits = sorted(commit_ids.keys(), key=lambda x: x.hexsha)
-        auto_branch_hash = hashlib.sha1(''.join([x.hexsha for x in sorted_commits]).encode()).hexdigest()
         version = '-'.join([x.hexsha[0:8] for x in sorted_commits])
-        auto_branch_name = f"auto/{version}"
-        if merge_commit1 is not None:
-            for head in repo.branches:
-                if head.is_remote and head.commit.hexsha == merge_commit1.hexsha: # type: ignore[truthy-function]
-                    logger.info(f"Merge commit {merge_commit1} corresponds to branch {head}")
-                    repo.git.checkout(head.name)
-                    return CheckoutAndMergeResult(head.name, merge_commit1.hexsha, version)
-
-
-        if merge_commit1 is not None:
-            repo.git.branch('-f', auto_branch_name, merge_commit1.hexsha)
-            repo.git.checkout(auto_branch_name)
-            logger.info(f"Head is {repo.head.commit}")
-            if self.push:
-                repo.git.push('-f', 'origin', auto_branch_name)
-                logger.info(f"Pushed {merge_commit1} to {auto_branch_name}")
-            return CheckoutAndMergeResult(auto_branch_name, merge_commit1.hexsha, version)
-        
-        logger.info(f"Looking for existing auto branch: {auto_branch_name}")
-        
-        # Check if the auto branch already exists
-        for remote_ref in repo.remotes.origin.refs:
-            if remote_ref.name == f"origin/{auto_branch_name}":
-                # Auto branch exists, fetch it
-                logger.info(f"Found existing auto branch: {auto_branch_name}")
-                repo.git.checkout(auto_branch_name)
-                auto_branch_hash = repo.head.commit.hexsha
-                
-                return CheckoutAndMergeResult(auto_branch_name, auto_branch_hash, version)
-
-        if auto_branch_name in repo.branches:
-            try:
-                repo.git.branch('-D', auto_branch_name)
-            except git.GitCommandError as e:
-                logger.warning(f"Could not delete local branch {auto_branch_name}: {e}")
-        # Auto branch doesn't exist, create it
-        logger.info(f"Creating new auto branch: {auto_branch_name}")
-        
-        commits = list(commit_ids.keys())
-        repo.git.branch('-f', auto_branch_name,  commits[0].hexsha)
-        repo.git.checkout(commits[0].hexsha)
-        
-        # Merge the rest of the branches
-        for commit in commits[1:]:
-            try:
-                logger.info(f"Merging commit: {commit}")
-                repo.git.merge(commit, '--no-ff')
-            except git.GitCommandError as e:
-                # Handle merge conflicts according to predefined rules
-                # For now, we'll abort the merge and report failure
-                repo.git.merge('--abort')
-                error_message = f"Merge conflict when merging {commit}: {str(e)}"
-                logger.error(error_message)
-                
-                raise BaseException(error_message)
-        
-        
-        auto_branch_hash = repo.head.commit.hexsha
         if self.push:
-            logger.info(f"Pushing {auto_branch_hash} to {auto_branch_name}")
-            repo.git.push('-f', 'origin', auto_branch_name)
-        return CheckoutAndMergeResult(auto_branch_name,auto_branch_hash, version)
+            auto_branch_hash = hashlib.sha1(''.join([x.hexsha for x in sorted_commits]).encode()).hexdigest()
+            auto_branch_name = f"auto-{version}"
+
+            logger.info(f"Pushing {repo.head.commit.hexsha} -> {auto_branch_name}")
+            repo.git.push('-f', 'origin', f"HEAD:refs/heads/{auto_branch_name}")
+            remote_branch_name = auto_branch_name
+        else:
+            for ref in repo.refs:
+                if ref.is_remote() and ref.commit == repo.head.commit: # type: ignore[truthy-function]
+                    logger.info(f"Merge commit {ref.commit} corresponds to branch {ref}")
+                    remote_branch_name = ref.name[len('origin/'):]
+                    break
+
+        return CheckoutAndMergeResult(
+            remote_branch_name=remote_branch_name, 
+            commit_hash=repo.head.commit.hexsha, 
+            version=version
+        )
 
 
 from steps.docker import DockerSwarmCheckResult, DockerSwarmCheck
