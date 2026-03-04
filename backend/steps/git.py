@@ -190,19 +190,19 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
         remote_branch_name = None
         sorted_commits = sorted(commit_ids.keys(), key=lambda x: x.hexsha)
         version = '-'.join([x.hexsha[0:8] for x in sorted_commits])
-        if self.push:
+
+        for ref in repo.refs:
+            if ref.is_remote() and ref.commit == repo.head.commit:
+                logger.info(f"Merge commit {ref.commit} corresponds to branch {ref}")
+                remote_branch_name = ref.name[len('origin/'):]
+                break
+        if self.push and remote_branch_name is None:
             auto_branch_hash = hashlib.sha1(''.join([x.hexsha for x in sorted_commits]).encode()).hexdigest()
             auto_branch_name = f"auto-{version}"
 
             logger.info(f"Pushing {repo.head.commit.hexsha} -> {auto_branch_name}")
             repo.git.push('-f', 'origin', f"HEAD:refs/heads/{auto_branch_name}")
             remote_branch_name = auto_branch_name
-        else:
-            for ref in repo.refs:
-                if ref.is_remote() and ref.commit == repo.head.commit:
-                    logger.info(f"Merge commit {ref.commit} corresponds to branch {ref}")
-                    remote_branch_name = ref.name[len('origin/'):]
-                    break
 
         return CheckoutAndMergeResult(
             remote_branch_name=remote_branch_name, 
