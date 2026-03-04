@@ -25,6 +25,8 @@ jobs:
           # "3.15",
          ]
         checker: [
+          "python -c \"import sys; print(f'Python {sys.version}'); print(f'Build: {sys.version_info}'); print(f'Implementation: {sys.implementation}')\"",
+# python -c "import sys; print(f'Python {sys.version}'); print(f'Build: {sys.version_info}'); print(f'Implementation: {sys.implementation}')"
           "flake8 . --count --select=E9,F63,F7,F82 --ignore=F824 --show-source --statistics",
           "flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics",
           # "ty check backend",
