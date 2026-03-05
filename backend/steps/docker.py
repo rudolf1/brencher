@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class DockerComposeBuild(AbstractStep[List[str]]):
     def __init__(self, 
-                wd: GitClone, 
+                wd: GitClone, # TODO should be CheckoutMerged
                 docker_repo_username: str, 
                 docker_repo_password: str, 
                 docker_compose_path: str, 

@@ -80,6 +80,7 @@ class GitClone(AbstractStep[str]):
 
 @dataclass
 class CheckoutAndMergeResult:
+    wd: str
     remote_branch_name: str | None
     commit_hash: str
     version: str
@@ -161,11 +162,15 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
                 result = result.intersection(l)
             return result
 
-        merge_commits = find_common_merge_commits()
-        commit_resulting = None
-        if len(merge_commits) > 0:
-            commit_resulting = merge_commits.pop()
-            logger.info(f"Common commit found {merge_commits}")
+        if len(commit_ids) == 1:
+            commit_resulting = list(commit_ids.keys())[0]
+            logger.info(f"Only one branch selected, using commit {commit_resulting.hexsha}")
+        else:
+            merge_commits = find_common_merge_commits() # TODO There bugs here
+            commit_resulting = None
+            if len(merge_commits) > 0:
+                commit_resulting = merge_commits.pop()
+                logger.info(f"Common commit found {merge_commits}")
 
         if commit_resulting is None:
             logger.info(f"Merging commits")
@@ -185,7 +190,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
                     
                     raise BaseException(error_message)
             commit_resulting = repo.head.commit
-        
+
         repo.git.checkout(commit_resulting.hexsha, detach=True)
         remote_branch_name = None
         sorted_commits = sorted(commit_ids.keys(), key=lambda x: x.hexsha)
@@ -205,6 +210,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
             remote_branch_name = auto_branch_name
 
         return CheckoutAndMergeResult(
+            wd = repo_path,
             remote_branch_name=remote_branch_name, 
             commit_hash=repo.head.commit.hexsha, 
             version=version
@@ -212,12 +218,21 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 
 
 from steps.docker import DockerSwarmCheckResult, DockerSwarmCheck
+from typing import Protocol, Any
+
+class HasVersion(Protocol):
+    version: str
+
+
+class VersionProvider(Protocol):
+    def progress(self) -> Dict[str, HasVersion]:
+        ...
 
 class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
     wd: GitClone
 
     def __init__(self, wd: GitClone,
-                 check: DockerSwarmCheck,
+                 check: VersionProvider,
                   **kwargs: Any):
         super().__init__(**kwargs)
         self.wd = wd
@@ -225,7 +240,7 @@ class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
 
     def progress(self) -> List[Tuple[str, str]]:
         wd = self.wd.progress()
-        deployState: Dict[str, DockerSwarmCheckResult] = self.check.progress()
+        deployState: Dict[str, HasVersion] = self.check.progress()
 
         versions = set([it.version for it in deployState.values()])
         if len(versions) != 1:

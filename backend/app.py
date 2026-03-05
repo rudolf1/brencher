@@ -210,72 +210,65 @@ socketio.on_namespace(BranchesNamespace('/ws/branches'))
 socketio.on_namespace(EnvironmentNamespace('/ws/environment'))
 socketio.on_namespace(ErrorsNamespace('/ws/errors'))
 
-if __name__ == '__main__':
-    
-    import signal
-    import os
-    import sys
-
-    def sigchld_handler(signum, frame): # type: ignore[no-untyped-def]
-        """Reap zombie processes"""
-        while True:
-            try:
-                pid, status = os.waitpid(-1, os. WNOHANG)
-                if pid == 0:
-                    break
-            except ChildProcessError:
+def sigchld_handler(signum, frame): # type: ignore[no-untyped-def]
+    """Reap zombie processes"""
+    while True:
+        try:
+            pid, status = os.waitpid(-1, os. WNOHANG)
+            if pid == 0:
                 break
+        except ChildProcessError:
+            break
 
-    # Register the handler
-    signal.signal(signal. SIGCHLD, sigchld_handler)
+import signal
 
-    import configs.brencher
-    import configs.brencher2
-    import configs.brencher_local2
-    import configs.brencher_local1
-    import configs.torrserv_proxy
-    import configs.immich
-    environments_l: List[Environment] = [
-        configs.brencher.brencher, 
-        configs.brencher2.brencher2,
-        configs.brencher_local2.brencher_local2,
-        configs.brencher_local1.brencher_local1,
-        configs.torrserv_proxy.torrserv_proxy,
-        configs.immich.immich,
-    ]
-    environments = {e.id: e for e in environments_l}
+class App:
 
-    import sys
-    cli_env_ids_list = sys.argv[1:]
-    cli_env_ids_str: str
-    if len(cli_env_ids_list) == 0:
-        cli_env_ids_str = os.getenv('PROFILES', '')
-    else:
-        cli_env_ids_str = cli_env_ids_list[0]
-    logger.info(f"cli_env_ids {cli_env_ids_str}")        
-    if len(cli_env_ids_str) > 0 and cli_env_ids_str[0] == '-':
-        cli_env_ids = cli_env_ids_str[1:].split(',')
-        cli_env_ids = [x for x in cli_env_ids if len(x) > 0]
-        logger.info(f"cli_env_ids (minus) {cli_env_ids}")        
-        if cli_env_ids and len(cli_env_ids) > 0:
-            environments = { k: e for k, e in environments.items() if k not in cli_env_ids }
-    else:
-        cli_env_ids = cli_env_ids_str.split(',')
-        cli_env_ids = [x for x in cli_env_ids if len(x) > 0]
-        logger.info(f"cli_env_ids {cli_env_ids}")        
-        if cli_env_ids and len(cli_env_ids) > 0:
-            environments = { k: e for k, e in environments.items() if k in cli_env_ids }
+    def __init__(self, cli_env_ids_str: str, dry_run: bool = False) -> None:
+        global environments
+        # Register the handler
+        signal.signal(signal.SIGCHLD, sigchld_handler)
 
-    if 'dry' in sys.argv[1:]:
-        for id, e in environments.items():
-            e.dry = True
+        import configs.brencher
+        import configs.brencher2
+        import configs.brencher_local2
+        import configs.brencher_local1
+        import configs.torrserv_proxy
+        import configs.immich
+        environments_l: List[Environment] = [
+            configs.brencher.brencher,
+            configs.brencher2.brencher2,
+            configs.brencher_local2.brencher_local2,
+            configs.brencher_local1.brencher_local1,
+            configs.torrserv_proxy.torrserv_proxy,
+            configs.immich.immich,
+        ]
+        environments = {e.id: e for e in environments_l}
 
-    logger.info(f"Resulting profiles {environments.keys()}")        
+        logger.info(f"cli_env_ids {cli_env_ids_str}")
+        if len(cli_env_ids_str) > 0 and cli_env_ids_str[0] == '-':
+            cli_env_ids = cli_env_ids_str[1:].split(',')
+            cli_env_ids = [x for x in cli_env_ids if len(x) > 0]
+            logger.info(f"cli_env_ids (minus) {cli_env_ids}")
+            if cli_env_ids and len(cli_env_ids) > 0:
+                environments = { k: e for k, e in environments.items() if k not in cli_env_ids }
+        else:
+            cli_env_ids = cli_env_ids_str.split(',')
+            cli_env_ids = [x for x in cli_env_ids if len(x) > 0]
+            logger.info(f"cli_env_ids {cli_env_ids}")
+            if cli_env_ids and len(cli_env_ids) > 0:
+                environments = { k: e for k, e in environments.items() if k in cli_env_ids }
 
-    environments = {id: replace(e, pipeline=[CachingStep(step) for step in e.pipeline]) for id, e in environments.items()}
+        if dry_run:
+            for id, e in environments.items():
+                e.dry = True
+
+        logger.info(f"Resulting profiles {environments.keys()}")
+
+        environments = {id: replace(e, pipeline=[CachingStep(step) for step in e.pipeline]) for id, e in environments.items()}
 
     # Background thread to refresh branches every 5 minutes
-    def emit_fresh_branches() -> None:
+    def emit_fresh_branches(self) -> None:
         global branches, branches_slaves, environments
         for k, env in environments.items():
             branches[k] = {}
@@ -293,7 +286,7 @@ if __name__ == '__main__':
         socketio.emit('branches', merge_dicts(branches, branches_slaves), namespace='/ws/branches')
 
 
-    def processing_thread() -> None:
+    def processing_thread(self) -> None:
         while True:
             import processing
             def emit_envs() -> None:
@@ -304,18 +297,11 @@ if __name__ == '__main__':
             with state_lock:
                 logger.error(f"Processing")
                 processing.process_all_jobs(list(environments.values()), lambda: emit_envs())
-                emit_fresh_branches()
+                self.emit_fresh_branches()
             environment_update_event.wait(timeout=1*60)
             environment_update_event.clear()
 
-
-    processing = threading.Thread(target=processing_thread)
-    processing.daemon = True
-    processing.start()
-
-
-        # Connect in background so server startup isn't blocked
-    def _connect_remote() -> None:
+    def _connect_remote(self) -> None:
         global remote_sio
         print("Connecting to SLAVE_BRENCHER...")
         while True:
@@ -325,11 +311,28 @@ if __name__ == '__main__':
             except Exception as e:
                 logger.error(f"Could not connect to SLAVE_BRENCHER {slave_url}: {e}")
             time.sleep(60)
+    def run(self) -> None:
+        processing = threading.Thread(target=self.processing_thread)
+        processing.daemon = True
+        processing.start()
 
-    t = threading.Thread(target=_connect_remote, daemon=True)
-    t.start()
+        t = threading.Thread(target=self._connect_remote, daemon=True)
+        t.start()
 
-    if 'noweb' in sys.argv[1:]:
-        socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+    def runWeb(self, port: int) -> None:
+        self.run()
+        socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+
+if __name__ == '__main__':
+    import os
+    import sys
+    cli_env_ids_list = sys.argv[1:]
+    cli_env_ids_str: str
+    if len(cli_env_ids_list) == 0:
+        cli_env_ids_str = os.getenv('PROFILES', '')
     else:
-        socketio.run(app, host='0.0.0.0', port=5001, debug=False, allow_unsafe_werkzeug=True)
+        cli_env_ids_str = cli_env_ids_list[0]
+
+    app1 = App(cli_env_ids_str, 'dry' in sys.argv[1:])
+    app1.runWeb(port=(5000 if 'noweb' in sys.argv[1:] else 5001))
+

@@ -7,8 +7,10 @@ PyYAML
 websocket-client
 
 pytest
+pytest-asyncio
 mypy
 ty
 types-PyYAML
 types-requests
 types-flask-socketio
+testcontainers
