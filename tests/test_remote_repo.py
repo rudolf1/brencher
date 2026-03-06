@@ -120,3 +120,17 @@ class RemoteRepoHelper:
 			with open(os.path.join(self.local_dir, filename)) as f:
 				actual_content = f.read()
 				assert actual_content == expected_content, f"{filename} has incorrect content. Expected '{expected_content}', got '{actual_content}'"
+
+	def _safe_git_log(self, repo_path: str, title: str) -> str:
+		repo = git.Repo(repo_path)
+		commits = list(repo.iter_commits("--all", max_count=30))
+		lines = [
+			f"{commit.hexsha[:10]} (p{[it.hexsha[:10] for it in commit.parents]}, r{[it.name for it in repo.refs if it.commit.hexsha == commit.hexsha]}): {commit.message.splitlines()[0]}"
+			for commit in commits
+		]
+		return f"[{title}] git log ({repo_path})\n" + "\n".join(lines)
+
+	def print_git_logs(self) -> None:
+		"""Print remote and local repository logs for debugging failed tests."""
+		print(self._safe_git_log(self.remote_dir, "remote"))
+		print(self._safe_git_log(self.local_dir, "local"))

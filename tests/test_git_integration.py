@@ -16,11 +16,15 @@ class TestGitIntegration:
 	"""Integration tests for git operations"""
 
 	@pytest.fixture
-	def repo_helper(self) -> Generator[RemoteRepoHelper, None, None]:
+	def repo_helper(self, request: pytest.FixtureRequest) -> Generator[RemoteRepoHelper, None, None]:
 		"""Create a repository helper instance"""
 		helper = RemoteRepoHelper()
 
 		yield helper
+
+		report = getattr(request.node, "rep_call", None)
+		if report is not None and report.failed:
+			helper.print_git_logs()
 		helper.teardown()
 
 	def test_checkout_merged_one_branch(self, repo_helper: RemoteRepoHelper) -> None:
@@ -37,7 +41,7 @@ class TestGitIntegration:
 
 		assert isinstance(result, CheckoutAndMergeResult)
 		assert result.commit_hash == commit2.hexsha, f"Invalid commit"
-		assert result.remote_branch_name == "branch1", f"Remote branch incorrect"
+		assert result.remote_branch_name == "brancXh1", f"Remote branch incorrect"
 		assert result.version == commit2.hexsha[:8], f"Incorrect version"
 
 		repo_helper.verify_working_directory_files([
