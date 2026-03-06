@@ -1,5 +1,4 @@
-from typing import Dict, TypedDict, List, runtime_checkable, Protocol, Callable
-from dataclasses import dataclass
+from typing import Dict, List, runtime_checkable, Protocol
 
 
 @runtime_checkable
@@ -24,6 +23,7 @@ class C2_C3(C2, C3):
 class CM:
 	def __init__(self, arg1: C2, arg2: C3, arg3: C2 | C3, arg4: C2_C3) -> None:
 		pass
+
 
 v2: C2 = {"data": {"service1": {"version": "1.0"}}}
 v3: C3 = {"data1": [{"version": "1.0"}, {"version": "2.0"}]}

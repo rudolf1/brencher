@@ -1,4 +1,5 @@
-from typing import Dict, TypedDict, List, runtime_checkable, Collection
+from typing import Dict, TypedDict, runtime_checkable, Collection
+
 
 @runtime_checkable
 class C1(TypedDict):

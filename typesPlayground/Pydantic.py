@@ -19,9 +19,11 @@ class C3(BaseModel):
 class C2_C3(C2, C3):
 	pass
 
+
 A = TypeVar('A', bound=type[BaseModel])
 B = TypeVar('B', bound=type[BaseModel])
-C = TypeVar('C', bound=type[(BaseModel, A,B)])
+C = TypeVar('C', bound=type[(BaseModel, A, B)])
+
 
 def intersect(a: type[A], b: type[B]) -> type[C]:
 	class C(BaseModel, a, b):
@@ -47,7 +49,6 @@ class CM:
 		print(arg3)
 		print(arg4)
 		print(arg5)
-
 
 
 v2: C2 = C2(data={"service1": C1(version="1.0")})

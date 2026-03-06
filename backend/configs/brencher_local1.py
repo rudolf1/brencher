@@ -1,57 +1,54 @@
-from steps.git import GitClone, CheckoutMerged, GitUnmerge
-from steps.docker_plain import DockerImageBuild, DockerContainerCheck, DockerContainerDeploy
 from enironment import Environment
-from typing import List, Tuple
-
+from steps.docker_plain import DockerImageBuild, DockerContainerCheck, DockerContainerDeploy
+from steps.git import GitClone, CheckoutMerged, GitUnmerge
 
 clone = GitClone()
 checkoutMerged = CheckoutMerged(clone,
-                    push = False,
-                    git_user_email="rudolfss13@gmail.com",
-                    git_user_name="brencher_bot"
-        )
+								push=False,
+								git_user_email="rudolfss13@gmail.com",
+								git_user_name="brencher_bot"
+								)
 
 # Step 1: Build the image
 image_build = DockerImageBuild(
-    wd=checkoutMerged,
-    dockerfile_path="Dockerfile",
-    image_name="brencher_plain",
-    image_tag=lambda: "auto-" + checkoutMerged.progress().version,
-    nocache=False,
+	wd=checkoutMerged,
+	dockerfile_path="Dockerfile",
+	image_name="brencher_plain",
+	image_tag=lambda: "auto-" + checkoutMerged.progress().version,
+	nocache=False,
 )
 
 # Step 2: Check if container already exists
 container_check = DockerContainerCheck(
-    container_name="brencher_plain-container"
+	container_name="brencher_plain-container"
 )
 
 # Step 3: Deploy the container
 container_deploy = DockerContainerDeploy(
-    image_build=image_build,
-    container_name="brencher_plain-container",
-    ports={"5001/tcp": 5002},
-    environment={"PROFILES": "no_profiles"},
-    restart_policy={"Name": "unless-stopped"},
+	image_build=image_build,
+	container_name="brencher_plain-container",
+	ports={"5001/tcp": 5002},
+	environment={"PROFILES": "no_profiles"},
+	restart_policy={"Name": "unless-stopped"},
 )
 
 unmerge = GitUnmerge(wd=clone, check=container_check)
 
 __all__ = ["brencher_local1"]
 brencher_local1 = Environment(
-    id="brencher_local1",
-    branches=[("main", "HEAD")],
-    dry=False,
-    repo="https://github.com/rudolf1/brencher.git",
-    pipeline = [
-        clone,
-        checkoutMerged,
-        image_build,
-        container_deploy,
-        container_deploy,
-        unmerge
-    ]
+	id="brencher_local1",
+	branches=[("main", "HEAD")],
+	dry=False,
+	repo="https://github.com/rudolf1/brencher.git",
+	pipeline=[
+		clone,
+		checkoutMerged,
+		image_build,
+		container_deploy,
+		container_deploy,
+		unmerge
+	]
 )
-
 
 #
 #
@@ -88,5 +85,3 @@ brencher_local1 = Environment(
 #     stack_name = "brencher_local1",
 #     docker_compose_path = "docker-compose.yml",
 # )
-
-

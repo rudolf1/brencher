@@ -4,7 +4,8 @@ This directory contains integration tests for the `CheckoutMerged` and `GitUnmer
 
 ## Overview
 
-The integration tests simulate real git operations in isolated temporary directories to ensure the git merge and unmerge functionality works correctly in various scenarios without affecting the host environment.
+The integration tests simulate real git operations in isolated temporary directories to ensure the git merge and unmerge
+functionality works correctly in various scenarios without affecting the host environment.
 
 ## Test Structure
 
@@ -16,6 +17,7 @@ The tests are organized into two files:
 ### Helper Classes
 
 The `test_remote_repo.py` file provides:
+
 - `RemoteRepoHelper` - Manages creation and cleanup of temporary test repositories
 - `MockGitClone` - Mock GitClone object for testing
 - `MockDockerSwarmCheck` - Mock DockerSwarmCheck object with configurable version strings
@@ -33,16 +35,19 @@ The `test_remote_repo.py` file provides:
 
 ### Combined CheckoutMerged and GitUnmerge Tests
 
-1. **test_checkout_merged_and_unmerge_valid_version** - Tests merging branches and then extracting branch information from version string
+1. **test_checkout_merged_and_unmerge_valid_version** - Tests merging branches and then extracting branch information
+   from version string
 
 ### GitUnmerge-Specific Tests
 
 1. **test_git_unmerge_invalid_version** - Tests handling of invalid version formats
-2. **test_git_unmerge_nonhead_commit** - Tests behavior when version corresponds to non-HEAD commit in a branch (expected to fail)
+2. **test_git_unmerge_nonhead_commit** - Tests behavior when version corresponds to non-HEAD commit in a branch (
+   expected to fail)
 
 ## Test Improvements
 
 Recent refactoring improvements:
+
 - Centralized repository setup code in `RemoteRepoHelper` class
 - Single instances of `MockGitClone` and `MockDockerSwarmCheck` defined in helper file
 - Enhanced assertions that check actual field values (not just "is not None")
@@ -59,6 +64,7 @@ The tests can be run inside a Docker container to ensure complete isolation from
 ```
 
 This script will:
+
 1. Build a Docker image with all necessary dependencies
 2. Run the integration tests inside a container
 3. Clean up after completion
@@ -95,6 +101,7 @@ python -m pytest tests/test_git_integration.py::TestGitIntegration::test_checkou
 ### Repository Simulation
 
 Each test:
+
 1. Creates a temporary "remote" repository
 2. Creates a temporary "local" clone
 3. Simulates various branch scenarios
@@ -104,7 +111,8 @@ Each test:
 
 ## CI Integration
 
-These tests are integrated into the CI pipeline through the `python-package.yml` workflow, which runs pytest on every push and pull request.
+These tests are integrated into the CI pipeline through the `python-package.yml` workflow, which runs pytest on every
+push and pull request.
 
 ## Dependencies
 

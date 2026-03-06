@@ -54,7 +54,7 @@ class TestDockerContainer:
 		assert "brencher_local1" in state_data, "Missing 'brencher_local1' field in response"
 		logger.info(f"Application state: {state_data}")
 
-	# TODO Verify DockerContainerDeploy step status is running and has correct image and ports
+# TODO Verify DockerContainerDeploy step status is running and has correct image and ports
 # {
 #   "container_id": "213d161d7d08a0a4a45d666c2f31ad186a212e156ef310673cea24ff9eaa99d7",
 #   "container_name": "brencher_plain-container",
