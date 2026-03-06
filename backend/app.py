@@ -5,8 +5,7 @@ import threading
 import time
 import traceback
 import types
-from dataclasses import asdict
-from dataclasses import replace
+from dataclasses import asdict, replace
 from typing import List, Dict, Any, Optional, Tuple
 from typing import TypeVar
 
@@ -16,9 +15,8 @@ from flask import Flask, send_from_directory
 from flask.json.provider import DefaultJSONProvider
 from flask_socketio import SocketIO, emit
 
-from enironment import Environment
+from enironment import Environment, wrap_in_cached
 from steps.git import GitClone
-from steps.step import CachingStep
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -292,8 +290,7 @@ class App:
 
 		logger.info(f"Resulting profiles {environments.keys()}")
 
-		environments = {id: replace(e, pipeline=[CachingStep(step) for step in e.pipeline]) for id, e in
-						environments.items()}
+		environments = {id: wrap_in_cached(e) for id, e in environments.items()}
 
 	# Background thread to refresh branches every 5 minutes
 	def emit_fresh_branches(self) -> None:
