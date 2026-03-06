@@ -204,7 +204,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 		version = '-'.join([x.hexsha[0:8] for x in sorted_commits])
 
 		for ref in repo.refs:
-			if ref.is_remote() and ref.commit == repo.head.commit:
+			if ref.is_remote() and ref.commit == repo.head.commit and ref.name != 'origin/HEAD':
 				logger.info(f"Merge commit {ref.commit} corresponds to branch {ref}")
 				remote_branch_name = ref.name[len('origin/'):]
 				break
