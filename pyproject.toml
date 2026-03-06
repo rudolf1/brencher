@@ -3,6 +3,9 @@ name = "brencher"
 version = "0.1.0"
 description = "Brencher project"
 requires-python = ">=3.12.3"
+dependencies = [
+    "mypy>=1.11",
+]
 
 [tool.pyright]
 reportMissingModuleSource = false
