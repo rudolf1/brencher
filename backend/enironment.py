@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Tuple, Generic
+from typing import List, Tuple
 from typing import TypeVar
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,7 @@ class Environment:
 			p.env = self
 
 
-class AbstractStep(ABC, Generic[T]):
+class AbstractStep[T](ABC):
 	_env: Environment | None = None
 
 	name: str
