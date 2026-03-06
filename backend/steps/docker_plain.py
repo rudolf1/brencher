@@ -2,10 +2,11 @@ import hashlib
 import logging
 import os
 from dataclasses import dataclass
-from typing import List, Dict, Callable, Any, Optional
+from typing import List, Dict, Callable, Any, Optional, cast
 
 import docker
-from docker.models.containers import Container as DockerContainer
+from docker.models.containers import Container
+from docker.models.images import Image
 
 from enironment import AbstractStep
 from steps.git import CheckoutMerged
@@ -19,7 +20,7 @@ class DockerImageBuildResult:
 	image_name: str
 	image_tag: str
 	full_image: str
-	build_logs: List[str]
+	# build_logs: List[str]
 
 
 class DockerImageBuild(AbstractStep[DockerImageBuildResult]):
@@ -81,12 +82,12 @@ class DockerImageBuild(AbstractStep[DockerImageBuildResult]):
 				rm=True
 			)
 
-			for log in logs:
-				if 'stream' in log:
-					log_msg = log['stream'].strip()
-					if log_msg:
-						logger.debug(log_msg)
-						build_logs.append(log_msg)
+			# for log in logs:
+			# 	if 'stream' in log:
+			# 		log_msg = log['stream'].strip()
+			# 		if log_msg:
+			# 			logger.debug(log_msg)
+			# 			build_logs.append(log_msg)
 
 			logger.info(f"Successfully built image: {full_image} (ID: {image.id})")
 
@@ -94,7 +95,7 @@ class DockerImageBuild(AbstractStep[DockerImageBuildResult]):
 			image_name=self.image_name,
 			image_tag=tag,
 			full_image=full_image,
-			build_logs=build_logs
+			# build_logs=build_logs
 		)
 
 
@@ -136,13 +137,16 @@ class DockerContainerCheck(AbstractStep[Dict[str, DockerContainerCheckResult]]):
 		if container.attrs.get('State', {}).get('Health'):
 			health_status = container.attrs['State']['Health'].get('Status')
 
+		image: Image | None = container.image
+		if image is None:
+			raise BaseException(f"Container {self.container_name} has no image information")
 		return {
 			self.container_name: DockerContainerCheckResult(
 				container_name=self.container_name,
 				exists=True,
 				status=container.status,
-				image=container.image.tags[0] if container.image.tags else container.image.id,
-				version=container.image.tags[0].split(":")[1] if container.image.tags else "unknown",
+				image=(image.tags[0] if image.tags else image.id) or "unknown",
+				version=image.tags[0].split(":")[1] if image.tags else "unknown",
 				created=container.attrs['Created'],
 				started=container.attrs['State'].get('StartedAt', ''),
 				ports=container.ports,
@@ -186,9 +190,8 @@ class DockerContainerDeploy(AbstractStep[DockerContainerDeployResult]):
 		config_str = f"{sorted(self.ports.items())}|{sorted(self.environment.items())}|{sorted(self.volumes.items())}|{self.network}|{self.restart_policy}"
 		return hashlib.sha1(config_str.encode()).hexdigest()[:12]
 
-	def _check_container_match(self, existing_container: DockerContainer,
-							   full_image: str) -> str | None:  # type: ignore[no-any-unimported]
-		if existing_container.image.tags and full_image not in existing_container.image.tags:
+	def _check_container_match(self, existing_container: Container, full_image: str) -> str | None:
+		if existing_container.image and existing_container.image.tags and full_image not in existing_container.image.tags:
 			return "Version mismatch"
 		current_hash = existing_container.labels["config_hash"] if "config_hash" in existing_container.labels else None
 		if self._get_config_hash() != current_hash:
@@ -235,16 +238,18 @@ class DockerContainerDeploy(AbstractStep[DockerContainerDeployResult]):
 			logger.info(f"Creating container {self.container_name} from image {full_image}...")
 			existing_container = client.containers.run(
 				image=full_image,
+				detach=True,
 				name=self.container_name,
 				ports=self.ports,
 				environment=self.environment,
 				volumes=self.volumes,
 				network=self.network,
-				restart_policy=self.restart_policy,
+				restart_policy=cast(Any, self.restart_policy),
 				labels={"config_hash": self._get_config_hash()}
 			)
 
-			logger.info(f"Successfully deployed container: {existing_container.id[:12]}")
+			container_id = existing_container.id or "unknown"
+			logger.info(f"Successfully deployed container: {container_id[:12]}")
 
 		if existing_container.status != "running":
 			logger.info(f"Starting existing container...")
@@ -255,7 +260,7 @@ class DockerContainerDeploy(AbstractStep[DockerContainerDeployResult]):
 		existing_container.reload()
 
 		return DockerContainerDeployResult(
-			container_id=existing_container.id,
+			container_id=existing_container.id or "unknown",
 			container_name=self.container_name,
 			image=full_image,
 			status=existing_container.status,

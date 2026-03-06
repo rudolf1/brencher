@@ -122,13 +122,22 @@ class RemoteRepoHelper:
 				assert actual_content == expected_content, f"{filename} has incorrect content. Expected '{expected_content}', got '{actual_content}'"
 
 	def _safe_git_log(self, repo_path: str, title: str) -> str:
+		def _as_text(value: object) -> str:
+			if isinstance(value, bytes):
+				return value.decode(errors='replace')
+			return str(value)
+
 		repo = git.Repo(repo_path)
 		commits = list(repo.iter_commits("--all", max_count=30))
+		refs = [
+			f"{_as_text(it.commit)[:10]}:{_as_text(it.name)}, is_remote:{it.is_remote()}"
+			for it in repo.refs
+		]
 		lines = [
-			f"{commit.hexsha[:10]} (p{[it.hexsha[:10] for it in commit.parents]}, r{[it.name for it in repo.refs if it.commit.hexsha == commit.hexsha]}): {commit.message.splitlines()[0]}"
+			f"{_as_text(commit.hexsha)[:10]} (p{[_as_text(it.hexsha)[:10] for it in commit.parents]}): {_as_text(commit.message).splitlines()[0]}"
 			for commit in commits
 		]
-		return f"[{title}] git log ({repo_path})\n" + "\n".join(lines)
+		return f"[{title}] git log ({repo_path})\n{"\n".join(lines)}\nrefs:\n{"\n".join(refs)}"
 
 	def print_git_logs(self) -> None:
 		"""Print remote and local repository logs for debugging failed tests."""

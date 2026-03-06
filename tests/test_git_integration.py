@@ -41,7 +41,7 @@ class TestGitIntegration:
 
 		assert isinstance(result, CheckoutAndMergeResult)
 		assert result.commit_hash == commit2.hexsha, f"Invalid commit"
-		assert result.remote_branch_name == "brancXh1", f"Remote branch incorrect"
+		assert result.remote_branch_name == "branch1", f"Remote branch incorrect"
 		assert result.version == commit2.hexsha[:8], f"Incorrect version"
 
 		repo_helper.verify_working_directory_files([

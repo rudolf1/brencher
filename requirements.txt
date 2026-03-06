@@ -13,4 +13,5 @@ ty
 types-PyYAML
 types-requests
 types-flask-socketio
+types-docker
 testcontainers
