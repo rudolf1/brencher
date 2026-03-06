@@ -319,15 +319,17 @@ class App:
 			def emit_envs() -> None:
 				try:
 					socketio.emit('environments', get_global_envs_to_emit(), namespace='/ws/environment')
+					self.emit_fresh_branches()
 				except Exception as e:
 					logger.error(f"Error emitting environments: {str(e)}")
 
 			with state_lock:
 				logger.error(f"Processing")
-				processing.process_all_jobs(list(environments.values()), lambda: emit_envs())
-				self.emit_fresh_branches()
-			environment_update_event.wait(timeout=1 * 60)
-			environment_update_event.clear()
+				if processing.process_all_jobs(list(environments.values()), lambda: emit_envs()):
+					environment_update_event.wait(timeout=1 * 5)
+				else:
+					environment_update_event.wait(timeout=1 * 60)
+				environment_update_event.clear()
 
 	def _connect_remote(self) -> None:
 		global remote_sio

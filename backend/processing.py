@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import List, Callable
 
 from enironment import Environment
@@ -7,16 +8,25 @@ from steps.step import CachingStep
 
 logger = logging.getLogger(__name__)
 
+_last_reset_time: float = 0
+RESET_INTERVAL = 3 * 60  # 3 minutes in seconds
 
 def process_all_jobs(
 		environemnts: List[Environment],
 		onupdate: Callable[[], None]
-) -> None:
+) -> bool:
+	global _last_reset_time
+	current_time = time.time()
+	if current_time - _last_reset_time >= RESET_INTERVAL:
+		for env in environemnts:
+			for step in env.pipeline:
+				if isinstance(step, CachingStep):
+					step.reset()
+		_last_reset_time = current_time
+	has_error = False
 	for env in environemnts:
 		for step in env.pipeline:
 			try:
-				if isinstance(step, CachingStep):
-					step.reset()
 				step.progress()
 				if isinstance(step, GitUnmerge) and len(env.branches) == 0:
 					# TODO Move to separate job.
@@ -28,5 +38,7 @@ def process_all_jobs(
 				error_msg = f"Error processing release {env.id}, job {step.name}: {str(e)}"
 				logger.error(error_msg)
 				onupdate()
+				has_error = True
 			finally:
 				onupdate()
+	return has_error

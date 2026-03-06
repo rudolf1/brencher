@@ -30,7 +30,7 @@ jobs:
           "flake8 . --count --select=E9,F63,F7,F82 --ignore=F824 --show-source --statistics",
           "flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics",
           # "ty check backend",
-          "mypy --config-file mypy.ini backend tests integrationTests",
+          "mypy --no-incremental --config-file mypy.ini backend tests integrationTests",
           "pytest",
         ]
 
