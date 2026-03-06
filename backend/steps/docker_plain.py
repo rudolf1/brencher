@@ -4,7 +4,7 @@ import logging
 import docker
 from docker import errors as docker_errors
 import yaml
-from docker.models.containers import Container
+from docker.models.containers import Container as DockerContainer
 from dotenv import dotenv_values
 from typing import List, Dict, Callable, Any, Optional
 from dataclasses import dataclass
@@ -189,7 +189,7 @@ class DockerContainerDeploy(AbstractStep[DockerContainerDeployResult]):
         config_str = f"{sorted(self.ports.items())}|{sorted(self.environment.items())}|{sorted(self.volumes.items())}|{self.network}|{self.restart_policy}"
         return hashlib.sha1(config_str.encode()).hexdigest()[:12]
 
-    def _check_container_match(self, existing_container: Container, full_image: str) -> str | None:
+    def _check_container_match(self, existing_container: DockerContainer, full_image: str) -> str | None:  # type: ignore[no-any-unimported]
         if existing_container.image.tags and full_image not in existing_container.image.tags:
             return "Version mismatch"
         current_hash = existing_container.labels["config_hash"] if "config_hash" in existing_container.labels else None

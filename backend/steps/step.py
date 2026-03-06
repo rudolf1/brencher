@@ -8,7 +8,7 @@ class NotReadyException(Exception):
         super().__init__(message)
 
 
-class CachingStep(AbstractStep[T], Generic[T]):
+class CachingStep[T](AbstractStep[T]):
 
     _result: T | BaseException
 

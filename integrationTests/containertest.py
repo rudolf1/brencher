@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from typing import Any, Generator
 
 # Add backend to path so we can import modules
 backend_path = Path(__file__).parent.parent / "backend"
@@ -16,13 +17,14 @@ import docker
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
 class TestDockerContainer:
 
 	@pytest.fixture(autouse=True)
-	def setup_teardown(self):
+	def setup_teardown(self) -> Generator[None, Any, None]:
 		"""Set up and tear down test environment"""
 		# Setup
-		yield
+		yield None
 
 		# Teardown
 		client = docker.from_env()
@@ -33,14 +35,12 @@ class TestDockerContainer:
 
 	@pytest.mark.asyncio
 	async def test_start(self) -> None:
-
 		logger.info(f"Starting")
 
 		app = App(cli_env_ids_str="brencher_local1")
 		# app.runWeb(5001)
-		processing = threading.Thread(target=lambda: app.runWeb(5001), daemon = True)
+		processing = threading.Thread(target=lambda: app.runWeb(5001), daemon=True)
 		processing.start()
-
 
 		await asyncio.sleep(5)
 		# Verify container is still running
@@ -54,7 +54,7 @@ class TestDockerContainer:
 		assert "brencher_local1" in state_data, "Missing 'brencher_local1' field in response"
 		logger.info(f"Application state: {state_data}")
 
-		# TODO Verify DockerContainerDeploy step status is running and has correct image and ports
+	# TODO Verify DockerContainerDeploy step status is running and has correct image and ports
 # {
 #   "container_id": "213d161d7d08a0a4a45d666c2f31ad186a212e156ef310673cea24ff9eaa99d7",
 #   "container_name": "brencher_plain-container",
@@ -73,5 +73,4 @@ class TestDockerContainer:
 #     ]
 #   }
 # }
-		# await asyncio.sleep(5000)
-
+# await asyncio.sleep(5000)
