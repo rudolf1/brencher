@@ -100,6 +100,7 @@ def merge_dicts(a: Dict[str, T], b: Dict[str, T]) -> Dict[str, T]:
 
 
 slave_url = os.getenv('SLAVE_BRENCHER')
+remote_sio = None
 if slave_url:
 	logger.info(f"SLAVE_BRENCHER set, will connect to master at {slave_url}")
 	remote_sio = socketio_client.Client(logger=False, engineio_logger=False)
@@ -321,7 +322,7 @@ class App:
 					logger.error(f"Error emitting environments: {str(e)}")
 
 			with state_lock:
-				logger.error(f"Processing")
+				logger.info(f"Processing")
 				if processing.process_all_jobs(list(environments.values()), lambda: emit_envs()):
 					environment_update_event.wait(timeout=1 * 5)
 				else:

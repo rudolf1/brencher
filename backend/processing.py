@@ -33,10 +33,10 @@ def process_all_jobs(
 					# If branches list empty, need to find any brunch which includes commit and add pair (branch, commit)
 					# If branches not empty, need to find most priority branch (project specific) and add (branch, HEAD)
 					env.branches = step.progress()
-					logger.error(f"Branches on startup resolved {env.id}, job {step.name}: {env.branches}")
+					logger.info(f"Branches on startup resolved {env.id}, job {step.name}: {env.branches}")
 			except BaseException as e:
 				error_msg = f"Error processing release {env.id}, job {step.name}: {str(e)}"
-				logger.error(error_msg)
+				logger.error(error_msg, e)
 				onupdate()
 				has_error = True
 			finally:
