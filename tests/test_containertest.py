@@ -1,11 +1,12 @@
-import sys
-from pathlib import Path
-from typing import Any, Generator
+# import sys
+# from pathlib import Path
 
 # Add backend to path so we can import modules
-backend_path = Path(__file__).parent.parent / "backend"
-if str(backend_path) not in sys.path:
-	sys.path.insert(0, str(backend_path))
+# backend_path = Path(__file__).parent.parent / "backend"
+# if str(backend_path) not in sys.path:
+# 	sys.path.insert(0, str(backend_path))
+
+import json
 
 import pytest
 import logging
@@ -13,10 +14,10 @@ import asyncio
 from app import App
 import threading
 import docker
+from typing import Any, Generator
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
 
 class TestDockerContainer:
 
@@ -52,7 +53,7 @@ class TestDockerContainer:
 		state_data = response.json()
 
 		assert "brencher_local1" in state_data, "Missing 'brencher_local1' field in response"
-		logger.info(f"Application state: {state_data}")
+		logger.info(f"Application state: {json.dumps(state_data, indent=2)}")
 
 # TODO Verify DockerContainerDeploy step status is running and has correct image and ports
 # {
