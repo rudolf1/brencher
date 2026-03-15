@@ -188,7 +188,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 				try:
 					logger.info(f"Merging commit: {commit}")
 					repo.git.merge(commit)
-				except git.GitCommandError as e:
+				except BaseException as e:
 					# Handle merge conflicts according to predefined rules
 					# For now, we'll abort the merge and report failure
 					repo.git.merge('--abort')
