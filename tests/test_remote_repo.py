@@ -141,5 +141,7 @@ class RemoteRepoHelper:
 
 	def print_git_logs(self) -> None:
 		"""Print remote and local repository logs for debugging failed tests."""
+		print(f"Version: {git.__version__}")
+		
 		print(self._safe_git_log(self.remote_dir, "remote"))
 		print(self._safe_git_log(self.local_dir, "local"))

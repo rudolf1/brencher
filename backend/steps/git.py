@@ -187,7 +187,8 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 			for commit in commits[1:]:
 				try:
 					logger.info(f"Merging commit: {commit}")
-					repo.git.merge(commit.hexsha)
+					result = repo.git.merge(commit.hexsha)
+					logger.info(result)
 				except BaseException as e:
 					# Handle merge conflicts according to predefined rules
 					# For now, we'll abort the merge and report failure
