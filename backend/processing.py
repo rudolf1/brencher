@@ -36,7 +36,7 @@ def process_all_jobs(
 					logger.info(f"Branches on startup resolved {env.id}, job {step.name}: {env.branches}")
 			except BaseException as e:
 				error_msg = f"Error processing release {env.id}, job {step.name}: {str(e)}"
-				logger.error(error_msg, e)
+				logger.error(error_msg)
 				onupdate()
 				has_error = True
 			finally:
