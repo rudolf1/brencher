@@ -97,8 +97,8 @@ def _commits_childs(repo: git.Repo) -> Dict[Commit, List[Commit]]:
 			childs.setdefault(p, []).append(c)
 	return childs
 
-def check_repo_clear(repo: git.Repo) -> None:
-	if len(repo.index.entries) + len(repo.untracked_files) > 0:
+def ensure_clean(repo: git.Repo) -> None:
+	if repo.is_dirty():
 		raise BaseException(f"Changes in repo: I{repo.index.entries}, U{repo.untracked_files}")
 
 
@@ -188,13 +188,13 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 			# Merge the rest of the branches
 			commits = list(commit_ids.keys())
 			repo.git.checkout(commits[0].hexsha, detach=True)
-			check_repo_clear(repo)
+			ensure_clean(repo)
 			for commit in commits[1:]:
 				try:
 					logger.info(f"Merging commit: {commit}")
-					result = repo.git.merge('--no-ff', commit.hexsha)
-					check_repo_clear(repo)
+					result = repo.git.merge(commit.hexsha)
 					logger.info(result)
+					ensure_clean(repo)
 				except BaseException as e:
 					# Handle merge conflicts according to predefined rules
 					# For now, we'll abort the merge and report failure
@@ -206,7 +206,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 			commit_resulting = repo.head.commit
 
 		repo.git.checkout(commit_resulting.hexsha, detach=True)
-		check_repo_clear(repo)
+		ensure_clean(repo)
 		remote_branch_name = None
 		sorted_commits = sorted(commit_ids.keys(), key=lambda x: x.hexsha)
 		version = '-'.join([x.hexsha[0:8] for x in sorted_commits])
