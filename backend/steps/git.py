@@ -98,7 +98,7 @@ def _commits_childs(repo: git.Repo) -> Dict[Commit, List[Commit]]:
 	return childs
 
 def ensure_clean(repo: git.Repo) -> None:
-	if repo.is_dirty():
+	if repo.is_dirty() or len(repo.untracked_files) > 0:
 		raise BaseException(f"Changes in repo: I{repo.index.entries}, U{repo.untracked_files}")
 
 
