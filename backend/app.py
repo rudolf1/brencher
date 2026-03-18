@@ -110,11 +110,8 @@ if slave_url:
 	# Handlers for events from master -> re-emit locally (marked so we don't loop)
 	@remote_sio.on('branches', namespace='/ws/branches')
 	def _remote_branches(data: Any) -> None:
-		global branches, branches_slaves
-		branches_slaves = data
-		merge_result = merge_dicts(branches, branches_slaves)
 		try:
-			socketio.emit('branches', merge_result, namespace='/ws/branches')
+			socketio.emit('branches', get_global_branches_to_emit(), namespace='/ws/branches')
 		except Exception as e:
 			logger.error(f"Error forwarding remote branches locally: {e}")
 
