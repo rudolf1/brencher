@@ -159,7 +159,10 @@ def get_local_envs_to_emit() -> Dict[str, Tuple[Dict[str, Any], List[Dict[str, A
 		res: List[Dict[str, Any]] = []
 		for r in env.pipeline:
 			try:
-				result = r.progress()
+				if isinstance(r, CachingStep):
+					result = r._result
+				else:
+					result = r.progress()
 				res.append({
 					"name": r.name,
 					"status": result,
