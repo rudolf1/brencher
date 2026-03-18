@@ -37,27 +37,31 @@ class GitClone(AbstractStep[str]):
 														f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
 		logger.info(f"Cloning repository {self.env.repo} to {self.repo_path}")
 		os.makedirs(self.repo_path, exist_ok=True)
-		if os.path.exists(os.path.join(self.repo_path, ".git")):
-			logger.info(f"Repository already cloned at {self.repo_path}, fetching updates.")
-			repo = git.Repo(self.repo_path)
-			if repo.remotes.origin.url != self._get_auth_git_url(self.env.repo):
-				repo.remotes.origin.set_url(self._get_auth_git_url(self.env.repo))
-			result = repo.remotes.origin.fetch(prune=True)
-			if not result or any(fetch_info.flags & fetch_info.ERROR for fetch_info in result):
-				raise BaseException(f"Failed to fetch updates for {self.env.repo}")
-		else:
-			repo = git.Repo.init(self.repo_path)
-			repo.remotes.append(repo.create_remote(
-				'origin',
-				self._get_auth_git_url(self.env.repo)
-			))
-			if self.branchNamePrefix != "":
-				repo.config_writer().set_value('remote "origin"', "fetch",
-											   f"+refs/heads/{self.branchNamePrefix}/*:refs/remotes/origin/{self.branchNamePrefix}/*").release()
-			repo.remotes.origin.fetch(prune=True)
-			if not os.path.exists(os.path.join(self.repo_path, ".git")):
-				raise BaseException(f"Failed to clone repository {self.env.repo} to {self.repo_path}")
-
+		try:
+			if os.path.exists(os.path.join(self.repo_path, ".git")):
+				logger.info(f"Repository already cloned at {self.repo_path}, fetching updates.")
+				repo = git.Repo(self.repo_path)
+				if repo.remotes.origin.url != self._get_auth_git_url(self.env.repo):
+					repo.remotes.origin.set_url(self._get_auth_git_url(self.env.repo))
+				result = repo.remotes.origin.fetch(prune=True)
+				if not result or any(fetch_info.flags & fetch_info.ERROR for fetch_info in result):
+					raise BaseException(f"Failed to fetch updates for {self.env.repo}")
+			else:
+				repo = git.Repo.init(self.repo_path)
+				repo.remotes.append(repo.create_remote(
+					'origin',
+					self._get_auth_git_url(self.env.repo)
+				))
+				if self.branchNamePrefix != "":
+					repo.config_writer().set_value('remote "origin"', "fetch",
+												f"+refs/heads/{self.branchNamePrefix}/*:refs/remotes/origin/{self.branchNamePrefix}/*").release()
+				repo.remotes.origin.fetch(prune=True)
+				if not os.path.exists(os.path.join(self.repo_path, ".git")):
+					raise BaseException(f"Failed to clone repository {self.env.repo} to {self.repo_path}")
+		except BaseException as e:
+			logger.error(f"Error during git clone/fetch, removing directory {self.repo_path}")
+			os.rmdir(self.repo_path)
+			raise e
 		return self.repo_path
 
 	def get_branches(self) -> Dict[str, List[Any]]:

@@ -203,8 +203,7 @@ def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 def get_global_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 	global branches, branches_slaves
 	local_branches: Dict[str, Dict[str, List[Any]]] = get_local_branches_to_emit()
-	merge_result = merge_dicts(local_branches, branches_slaves)  # type: ignore[misc]
-	return merge_result
+	return merge_dicts(local_branches, branches_slaves)
 
 
 environment_update_event = threading.Event()
