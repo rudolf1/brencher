@@ -4,6 +4,7 @@ import os
 import tempfile
 from dataclasses import dataclass
 from typing import List, Tuple, Set, Dict, Any, Mapping
+import shutil
 
 import git
 from git.objects import Commit
@@ -60,7 +61,7 @@ class GitClone(AbstractStep[str]):
 					raise BaseException(f"Failed to clone repository {self.env.repo} to {self.repo_path}")
 		except BaseException as e:
 			logger.error(f"Error during git clone/fetch, removing directory {self.repo_path}: {str(e)}")
-			os.rmdir(self.repo_path)
+			shutil.rmtree(self.repo_path)
 			raise e
 		return self.repo_path
 
