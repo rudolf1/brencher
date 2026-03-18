@@ -165,8 +165,13 @@ def get_local_envs_to_emit() -> Dict[str, Tuple[Dict[str, Any], List[Dict[str, A
 					result = r.progress()
 
 				if isinstance(result, BaseException):
-					raise result
-				res.append({
+					stack = traceback.format_exception(type(result), result, result.__traceback__)
+					res.append({
+						"name": r.name,
+						"status": [str(result), stack],
+					})
+				else:
+					res.append({
 					"name": r.name,
 					"status": result,
 				})
