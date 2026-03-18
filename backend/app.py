@@ -321,13 +321,13 @@ class App:
 			import processing
 			def emit_envs() -> None:
 				try:
-					socketio.emit('environments', get_global_envs_to_emit(), namespace='/ws/environment')
-				except Exception as e:
-					logger.error(f"Error emitting environments: {str(e)}")
-				try:
 					socketio.emit('branches', get_global_branches_to_emit(), namespace='/ws/branches')
 				except Exception as e:
 					logger.error(f"Error emitting branches: {str(e)}")
+				try:
+					socketio.emit('environments', get_global_envs_to_emit(), namespace='/ws/environment')
+				except Exception as e:
+					logger.error(f"Error emitting environments: {str(e)}")
 
 			with state_lock:
 				logger.info(f"Processing")

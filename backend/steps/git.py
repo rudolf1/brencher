@@ -59,7 +59,7 @@ class GitClone(AbstractStep[str]):
 				if not os.path.exists(os.path.join(self.repo_path, ".git")):
 					raise BaseException(f"Failed to clone repository {self.env.repo} to {self.repo_path}")
 		except BaseException as e:
-			logger.error(f"Error during git clone/fetch, removing directory {self.repo_path}")
+			logger.error(f"Error during git clone/fetch, removing directory {self.repo_path}: {str(e)}")
 			os.rmdir(self.repo_path)
 			raise e
 		return self.repo_path
