@@ -163,6 +163,9 @@ def get_local_envs_to_emit() -> Dict[str, Tuple[Dict[str, Any], List[Dict[str, A
 					result = r._result
 				else:
 					result = r.progress()
+
+				if isinstance(result, BaseException):
+					raise result
 				res.append({
 					"name": r.name,
 					"status": result,

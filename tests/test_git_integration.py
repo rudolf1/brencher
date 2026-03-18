@@ -4,8 +4,10 @@ Integration tests for git.py classes: CheckoutMerged and GitUnmerge
 These tests run in a Docker-like isolated environment to avoid harming the host system.
 They simulate remote and local git repositories and test various merge scenarios.
 """
+import os
 from typing import Generator
 
+import git
 import pytest
 
 from steps.git import CheckoutAndMergeResult
@@ -342,6 +344,32 @@ class TestGitIntegration:
 
 		with pytest.raises(BaseException, match="Empty branches set"):
 			repo_helper.checkout_merged.progress()
+
+	def test_git_clone_recovers_from_corrupted_local_config(self, repo_helper: RemoteRepoHelper) -> None:
+		"""GitClone should delete and refetch when local .git/config is corrupted."""
+
+		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
+											"Initial commit")
+
+		cloned_path = repo_helper.git_clone.progress()
+		assert cloned_path == repo_helper.local_dir
+
+		# Corrupt local git config to simulate a broken local repository.
+		with open(os.path.join(repo_helper.local_dir, ".git", "config"), "w") as config_file:
+			config_file.write("grabadge")
+
+		commit2 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file2.txt", "content2",
+											"Second commit")
+
+		with pytest.raises(BaseException):
+			repo_helper.git_clone.progress()
+		recovered_path = repo_helper.git_clone.progress()
+		assert recovered_path == repo_helper.local_dir
+
+		local_repo = git.Repo(repo_helper.local_dir)
+		assert local_repo.remotes.origin.url == repo_helper.remote_dir, "Remote URL should be restored"
+		assert local_repo.commit("origin/master").hexsha == commit2.hexsha, "Repository should be re-fetched"
+		assert local_repo.commit("origin/master").hexsha != commit1.hexsha, "Old state should be replaced"
 
 
 if __name__ == "__main__":
