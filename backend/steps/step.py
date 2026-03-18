@@ -5,7 +5,7 @@ from enironment import AbstractStep
 T = TypeVar('T')
 
 
-class NotReadyException(Exception):
+class NotReadyException(BaseException):
 	def __init__(self, message: str):
 		super().__init__(message)
 
@@ -26,7 +26,7 @@ class CachingStep(AbstractStep[T], Generic[T]):
 				self._result = e
 
 		if isinstance(self._result, BaseException):
-			raise self._result
+			raise self._result from None
 		else:
 			return self._result
 
