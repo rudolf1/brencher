@@ -191,11 +191,15 @@ def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 	branches: Dict[str, Dict[str, List[Any]]] = {}
 	for k, env in environments.items():
 		branches[k] = {}
-		for step in env.pipeline:
-			if isinstance(step, GitClone):
-				branches[k] = {**step.get_branches()}
-			if isinstance(step, CachingStep) and isinstance(step.step, GitClone):
-				branches[k] = {**step.step.get_branches()}
+		try:
+			for step in env.pipeline:
+					if isinstance(step, GitClone):
+						branches[k] = {**step.get_branches()}
+					if isinstance(step, CachingStep) and isinstance(step.step, GitClone):
+						branches[k] = {**step.step.get_branches()}
+		except BaseException as e:
+			logger.error(f"Error fetching branches for environment {env.id}: {str(e)}")
+
 		logger.info(f"Fetched {env.id}: {len(branches[env.id])} branches")
 	return branches
 		# logger.info(f"Fetched {env.id}: {branches[env.id]}")
