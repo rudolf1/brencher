@@ -15,8 +15,10 @@ from flask import Flask, send_from_directory
 from flask.json.provider import DefaultJSONProvider
 from flask_socketio import SocketIO, emit
 
-from enironment import Environment, wrap_in_cached
+from enironment import AbstractStep, Environment, wrap_in_cached
 from steps.git import GitClone
+from steps.step import CachingStep
+from steps.step import CachingStep
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -62,7 +64,6 @@ FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
 # In-memory state
 environments: Dict[str, Environment] = {}
 environments_slaves: Dict[str, Environment] = {}
-branches: Dict[str, Dict[str, Any]] = {}
 branches_slaves: Dict[str, Dict[str, Any]] = {}
 state_lock = threading.Lock()
 
@@ -148,10 +149,10 @@ if slave_url:
 
 class BranchesNamespace(Namespace):
 	def on_connect(self, auth: Optional[Any] = None) -> None:
-		emit('branches', merge_dicts(branches, branches_slaves))
+		emit('branches', get_global_branches_to_emit())
 
 	def on_update(self, data: Any) -> None:
-		emit('branches', merge_dicts(branches, branches_slaves))
+		emit('branches', get_global_branches_to_emit())
 
 
 def get_local_envs_to_emit() -> Dict[str, Tuple[Dict[str, Any], List[Dict[str, Any]]]]:
@@ -188,6 +189,26 @@ def get_global_envs_to_emit() -> Any:
 					  namespace='/ws/errors')
 	return merge_result
 
+def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
+	global branches_slaves, environments
+	branches: Dict[str, Dict[str, List[Any]]] = {}
+	for k, env in environments.items():
+		branches[k] = {}
+		for step in env.pipeline:
+			if isinstance(step, GitClone):
+				branches[k] = {**step.get_branches()}
+			if isinstance(step, CachingStep) and isinstance(step.step, GitClone):
+				branches[k] = {**step.step.get_branches()}
+		logger.info(f"Fetched {env.id}: {len(branches[env.id])} branches")
+	return branches
+		# logger.info(f"Fetched {env.id}: {branches[env.id]}")
+
+def get_global_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
+	global branches, branches_slaves
+	local_branches: Dict[str, Dict[str, List[Any]]] = get_local_branches_to_emit()
+	merge_result = merge_dicts(local_branches, branches_slaves)  # type: ignore[misc]
+	return merge_result
+
 
 environment_update_event = threading.Event()
 
@@ -195,6 +216,11 @@ environment_update_event = threading.Event()
 @app.route('/state')
 def serve_state() -> Any:
 	return get_global_envs_to_emit()
+
+@app.route('/branches')
+def serve_branches() -> Any:
+	return get_global_branches_to_emit()
+
 
 
 class EnvironmentNamespace(Namespace):
@@ -293,23 +319,6 @@ class App:
 
 		environments = {id: wrap_in_cached(e) for id, e in environments.items()}
 
-	# Background thread to refresh branches every 5 minutes
-	def emit_fresh_branches(self) -> None:
-		global branches, branches_slaves, environments
-		for k, env in environments.items():
-			branches[k] = {}
-			for step in env.pipeline:
-				try:
-					if not isinstance(step, GitClone):
-						continue
-					branches[k] = {**step.get_branches()}
-					# logger.info(f"Delete check {env.branches} after {[x for x in env.branches if x[0] in branches[env.id].keys()]}")
-					env.branches = [x for x in env.branches if x[0] in branches[env.id].keys()]
-				except BaseException as e:
-					socketio.emit('error', {'message': e}, namespace='/ws/errors')
-			logger.info(f"Fetched {env.id}: {len(branches[env.id])} branches")
-			# logger.info(f"Fetched {env.id}: {branches[env.id]}")
-		socketio.emit('branches', merge_dicts(branches, branches_slaves), namespace='/ws/branches')
 
 	def processing_thread(self) -> None:
 		while True:
@@ -317,9 +326,12 @@ class App:
 			def emit_envs() -> None:
 				try:
 					socketio.emit('environments', get_global_envs_to_emit(), namespace='/ws/environment')
-					self.emit_fresh_branches()
 				except Exception as e:
 					logger.error(f"Error emitting environments: {str(e)}")
+				try:
+					socketio.emit('branches', get_global_branches_to_emit(), namespace='/ws/branches')
+				except Exception as e:
+					logger.error(f"Error emitting branches: {str(e)}")
 
 			with state_lock:
 				logger.info(f"Processing")
