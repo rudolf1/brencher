@@ -231,8 +231,9 @@ function renderJobs() {
         jobsList.innerHTML = '<p class="loading">No jobs found.</p>';
         return;
     }
-    jobsList.innerHTML = environmentsRaw.map(([envObj, jobsArr]) => {
+    jobsList.innerHTML = environmentsRaw.map((envObj) => {
         var linksHtml = ""
+        const jobsArr = envObj.pipeline || [];
         if (Array.isArray(jobsArr)) {
             linksHtml = jobsArr.flatMap(job => {
                 const userLinks = [];
@@ -269,7 +270,7 @@ function renderJobs() {
                 const key = `${envObj.id}::${job.name}`;
                 const storageKey = 'jobSpoiler:' + key;
                 const safeId = 'spoiler-' + encodeURIComponent(key).replace(/[^a-zA-Z0-9_-]/g, '_');
-                const isError = /error|exception/i.test(statusDisplay);
+                const isError = job.error;
                 const openByDefault = isError || (window._jobSpoilerState && window._jobSpoilerState[storageKey] === 'open');
 
                 return `
@@ -344,7 +345,7 @@ function setupSocketIO() {
         // data: { envId: { branchName: commits[] } }
         branches = Object.entries(data).flatMap(([envId, branchMap]) =>
             Object.entries(branchMap).map(([branchName, commitList]) => {
-                const envObj = (environmentsRaw.find(([e]) => e.id === envId) || [null])[0];
+                const envObj = (environmentsRaw.find((e) => e.id === envId) || [null])[0];
                 return { envId, envName: envObj ? (envObj.name || envObj.id) : envId, branch: branchName, commits: commitList };
             })
         );
@@ -357,7 +358,7 @@ function setupSocketIO() {
         environmentsRaw = Object.values(payload);
 
         // Sync selections and deployed commits per environment
-        environmentsRaw.forEach(([envObj, jobsArr]) => {
+        environmentsRaw.forEach((envObj) => {
             if (!envObj) return;
             const envId = envObj.id || envObj.name || 'unknown';
             // Branch selections
@@ -372,7 +373,7 @@ function setupSocketIO() {
                 selectedBranchesByEnv[envId] = [];
                 serverSelectedBranchesByEnv[envId] = [];
             }
-
+            const jobsArr = envObj.pipeline || []
             // Deployed commits from GitUnmerge job
             const gitUnmergeJob = Array.isArray(jobsArr) ? jobsArr.find(j => j.name === 'GitUnmerge') : null;
             deployedCommitsByEnv[envId] = {};
@@ -389,8 +390,8 @@ function setupSocketIO() {
 
         // Rebuild branches list environment names for rows already present
         branches = branches.map(b => {
-            const envEntry = environmentsRaw.find(([e]) => (e.id || e.name) === b.envId);
-            return { ...b, envName: envEntry ? (envEntry[0].name || envEntry[0].id) : b.envName };
+            const envEntry = environmentsRaw.find((e) => (e.id || e.name) === b.envId);
+            return { ...b, envName: envEntry ? (envEntry.name || envEntry.id) : b.envName };
         });
 
         filterBranches();

@@ -1,49 +1,35 @@
-from abc import ABC, abstractmethod
-from typing import Union
 from typing import TypeVar, Generic
-from enironment import Environment
-import logging
 
-logger = logging.getLogger(__name__)
-
-
-class NotReadyException(Exception):
-    def __init__(self, message: str):
-        super().__init__(message)
-
+from enironment import AbstractStep
 
 T = TypeVar('T')
 
 
-class AbstractStep(ABC, Generic[T]):
+class NotReadyException(BaseException):
+	def __init__(self, message: str):
+		super().__init__(message)
 
-    env: Environment
-    name: str
-    _result: T | BaseException | None
 
-    def __init__(self, env: Environment, n: str | None = None) -> None:
-        if n is None:
-            n = self.__class__.__name__
-        self.name = n
-        self._result = NotReadyException(f"No result yet for {self.name}")
-        self.env = env
+class CachingStep(AbstractStep[T], Generic[T]):
+	_result: T | BaseException
+	reset_cache: bool = False
 
-    @property
-    def result_obj(self) -> Union[T, BaseException | None]:
-        return self._result
+	def __init__(self, step: AbstractStep[T]) -> None:
+		super().__init__(n=step.name)
+		self.step = step
+		self._result = NotReadyException(f"No result yet for {self.step.name}")
 
-    @property
-    def result(self) -> T:
-        if self._result is None or isinstance(self._result, NotReadyException):
-            try:
-                self._result = self.progress()
-            except BaseException as e:
-                self._result = e
+	def progress(self) -> T:
+		if self.reset_cache or self._result is None or isinstance(self._result, BaseException):
+			try:
+				self._result = self.step.progress()
+			except BaseException as e:
+				self._result = e
+		self.reset_cache = False
+		if isinstance(self._result, BaseException):
+			raise self._result from None
+		else:
+			return self._result
 
-        if isinstance(self._result, BaseException):
-            raise self._result
-        return self._result
-
-    @abstractmethod
-    def progress(self) -> T:
-        pass
+	def reset(self) -> None:
+		self.reset_cache = True
