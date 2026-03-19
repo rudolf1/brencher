@@ -12,6 +12,7 @@ class NotReadyException(BaseException):
 
 class CachingStep(AbstractStep[T], Generic[T]):
 	_result: T | BaseException
+	reset_cache: bool = False
 
 	def __init__(self, step: AbstractStep[T]) -> None:
 		super().__init__(n=step.name)
@@ -19,16 +20,16 @@ class CachingStep(AbstractStep[T], Generic[T]):
 		self._result = NotReadyException(f"No result yet for {self.step.name}")
 
 	def progress(self) -> T:
-		if self._result is None or isinstance(self._result, BaseException):
+		if self.reset_cache or self._result is None or isinstance(self._result, BaseException):
 			try:
 				self._result = self.step.progress()
 			except BaseException as e:
 				self._result = e
-
+		self.reset_cache = False
 		if isinstance(self._result, BaseException):
 			raise self._result from None
 		else:
 			return self._result
 
 	def reset(self) -> None:
-		self._result = NotReadyException(f"No result yet for {self.step.name}")
+		self.reset_cache = True

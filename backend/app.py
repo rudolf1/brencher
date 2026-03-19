@@ -16,8 +16,8 @@ from flask.json.provider import DefaultJSONProvider
 from flask_socketio import SocketIO, emit
 
 from enironment import AbstractStep, Environment, wrap_in_cached
+from processing import reset_caches
 from steps.git import GitClone
-from steps.step import CachingStep
 from steps.step import CachingStep
 
 # Configure logging
@@ -241,11 +241,13 @@ class EnvironmentNamespace(Namespace):
 		global environments, remote_sio
 
 		logger.info(f"Received environment update: {data}")
-
-		for env in environments.values():
-			if env.id == data.get('id'):
-				env.branches = data.get('branches', env.branches)
-				logger.info(f"Updated environment {env.id} branches to {env.branches}")
+		if data.get('id') == '':
+			reset_caches(list(environments.values()))
+		else:
+			for env in environments.values():
+				if env.id == data.get('id'):
+					env.branches = data.get('branches', env.branches)
+					logger.info(f"Updated environment {env.id} branches to {env.branches}")
 
 		environment_update_event.set()
 

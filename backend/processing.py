@@ -9,7 +9,13 @@ from steps.step import CachingStep
 logger = logging.getLogger(__name__)
 
 _last_reset_time: float = 0
-RESET_INTERVAL = 0 * 60  # 3 minutes in seconds
+RESET_INTERVAL = 3 * 60  # 3 minutes in seconds
+
+def reset_caches(environemnts: List[Environment]) -> None:
+	for env in environemnts:
+		for step in env.pipeline:
+			if isinstance(step, CachingStep):
+				step.reset()
 
 def process_all_jobs(
 		environemnts: List[Environment],
@@ -18,11 +24,9 @@ def process_all_jobs(
 	global _last_reset_time
 	current_time = time.time()
 	if current_time - _last_reset_time >= RESET_INTERVAL:
-		for env in environemnts:
-			for step in env.pipeline:
-				if isinstance(step, CachingStep):
-					step.reset()
+		reset_caches(environemnts)
 		_last_reset_time = current_time
+
 	has_error = False
 	for env in environemnts:
 		for step in env.pipeline:
