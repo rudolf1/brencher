@@ -227,7 +227,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
 				else:
 					ok.append(l)
 			else:
-				diffs.append(l)
+				diffs.append({"Error, redeployiong"})
 		if len(diffs) == 0:
 			logger.info(f"No diff found, stack is already up-to-date.")
 			return ok
