@@ -227,7 +227,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
 				else:
 					ok.append(l)
 			else:
-				raise BaseException(f"Invalid stackChecker result type {current_services}")
+				diffs.append(l)
 		if len(diffs) == 0:
 			logger.info(f"No diff found, stack is already up-to-date.")
 			return ok

@@ -18,9 +18,13 @@ Generate docker compose file to deploy to docker swarm.
 
 python ./backend/app.py brencher_local1:docker_swarm_check_by_version noweb
 
-# Local start
+# Prod recovery 
 
-python ./backend/app.py brencher_local1 noweb
+uv venv --python 3.12.3 .venv
+
+uv pip install -r requirements.txt
+
+python ./backend/app.py brencher:docker_swarm_check_by_version noweb
 
 # Update docker secret
 
