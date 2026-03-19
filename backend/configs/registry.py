@@ -27,8 +27,8 @@ deployDocker = DockerSwarmDeploy(
 unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
 checkPing = UrlCheck(
-	url="https://registry.rudolf.keenetic.link/TODO",
-	expected={"res": "pong"},
+	url="https://registry.rudolf.keenetic.link/v2/",
+	expected={},
 )
 logUrls = SimpleLog(message={
 	"userLinks": {

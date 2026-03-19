@@ -125,6 +125,8 @@ function renderBranches() {
     if (JSON.stringify(filteredBranches) === JSON.stringify(renderedBranches)) {
         return
     }
+    checkForPendingChanges();
+
     const branchesToShow = filteredBranches.length > 0 || branchFilter.value.trim() ? filteredBranches : branches;
     if (!branchesToShow.length) {
         branchesList.innerHTML = '<p class="loading">No branches found.</p>';
@@ -401,7 +403,6 @@ function setupSocketIO() {
 
         filterBranches();
         renderJobs();
-        checkForPendingChanges();
         showStatus('Environments updated.');
     });
 
