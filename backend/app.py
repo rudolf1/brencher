@@ -204,7 +204,7 @@ def _schedule_async(coro: Any) -> None:
 async def broadcast(event: str, data: Any) -> None:
 	"""Broadcast a message to all connected WebSocket clients."""
 	disconnected = set()
-	message = custom_json_dumps({"event": event, "data": data})
+	message = custom_json_dumps({event: data})
 
 	for websocket in list(ws_connections):
 		try:
@@ -239,21 +239,18 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 	try:
 		# Send initial state on connect
 		await websocket.send_text(custom_json_dumps({
-			"event": "branches",
-			"data": get_global_branches_to_emit(),
+			"branches": get_global_branches_to_emit(),
 		}))
 		await websocket.send_text(custom_json_dumps({
-			"event": "environments",
-			"data": get_global_envs_to_emit(),
+			"environments": get_global_envs_to_emit(),
 		}))
 
 		while True:
 			data = await websocket.receive_text()
 			message = json.loads(data)
-			event = message.get("event")
 
-			if event == "update":
-				update_data = message.get("data", {})
+			if "update" in message:
+				update_data = message.get("update") or {}
 				logger.info(f"Received environment update: {update_data}")
 
 				if update_data.get('id') == '':
@@ -267,7 +264,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 				environment_update_event.set()
 
 				if slave_ws_task is not None:
-					await slave_send_queue.put({"event": "update", "data": update_data})
+					await slave_send_queue.put({"update": update_data})
 
 				await broadcast_environments(get_global_envs_to_emit())
 
@@ -299,15 +296,14 @@ async def connect_to_slave() -> None:
 				async def handle_messages() -> None:
 					async for msg in ws:
 						parsed = json.loads(msg)
-						event = parsed.get("event")
-						if event == "branches":
-							branches_slaves = parsed.get("data", {})
+						if "branches" in parsed:
+							branches_slaves = parsed["branches"]
 							await broadcast_branches(get_global_branches_to_emit())
-						elif event == "environments":
-							environments_slaves = parsed.get("data", {})
+						elif "environments" in parsed:
+							environments_slaves = parsed["environments"]
 							await broadcast_environments(get_global_envs_to_emit())
-						elif event == "error":
-							await broadcast_error(parsed.get("data"))
+						elif "error" in parsed:
+							await broadcast_error(parsed["error"])
 
 				async def handle_sends() -> None:
 					while True:

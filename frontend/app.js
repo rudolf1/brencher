@@ -308,7 +308,7 @@ toggleJobSpoiler = function(key, safeId) {
 };
 refreshBranchesBtn.onclick = () => {
     if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ event: 'update', data: { id: "" } }));
+        ws.send(JSON.stringify({ update: { id: "" } }));
     }
     showStatus('Refreshing...');
 };
@@ -349,8 +349,8 @@ function setupWebSockets() {
     ws.onmessage = (event) => {
         try {
             const message = JSON.parse(event.data);
-            if (message.event === 'branches') {
-                const data = message.data;
+            if ('branches' in message) {
+                const data = message.branches;
                 // data: { envId: { branchName: commits[] } }
                 branches = Object.entries(data).flatMap(([envId, branchMap]) =>
                     Object.entries(branchMap).map(([branchName, commitList]) => {
@@ -360,8 +360,8 @@ function setupWebSockets() {
                 );
                 filterBranches();
                 showStatus('Branches updated.');
-            } else if (message.event === 'environments') {
-                const data = message.data;
+            } else if ('environments' in message) {
+                const data = message.environments;
                 payload = data || {};
                 environmentsRaw = Object.values(payload);
 
@@ -406,8 +406,8 @@ function setupWebSockets() {
                 renderJobs();
                 checkForPendingChanges();
                 showStatus('Environments updated.');
-            } else if (message.event === 'error') {
-                showStatus(message.data.message || 'Unknown error', true);
+            } else if ('error' in message) {
+                showStatus(message.error.message || 'Unknown error', true);
             }
         } catch (e) {
             console.error('Error processing WebSocket message:', e);
@@ -429,7 +429,7 @@ function updateEnvironment() {
         const serverSel = [...(serverSelectedBranchesByEnv[envId] || [])].sort();
         if (JSON.stringify(localSel) !== JSON.stringify(serverSel)) {
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ event: 'update', data: { id: envId, branches: selectedBranchesByEnv[envId] } }));
+                ws.send(JSON.stringify({ update: { id: envId, branches: selectedBranchesByEnv[envId] } }));
             }
             // Optimistically sync server state
             serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
