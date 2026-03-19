@@ -311,7 +311,9 @@ toggleJobSpoiler = function(key, safeId) {
     }
 };
 refreshBranchesBtn.onclick = () => {
-    wsEnv.emit('update', { id: "" });
+    if (wsEnv && wsEnv.readyState === WebSocket.OPEN) {
+        wsEnv.send(JSON.stringify({ event: 'update', data: { id: "" } }));
+    }
     showStatus('Refreshing...');
 };
 
@@ -335,74 +337,134 @@ applyChangesBtn.onclick = () => {
     updateEnvironment();
 };
 
-// Socket.IO setup
-function setupSocketIO() {
-    wsBranches = io(WS_BRANCHES);
-    wsEnv = io(WS_ENVIRONMENT);
-    wsErr = io(WS_ERRORS);
-
-    wsBranches.on('branches', data => {
-        // data: { envId: { branchName: commits[] } }
-        branches = Object.entries(data).flatMap(([envId, branchMap]) =>
-            Object.entries(branchMap).map(([branchName, commitList]) => {
-                const envObj = (environmentsRaw.find((e) => e.id === envId) || [null])[0];
-                return { envId, envName: envObj ? (envObj.name || envObj.id) : envId, branch: branchName, commits: commitList };
-            })
-        );
-        filterBranches();
-        showStatus('Branches updated.');
+// Native WebSocket setup (FastAPI compatible)
+function setupWebSockets() {
+    // Close any existing connections before reconnecting
+    [wsBranches, wsEnv, wsErr].forEach(ws => {
+        if (ws && ws.readyState !== WebSocket.CLOSED) {
+            ws.onclose = null; // Prevent recursive reconnect
+            ws.close();
+        }
     });
 
-    wsEnv.on('environments', data => {
-        payload = data || {};
-        environmentsRaw = Object.values(payload);
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
 
-        // Sync selections and deployed commits per environment
-        environmentsRaw.forEach((envObj) => {
-            if (!envObj) return;
-            const envId = envObj.id || envObj.name || 'unknown';
-            // Branch selections
-            if (Array.isArray(envObj.branches) && envObj.branches.length > 0) {
-                if (Array.isArray(envObj.branches[0])) {
-                    selectedBranchesByEnv[envId] = [...envObj.branches];
-                } else {
-                    selectedBranchesByEnv[envId] = envObj.branches.map(b => [b, 'HEAD']);
-                }
-                serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
-            } else if (!selectedBranchesByEnv[envId]) {
-                selectedBranchesByEnv[envId] = [];
-                serverSelectedBranchesByEnv[envId] = [];
+    // Setup branches WebSocket
+    wsBranches = new WebSocket(`${protocol}//${host}${WS_BRANCHES}`);
+    wsBranches.onopen = () => console.log('Branches WebSocket connected');
+    wsBranches.onmessage = (event) => {
+        try {
+            const message = JSON.parse(event.data);
+            if (message.event === 'branches') {
+                const data = message.data;
+                // data: { envId: { branchName: commits[] } }
+                branches = Object.entries(data).flatMap(([envId, branchMap]) =>
+                    Object.entries(branchMap).map(([branchName, commitList]) => {
+                        const envObj = (environmentsRaw.find((e) => e.id === envId) || [null])[0];
+                        return { envId, envName: envObj ? (envObj.name || envObj.id) : envId, branch: branchName, commits: commitList };
+                    })
+                );
+                filterBranches();
+                showStatus('Branches updated.');
             }
-            const jobsArr = envObj.pipeline || []
-            // Deployed commits from GitUnmerge job
-            const gitUnmergeJob = Array.isArray(jobsArr) ? jobsArr.find(j => j.name === 'GitUnmerge') : null;
-            deployedCommitsByEnv[envId] = {};
-            if (gitUnmergeJob && Array.isArray(gitUnmergeJob.status)) {
-                gitUnmergeJob.status.forEach(([commitHash, branchNames]) => {
-                    if (Array.isArray(branchNames)) {
-                        branchNames.forEach(bName => {
-                            deployedCommitsByEnv[envId][bName] = commitHash.substring(0, 8);
+        } catch (e) {
+            console.error('Error processing branches message:', e);
+        }
+    };
+    wsBranches.onclose = () => {
+        showStatus('Disconnected from branches websocket.', true);
+        setTimeout(() => setupWebSockets(), 5000);
+    };
+    wsBranches.onerror = (error) => {
+        console.error('Branches WebSocket error:', error);
+    };
+
+    // Setup environment WebSocket
+    wsEnv = new WebSocket(`${protocol}//${host}${WS_ENVIRONMENT}`);
+    wsEnv.onopen = () => console.log('Environment WebSocket connected');
+    wsEnv.onmessage = (event) => {
+        try {
+            const message = JSON.parse(event.data);
+            if (message.event === 'environments') {
+                const data = message.data;
+                payload = data || {};
+                environmentsRaw = Object.values(payload);
+
+                // Sync selections and deployed commits per environment
+                environmentsRaw.forEach((envObj) => {
+                    if (!envObj) return;
+                    const envId = envObj.id || envObj.name || 'unknown';
+                    // Branch selections
+                    if (Array.isArray(envObj.branches) && envObj.branches.length > 0) {
+                        if (Array.isArray(envObj.branches[0])) {
+                            selectedBranchesByEnv[envId] = [...envObj.branches];
+                        } else {
+                            selectedBranchesByEnv[envId] = envObj.branches.map(b => [b, 'HEAD']);
+                        }
+                        serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
+                    } else if (!selectedBranchesByEnv[envId]) {
+                        selectedBranchesByEnv[envId] = [];
+                        serverSelectedBranchesByEnv[envId] = [];
+                    }
+                    const jobsArr = envObj.pipeline || []
+                    // Deployed commits from GitUnmerge job
+                    const gitUnmergeJob = Array.isArray(jobsArr) ? jobsArr.find(j => j.name === 'GitUnmerge') : null;
+                    deployedCommitsByEnv[envId] = {};
+                    if (gitUnmergeJob && Array.isArray(gitUnmergeJob.status)) {
+                        gitUnmergeJob.status.forEach(([commitHash, branchNames]) => {
+                            if (Array.isArray(branchNames)) {
+                                branchNames.forEach(bName => {
+                                    deployedCommitsByEnv[envId][bName] = commitHash.substring(0, 8);
+                                });
+                            }
                         });
                     }
                 });
+
+                // Rebuild branches list environment names for rows already present
+                branches = branches.map(b => {
+                    const envEntry = environmentsRaw.find((e) => (e.id || e.name) === b.envId);
+                    return { ...b, envName: envEntry ? (envEntry.name || envEntry.id) : b.envName };
+                });
+
+                filterBranches();
+                renderJobs();
+                checkForPendingChanges();
+                showStatus('Environments updated.');
             }
-        });
+        } catch (e) {
+            console.error('Error processing environment message:', e);
+        }
+    };
+    wsEnv.onclose = () => {
+        showStatus('Disconnected from environment websocket.', true);
+        setTimeout(() => setupWebSockets(), 5000);
+    };
+    wsEnv.onerror = (error) => {
+        console.error('Environment WebSocket error:', error);
+    };
 
-        // Rebuild branches list environment names for rows already present
-        branches = branches.map(b => {
-            const envEntry = environmentsRaw.find((e) => (e.id || e.name) === b.envId);
-            return { ...b, envName: envEntry ? (envEntry.name || envEntry.id) : b.envName };
-        });
-
-        filterBranches();
-        renderJobs();
-        checkForPendingChanges();
-        showStatus('Environments updated.');
-    });
-
-    wsEnv.on('disconnect', () => showStatus('Disconnected from environment websocket.', true));
-    wsBranches.on('disconnect', () => showStatus('Disconnected from branches websocket.', true));
-    wsErr.on('error', data => showStatus(data.message || 'Unknown error', true));
+    // Setup errors WebSocket
+    wsErr = new WebSocket(`${protocol}//${host}${WS_ERRORS}`);
+    wsErr.onopen = () => console.log('Errors WebSocket connected');
+    wsErr.onmessage = (event) => {
+        try {
+            const message = JSON.parse(event.data);
+            if (message.event === 'error') {
+                showStatus(message.data.message || 'Unknown error', true);
+            }
+        } catch (e) {
+            console.error('Error processing error message:', e);
+        }
+    };
+    wsErr.onclose = () => {
+        console.log('Errors WebSocket closed');
+        setTimeout(() => setupWebSockets(), 5000);
+    };
+    wsErr.onerror = (error) => {
+        console.error('Errors WebSocket error:', error);
+    };
 }
 
 function updateEnvironment() {
@@ -411,7 +473,9 @@ function updateEnvironment() {
         const localSel = [...(selectedBranchesByEnv[envId] || [])].sort();
         const serverSel = [...(serverSelectedBranchesByEnv[envId] || [])].sort();
         if (JSON.stringify(localSel) !== JSON.stringify(serverSel)) {
-            wsEnv.emit('update', { id: envId, branches: selectedBranchesByEnv[envId] });
+            if (wsEnv && wsEnv.readyState === WebSocket.OPEN) {
+                wsEnv.send(JSON.stringify({ event: 'update', data: { id: envId, branches: selectedBranchesByEnv[envId] } }));
+            }
             // Optimistically sync server state
             serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
             branchFilter.value = '';
@@ -422,7 +486,7 @@ function updateEnvironment() {
 }
 
 // Initial load
-setupSocketIO();
+setupWebSockets();
 showStatus('Loading branches...');
 renderBranches();
 renderJobs();

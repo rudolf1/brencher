@@ -1,19 +1,19 @@
+import asyncio
 import json
 import logging
 import os
+import signal
+import sys
 import threading
-import time
 import traceback
-import types
 from dataclasses import asdict, replace
-from typing import List, Dict, Any, Optional, Tuple
-from typing import TypeVar
+from typing import Any, Dict, List, Optional, Set, Tuple, TypeVar
 
-import socketio as socketio_client
+import websockets
 from dotenv import load_dotenv
-from flask import Flask, send_from_directory
-from flask.json.provider import DefaultJSONProvider
-from flask_socketio import SocketIO, emit
+from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from enironment import AbstractStep, Environment, wrap_in_cached
 from processing import reset_caches
@@ -22,7 +22,6 @@ from steps.step import CachingStep
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logging.getLogger('werkzeug').setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
@@ -42,44 +41,70 @@ class DataclassJSONEncoder(json.JSONEncoder):
 			return str(o)
 
 
-custom_json = types.SimpleNamespace()
-custom_json.dumps = lambda obj, **kwargs: json.dumps(obj, cls=DataclassJSONEncoder, **kwargs)
-custom_json.loads = json.loads
+def custom_json_dumps(obj: Any) -> str:
+	return json.dumps(obj, cls=DataclassJSONEncoder)
 
 
-class DataclassJSONProvider(DefaultJSONProvider):
-	def dumps(self, obj: Any, **kwargs: Any) -> str:
-		return json.dumps(obj, cls=DataclassJSONEncoder, **kwargs)
+app = FastAPI()
 
-	def loads(self, s: str | bytes, **kwargs: Any) -> Any:
-		return json.loads(s, **kwargs)
-
-
-app = Flask(__name__, static_folder='frontend')
-app.json = DataclassJSONProvider(app)
-socketio = SocketIO(app, cors_allowed_origins="*", json=custom_json)
+app.add_middleware(
+	CORSMiddleware,
+	allow_origins=["*"],
+	allow_credentials=True,
+	allow_methods=["*"],
+	allow_headers=["*"],
+)
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
 
 # In-memory state
 environments: Dict[str, Environment] = {}
-environments_slaves: Dict[str, Environment] = {}
+environments_slaves: Dict[str, Any] = {}
 branches_slaves: Dict[str, Dict[str, Any]] = {}
 state_lock = threading.Lock()
 
+# WebSocket connection managers
+branches_connections: Set[WebSocket] = set()
+environment_connections: Set[WebSocket] = set()
+error_connections: Set[WebSocket] = set()
 
-@app.route('/')
-def serve_index() -> Any:
-	return send_from_directory(FRONTEND_DIR, 'index.html')
+# Event loop reference for thread-safe async calls
+_event_loop: Optional[asyncio.AbstractEventLoop] = None
+
+# Slave connection state
+slave_ws_task: Optional[asyncio.Task[None]] = None
+slave_send_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+slave_url = os.getenv('SLAVE_BRENCHER')
+
+environment_update_event = threading.Event()
 
 
-@app.route('/<path:path>')
-def serve_static(path: str) -> Any:
-	return send_from_directory(FRONTEND_DIR, path)
+# --- Static File Serving ---
+
+@app.get("/")
+async def serve_index() -> FileResponse:
+	return FileResponse(os.path.join(FRONTEND_DIR, 'index.html'))
 
 
-# --- WebSocket Endpoints ---
-from flask_socketio import Namespace
+@app.get("/state")
+async def serve_state() -> Response:
+	return Response(content=custom_json_dumps(get_global_envs_to_emit()), media_type="application/json")
+
+
+@app.get("/branches")
+async def serve_branches_route() -> Response:
+	return Response(content=custom_json_dumps(get_global_branches_to_emit()), media_type="application/json")
+
+
+@app.get("/{path:path}")
+async def serve_static(path: str) -> FileResponse:
+	file_path = os.path.join(FRONTEND_DIR, path)
+	if os.path.exists(file_path) and os.path.isfile(file_path):
+		return FileResponse(file_path)
+	return FileResponse(os.path.join(FRONTEND_DIR, 'index.html'))
+
+
+# --- Utility Functions ---
 
 T = TypeVar('T')
 
@@ -98,60 +123,6 @@ def merge_dicts(a: Dict[str, T], b: Dict[str, T]) -> Dict[str, T]:
 		else:
 			result[k] = b[k]
 	return result
-
-
-slave_url = os.getenv('SLAVE_BRENCHER')
-remote_sio = None
-if slave_url:
-	logger.info(f"SLAVE_BRENCHER set, will connect to master at {slave_url}")
-	remote_sio = socketio_client.Client(logger=False, engineio_logger=False)
-
-
-	# Handlers for events from master -> re-emit locally (marked so we don't loop)
-	@remote_sio.on('branches', namespace='/ws/branches')
-	def _remote_branches(data: Any) -> None:
-		global branches_slaves
-		branches_slaves = data
-		try:
-			socketio.emit('branches', get_global_branches_to_emit(), namespace='/ws/branches')
-		except Exception as e:
-			logger.error(f"Error forwarding remote branches locally: {e}")
-
-
-	@remote_sio.on('environments', namespace='/ws/environment')
-	def _remote_environments(data: Any) -> None:
-		global environments_slaves
-		environments_slaves = data
-		try:
-			socketio.emit('environments', get_global_envs_to_emit(), namespace='/ws/environment')
-		except Exception as e:
-			logger.error(f"Error forwarding remote environments locally: {e}")
-
-
-	@remote_sio.on('error', namespace='/ws/errors')
-	def _remote_error(data: Any) -> None:
-		try:
-			socketio.emit('error', data, namespace='/ws/errors')
-		except Exception as e:
-			logger.error(f"Error forwarding remote errors locally: {e}")
-
-
-	@remote_sio.event
-	def connect() -> None:
-		logger.info("Connected to master brencher (SLAVE mode).")
-
-
-	@remote_sio.event
-	def disconnect() -> None:
-		logger.info("Disconnected from master brencher (SLAVE mode).")
-
-
-class BranchesNamespace(Namespace):
-	def on_connect(self, auth: Optional[Any] = None) -> None:
-		emit('branches', get_global_branches_to_emit())
-
-	def on_update(self, data: Any) -> None:
-		emit('branches', get_global_branches_to_emit())
 
 
 def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
@@ -174,9 +145,9 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 					})
 				else:
 					pipeline_state.append({
-					"name": r.name,
-					"status": result,
-				})
+						"name": r.name,
+						"status": result,
+					})
 			except BaseException as e:
 				stack = traceback.format_exception(type(e), e, e.__traceback__)
 				pipeline_state.append({
@@ -192,14 +163,12 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 def get_global_envs_to_emit() -> Any:
 	global environments, environments_slaves
 	local_envs = get_local_envs_to_emit()
-	merge_result = merge_dicts(local_envs, environments_slaves)  # type: ignore[misc]
-	# logger.info(f"Local keys: {local_envs.keys()}")
-	# logger.info(f"Slave keys: {environments_slaves.keys()}")
+	merge_result = merge_dicts(local_envs, environments_slaves)
 	common_keys = set(local_envs.keys()) & set(environments_slaves.keys())
 	if len(common_keys) > 0:
-		socketio.emit('error', {'message': f"Conflict: both master and slave have environment with id {common_keys}"},
-					  namespace='/ws/errors')
+		_schedule_async(broadcast_error({'message': f"Conflict: both master and slave have environment with id {common_keys}"}))
 	return merge_result
+
 
 def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 	global environments
@@ -217,66 +186,200 @@ def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 
 	return branches
 
+
 def get_global_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 	global branches_slaves
 	local_branches: Dict[str, Dict[str, List[Any]]] = get_local_branches_to_emit()
 	return merge_dicts(local_branches, branches_slaves)
 
 
-environment_update_event = threading.Event()
+# --- Async Helper for Calling from Sync Threads ---
+
+def _schedule_async(coro: Any) -> None:
+	"""Schedule a coroutine from a sync thread using the saved event loop."""
+	if _event_loop is not None and _event_loop.is_running():
+		asyncio.run_coroutine_threadsafe(coro, _event_loop)
 
 
-@app.route('/state')
-def serve_state() -> Any:
-	return get_global_envs_to_emit()
+# --- WebSocket Broadcasting Functions ---
 
-@app.route('/branches')
-def serve_branches() -> Any:
-	return get_global_branches_to_emit()
+async def broadcast_to_connections(connections: Set[WebSocket], event: str, data: Any) -> None:
+	"""Broadcast a message to all connected WebSocket clients."""
+	disconnected = set()
+	message = custom_json_dumps({"event": event, "data": data})
 
+	for websocket in list(connections):
+		try:
+			await websocket.send_text(message)
+		except Exception as e:
+			logger.error(f"Error sending to websocket: {e}")
+			disconnected.add(websocket)
 
-
-class EnvironmentNamespace(Namespace):
-
-	def on_connect(self, auth: Optional[Any] = None) -> None:
-		emit('environments', get_global_envs_to_emit())
-
-	def on_update(self, data: Dict[str, Any]) -> None:
-		global environments, remote_sio
-
-		logger.info(f"Received environment update: {data}")
-		if data.get('id') == '':
-			reset_caches(list(environments.values()))
-		else:
-			for env in environments.values():
-				if env.id == data.get('id'):
-					env.branches = data.get('branches', env.branches)
-					logger.info(f"Updated environment {env.id} branches to {env.branches}")
-
-		environment_update_event.set()
-
-		if remote_sio and remote_sio is not None and remote_sio.connected:
-			remote_sio.emit('update', data, namespace='/ws/environment')
-			logger.info(f"Updated slave")
-
-		emit('environments', get_global_envs_to_emit(), namespace='/ws/environment')
+	for ws in disconnected:
+		connections.discard(ws)
 
 
-class ErrorsNamespace(Namespace):
-	def on_connect(self, auth: Optional[Any] = None) -> None:
-		pass
-
-	def on_error(self, data: Any) -> None:
-		emit('error', data)
+async def broadcast_branches(data: Any) -> None:
+	await broadcast_to_connections(branches_connections, "branches", data)
 
 
-socketio.on_namespace(BranchesNamespace('/ws/branches'))
-socketio.on_namespace(EnvironmentNamespace('/ws/environment'))
-socketio.on_namespace(ErrorsNamespace('/ws/errors'))
+async def broadcast_environments(data: Any) -> None:
+	await broadcast_to_connections(environment_connections, "environments", data)
 
 
-def sigchld_handler(signum, frame):  # type: ignore[no-untyped-def]
-	"""Reap zombie processes"""
+async def broadcast_error(data: Any) -> None:
+	await broadcast_to_connections(error_connections, "error", data)
+
+
+# --- WebSocket Endpoints ---
+
+@app.websocket("/ws/branches")
+async def websocket_branches(websocket: WebSocket) -> None:
+	await websocket.accept()
+	branches_connections.add(websocket)
+
+	try:
+		# Send initial data on connect
+		await websocket.send_text(custom_json_dumps({
+			"event": "branches",
+			"data": get_global_branches_to_emit(),
+		}))
+
+		while True:
+			data = await websocket.receive_text()
+			message = json.loads(data)
+			if message.get("event") == "update":
+				await broadcast_branches(get_global_branches_to_emit())
+	except WebSocketDisconnect:
+		branches_connections.discard(websocket)
+	except Exception as e:
+		logger.error(f"WebSocket error in /ws/branches: {e}")
+		branches_connections.discard(websocket)
+
+
+@app.websocket("/ws/environment")
+async def websocket_environment(websocket: WebSocket) -> None:
+	await websocket.accept()
+	environment_connections.add(websocket)
+
+	try:
+		# Send initial data on connect
+		await websocket.send_text(custom_json_dumps({
+			"event": "environments",
+			"data": get_global_envs_to_emit(),
+		}))
+
+		while True:
+			data = await websocket.receive_text()
+			message = json.loads(data)
+			if message.get("event") == "update":
+				update_data = message.get("data", {})
+
+				logger.info(f"Received environment update: {update_data}")
+				if update_data.get('id') == '':
+					reset_caches(list(environments.values()))
+				else:
+					for env in environments.values():
+						if env.id == update_data.get('id'):
+							env.branches = update_data.get('branches', env.branches)
+							logger.info(f"Updated environment {env.id} branches to {env.branches}")
+
+				environment_update_event.set()
+
+				if slave_ws_task is not None:
+					await slave_send_queue.put({"event": "update", "data": update_data})
+
+				await broadcast_environments(get_global_envs_to_emit())
+	except WebSocketDisconnect:
+		environment_connections.discard(websocket)
+	except Exception as e:
+		logger.error(f"WebSocket error in /ws/environment: {e}")
+		environment_connections.discard(websocket)
+
+
+@app.websocket("/ws/errors")
+async def websocket_errors(websocket: WebSocket) -> None:
+	await websocket.accept()
+	error_connections.add(websocket)
+
+	try:
+		while True:
+			data = await websocket.receive_text()
+			message = json.loads(data)
+			if message.get("event") == "error":
+				await broadcast_error(message.get("data"))
+	except WebSocketDisconnect:
+		error_connections.discard(websocket)
+	except Exception as e:
+		logger.error(f"WebSocket error in /ws/errors: {e}")
+		error_connections.discard(websocket)
+
+
+# --- Slave Connection ---
+
+async def connect_to_slave() -> None:
+	"""Connect to a slave brencher instance via native WebSockets."""
+	global branches_slaves, environments_slaves
+
+	if not slave_url:
+		return
+
+	logger.info(f"SLAVE_BRENCHER set, will connect to master at {slave_url}")
+
+	while True:
+		try:
+			ws_url_branches = slave_url.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws/branches'
+			ws_url_env = slave_url.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws/environment'
+			ws_url_errors = slave_url.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws/errors'
+
+			async with (
+				websockets.connect(ws_url_branches) as ws_branches,
+				websockets.connect(ws_url_env) as ws_env,
+				websockets.connect(ws_url_errors) as ws_errors,
+			):
+				logger.info("Connected to slave WebSockets")
+
+				async def handle_branches() -> None:
+					async for msg in ws_branches:
+						parsed = json.loads(msg)
+						if parsed.get("event") == "branches":
+							branches_slaves = parsed.get("data", {})
+							await broadcast_branches(get_global_branches_to_emit())
+
+				async def handle_env() -> None:
+					async for msg in ws_env:
+						parsed = json.loads(msg)
+						if parsed.get("event") == "environments":
+							environments_slaves = parsed.get("data", {})
+							await broadcast_environments(get_global_envs_to_emit())
+
+				async def handle_errors() -> None:
+					async for msg in ws_errors:
+						parsed = json.loads(msg)
+						if parsed.get("event") == "error":
+							await broadcast_error(parsed.get("data"))
+
+				async def handle_sends() -> None:
+					while True:
+						msg = await slave_send_queue.get()
+						await ws_env.send(json.dumps(msg))
+
+				await asyncio.gather(
+					handle_branches(),
+					handle_env(),
+					handle_errors(),
+					handle_sends(),
+				)
+
+		except Exception as e:
+			logger.error(f"Could not connect to SLAVE_BRENCHER {slave_url}: {e}")
+			await asyncio.sleep(60)
+
+
+# --- SIGCHLD Handler ---
+
+def sigchld_handler(signum: int, frame: Any) -> None:
+	"""Reap zombie processes."""
 	while True:
 		try:
 			pid, status = os.waitpid(-1, os.WNOHANG)
@@ -286,14 +389,22 @@ def sigchld_handler(signum, frame):  # type: ignore[no-untyped-def]
 			break
 
 
-import signal
+# --- Startup Event ---
 
+@app.on_event("startup")
+async def startup_event() -> None:
+	global _event_loop, slave_ws_task
+	_event_loop = asyncio.get_event_loop()
+	if slave_url:
+		slave_ws_task = asyncio.create_task(connect_to_slave())
+
+
+# --- App Class (used by CLI and integration tests) ---
 
 class App:
 
 	def __init__(self, cli_env_ids_str: str, dry_run: bool = False) -> None:
 		global environments
-		# Register the handler
 		signal.signal(signal.SIGCHLD, sigchld_handler)
 
 		import configs.brencher
@@ -346,19 +457,13 @@ class App:
 
 		environments = {id: wrap_in_cached(e) for id, e in environments.items()}
 
-
 	def processing_thread(self) -> None:
 		while True:
 			import processing
+
 			def emit_envs() -> None:
-				try:
-					socketio.emit('branches', get_global_branches_to_emit(), namespace='/ws/branches')
-				except Exception as e:
-					logger.error(f"Error emitting branches: {str(e)}")
-				try:
-					socketio.emit('environments', get_global_envs_to_emit(), namespace='/ws/environment')
-				except Exception as e:
-					logger.error(f"Error emitting environments: {str(e)}")
+				_schedule_async(broadcast_branches(get_global_branches_to_emit()))
+				_schedule_async(broadcast_environments(get_global_envs_to_emit()))
 
 			with state_lock:
 				logger.info(f"Processing")
@@ -368,34 +473,18 @@ class App:
 					environment_update_event.wait(timeout=1 * 60)
 				environment_update_event.clear()
 
-	def _connect_remote(self) -> None:
-		global remote_sio
-		print("Connecting to SLAVE_BRENCHER...")
-		while True:
-			try:
-				if remote_sio is not None and not remote_sio.connected:
-					remote_sio.connect(slave_url, namespaces=['/ws/branches', '/ws/environment', '/ws/errors'])
-			except Exception as e:
-				logger.error(f"Could not connect to SLAVE_BRENCHER {slave_url}: {e}")
-			time.sleep(60)
-
 	def run(self) -> None:
 		processing = threading.Thread(target=self.processing_thread)
 		processing.daemon = True
 		processing.start()
 
-		t = threading.Thread(target=self._connect_remote, daemon=True)
-		t.start()
-
 	def runWeb(self, port: int) -> None:
 		self.run()
-		socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+		import uvicorn
+		uvicorn.run(app, host='0.0.0.0', port=port, log_level='info')
 
 
 if __name__ == '__main__':
-	import os
-	import sys
-
 	cli_env_ids_list = sys.argv[1:]
 	cli_env_ids_str: str
 	if len(cli_env_ids_list) == 0:
