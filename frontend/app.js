@@ -231,8 +231,9 @@ function renderJobs() {
         jobsList.innerHTML = '<p class="loading">No jobs found.</p>';
         return;
     }
-    jobsList.innerHTML = environmentsRaw.map(([envObj, jobsArr]) => {
+    jobsList.innerHTML = environmentsRaw.map((envObj) => {
         var linksHtml = ""
+        const jobsArr = envObj.pipeline || [];
         if (Array.isArray(jobsArr)) {
             linksHtml = jobsArr.flatMap(job => {
                 const userLinks = [];
@@ -357,7 +358,7 @@ function setupSocketIO() {
         environmentsRaw = Object.values(payload);
 
         // Sync selections and deployed commits per environment
-        environmentsRaw.forEach(([envObj, jobsArr]) => {
+        environmentsRaw.forEach((envObj) => {
             if (!envObj) return;
             const envId = envObj.id || envObj.name || 'unknown';
             // Branch selections
@@ -372,7 +373,7 @@ function setupSocketIO() {
                 selectedBranchesByEnv[envId] = [];
                 serverSelectedBranchesByEnv[envId] = [];
             }
-
+            const jobsArr = envObj.pipeline || []
             // Deployed commits from GitUnmerge job
             const gitUnmergeJob = Array.isArray(jobsArr) ? jobsArr.find(j => j.name === 'GitUnmerge') : null;
             deployedCommitsByEnv[envId] = {};
@@ -389,8 +390,8 @@ function setupSocketIO() {
 
         // Rebuild branches list environment names for rows already present
         branches = branches.map(b => {
-            const envEntry = environmentsRaw.find(([e]) => (e.id || e.name) === b.envId);
-            return { ...b, envName: envEntry ? (envEntry[0].name || envEntry[0].id) : b.envName };
+            const envEntry = environmentsRaw.find((e) => (e.id || e.name) === b.envId);
+            return { ...b, envName: envEntry ? (envEntry.name || envEntry.id) : b.envName };
         });
 
         filterBranches();
