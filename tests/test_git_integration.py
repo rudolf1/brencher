@@ -10,6 +10,7 @@ from typing import Generator
 import git
 import pytest
 
+from enironment import wrap_in_cached
 from steps.git import CheckoutAndMergeResult
 from tests.test_remote_repo import RemoteRepoHelper
 
@@ -344,6 +345,13 @@ class TestGitIntegration:
 
 		with pytest.raises(BaseException, match="Empty branches set"):
 			repo_helper.checkout_merged.progress()
+
+		repo_helper.env.branches = [('master', 'HEAD')]
+		result = repo_helper.checkout_merged.progress()
+
+		# Verify same auto branch is used with actual value checks
+		assert result.commit_hash == commit1.hexsha, f"Expected {commit1.hexsha}, got {result.commit_hash}"
+
 
 	def test_git_clone_recovers_from_corrupted_local_config(self, repo_helper: RemoteRepoHelper) -> None:
 		"""GitClone should delete and refetch when local .git/config is corrupted."""

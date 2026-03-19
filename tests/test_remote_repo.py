@@ -13,7 +13,8 @@ import git
 
 from enironment import Environment, AbstractStep
 from steps.docker import DockerSwarmCheckResult
-from steps.git import CheckoutMerged, GitUnmerge, GitClone, HasVersion  # noqa: F401
+from steps.git import CheckoutAndMergeResult, CheckoutMerged, GitUnmerge, GitClone, HasVersion
+from steps.step import CachingStep  # noqa: F401
 
 
 class MockDockerSwarmCheck(AbstractStep[Dict[str, HasVersion]]):
@@ -38,10 +39,6 @@ class MockDockerSwarmCheck(AbstractStep[Dict[str, HasVersion]]):
 class RemoteRepoHelper:
 	"""Helper class for creating and managing test git repositories"""
 	env: Environment
-	checkout_merged: CheckoutMerged
-	git_clone: GitClone
-	git_unmerge: GitUnmerge
-	mock_check: MockDockerSwarmCheck
 
 	def __init__(self) -> None:
 		self.remote_dir = tempfile.mkdtemp(prefix="test_remote_")
@@ -51,17 +48,17 @@ class RemoteRepoHelper:
 		with self.repo.config_writer() as cw:
 			cw.set_value("user", "email", "test@example.com")
 			cw.set_value("user", "name", "Test User")
-		self.git_clone = GitClone(repo_path=self.local_dir)
-		self.checkout_merged = CheckoutMerged(
-			wd=self.git_clone,
+		git_clone = GitClone(repo_path=self.local_dir)
+		checkout_merged = CheckoutMerged(
+			wd=git_clone,
 			git_user_email="test@example.com",
 			git_user_name="Test User",
 			push=False,
 		)
-		self.mock_check = MockDockerSwarmCheck(lambda: f"auto-{self.checkout_merged.progress().version}")
-		self.git_unmerge = GitUnmerge(
-			wd=self.git_clone,
-			check=self.mock_check,
+		mock_check = MockDockerSwarmCheck(lambda: f"auto-{self.checkout_merged.progress().version}")
+		git_unmerge = GitUnmerge(
+			wd=git_clone,
+			check=mock_check,
 		)
 		self.env = Environment(
 			id="test1",
@@ -69,12 +66,27 @@ class RemoteRepoHelper:
 			dry=False,
 			repo=self.remote_dir,
 			pipeline=[
-				self.git_clone,
-				self.checkout_merged,
-				self.mock_check,
-				self.git_unmerge
+				git_clone,
+				checkout_merged,
+				mock_check,
+				git_unmerge
 			]
 		)
+	@property
+	def checkout_merged(self) -> AbstractStep[CheckoutAndMergeResult]:
+		return [i for i in self.env.pipeline if isinstance(i, CheckoutMerged) or (isinstance(i, CachingStep) and isinstance(i.step, CheckoutMerged))][0]
+	
+	@property
+	def git_clone(self) -> AbstractStep[str]:
+		return [i for i in self.env.pipeline if isinstance(i, GitClone) or (isinstance(i, CachingStep) and isinstance(i.step, GitClone))][0]
+
+	@property
+	def git_unmerge(self) -> AbstractStep[List[Tuple[str, str]]]:
+		return [i for i in self.env.pipeline if isinstance(i, GitUnmerge) or (isinstance(i, CachingStep) and isinstance(i.step, GitUnmerge))][0]
+
+	@property
+	def mock_check(self) -> AbstractStep[Dict[str, HasVersion]]:
+		return [i for i in self.env.pipeline if isinstance(i, MockDockerSwarmCheck) or (isinstance(i, CachingStep) and isinstance(i.step, MockDockerSwarmCheck))][0]
 
 	def teardown(self) -> None:
 		"""Clean up temporary directories"""

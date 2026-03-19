@@ -152,11 +152,10 @@ class BranchesNamespace(Namespace):
 		emit('branches', get_global_branches_to_emit())
 
 
-def get_local_envs_to_emit() -> Dict[str, Tuple[Dict[str, Any], List[Dict[str, Any]]]]:
-	env_dtos: Dict[str, Tuple[Dict[str, Any], List[Dict[str, Any]]]] = {}
+def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
+	env_dtos: Dict[str, Dict[str, Any]] = {}
 	for env in environments.values():
-		env_result = asdict(replace(env, pipeline=[]))
-		res: List[Dict[str, Any]] = []
+		pipeline_state: List[Dict[str, Any]] = []
 		for r in env.pipeline:
 			try:
 				if isinstance(r, CachingStep):
@@ -166,22 +165,23 @@ def get_local_envs_to_emit() -> Dict[str, Tuple[Dict[str, Any], List[Dict[str, A
 
 				if isinstance(result, BaseException):
 					stack = traceback.format_exception(type(result), result, result.__traceback__)
-					res.append({
+					pipeline_state.append({
 						"name": r.name,
 						"status": [str(result), stack],
 					})
 				else:
-					res.append({
+					pipeline_state.append({
 					"name": r.name,
 					"status": result,
 				})
 			except BaseException as e:
 				stack = traceback.format_exception(type(e), e, e.__traceback__)
-				res.append({
+				pipeline_state.append({
 					"name": r.name,
 					"status": [str(e), stack],
 				})
-		env_dtos[env.id] = (env_result, res)
+		env_dtos[env.id] = asdict(replace(env, pipeline=[]))
+		env_dtos[env.id]['pipeline'] = pipeline_state
 	return env_dtos
 
 
@@ -211,9 +211,7 @@ def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 		except BaseException as e:
 			logger.error(f"Error fetching branches for environment {env.id}: {str(e)}")
 
-		logger.info(f"Fetched {env.id}: {len(branches[env.id])} branches")
 	return branches
-		# logger.info(f"Fetched {env.id}: {branches[env.id]}")
 
 def get_global_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 	global branches, branches_slaves

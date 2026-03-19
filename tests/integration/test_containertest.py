@@ -48,20 +48,17 @@ class TestDockerContainer:
 		# Verify application is responding on /state endpoint
 		import requests
 
-		response = requests.get("http://localhost:5001/state", timeout=5000)
-		assert response.status_code == 200, "Failed to get /state endpoint"
-		state_data = response.json()
+		state_data = requests.get("http://localhost:5001/state", timeout=5000).json()
+		logger.info(f"Application state: {json.dumps(state_data, indent=2)}")
+
 		assert "brencher_local1" in state_data, "Missing 'brencher_local1' field in response"
 		assert len(state_data["brencher_local1"][1]) > 0, "Steps defined for 'brencher_local1' are empty"
 
-		response = requests.get("http://localhost:5001/branches", timeout=5000)
-		assert response.status_code == 200, "Failed to get /branches endpoint"
-		branches_data = response.json()
+		branches_data = requests.get("http://localhost:5001/branches", timeout=5000).json()
+		logger.info(f"Application branches: {json.dumps(branches_data, indent=2)}")
 		assert "brencher_local1" in branches_data, "Missing 'brencher_local1' field in response"
 		assert len(branches_data["brencher_local1"]) > 0, "No branches found for 'brencher_local1'"
 
-		logger.info(f"Application state: {json.dumps(state_data, indent=2)}")
-		logger.info(f"Application branches: {json.dumps(branches_data, indent=2)}")
 		
 
 # TODO Verify DockerContainerDeploy step status is running and has correct image and ports

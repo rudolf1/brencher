@@ -57,6 +57,7 @@ def wrap_in_cached(e: Environment) -> Environment:
 	cached = {it.step: it for it in result.pipeline if isinstance(it, CachingStep) }
 	for step in result.pipeline:
 		if isinstance(step, CachingStep):
+			step.step.env = result
 			for attr_name in dir(step.step):
 				if not attr_name.startswith('_'):
 					attr_value = getattr(step.step, attr_name)
