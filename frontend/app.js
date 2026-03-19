@@ -345,7 +345,7 @@ function setupSocketIO() {
         // data: { envId: { branchName: commits[] } }
         branches = Object.entries(data).flatMap(([envId, branchMap]) =>
             Object.entries(branchMap).map(([branchName, commitList]) => {
-                const envObj = (environmentsRaw.find(([e]) => e.id === envId) || [null])[0];
+                const envObj = (environmentsRaw.find((e) => e.id === envId) || [null])[0];
                 return { envId, envName: envObj ? (envObj.name || envObj.id) : envId, branch: branchName, commits: commitList };
             })
         );
