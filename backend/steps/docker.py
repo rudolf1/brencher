@@ -1,9 +1,11 @@
+import hashlib
 import logging
 import os
 import re
 import subprocess
+import tempfile
 from dataclasses import dataclass
-from typing import List, Dict, Callable, Any, Mapping, Protocol
+from typing import List, Dict, Callable, Any, Mapping, Protocol, Union, runtime_checkable
 
 import docker
 import yaml
@@ -11,7 +13,7 @@ from docker import errors as docker_errors
 from dotenv import dotenv_values
 
 from enironment import AbstractStep
-from steps.git import GitClone
+from steps.git import GitClone, HasVersion
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +132,7 @@ class DockerSwarmCheck(AbstractStep[Dict[str, DockerSwarmCheckResult]]):
 		return current_services
 
 
+@runtime_checkable
 class HasImage(Protocol):
 	image: str
 
@@ -138,7 +141,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
 	def __init__(self,
 				 wd: GitClone,
 				 buildDocker: DockerComposeBuild | None,
-				 stackChecker: AbstractStep[Mapping[str, HasImage]],
+				 stackChecker: AbstractStep[Mapping[str, Union[HasImage, HasVersion]]],
 				 docker_compose_path: str,
 				 envs: Callable[[], Dict[str, Any]],
 				 stack_name: str,
@@ -158,7 +161,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
 		self.wd.progress()
 		if self.buildDocker is not None:
 			self.buildDocker.progress()
-		current_services = self.stackChecker.progress()
+		current_services: Mapping[str, HasImage | HasVersion] = self.stackChecker.progress()
 
 		def merge_dicts(a: Dict[str, Any], b: Dict[str, Any]) -> None:
 			for k, v in b.items():
@@ -192,21 +195,44 @@ class DockerSwarmDeploy(AbstractStep[str]):
 		diffs = []
 		ok = []
 		for svc_name, svc in expected_services.items():
-			expected_image = svc.get("image")
 			running_service = current_services.get(svc_name)
-			running_image = running_service.image if running_service is not None else None
-			l = {
-				"service": svc_name,
-				"expected_image": expected_image,
-				"actual_image": running_image,
-				"stack": self.stack_name,
-			}
-			logger.info(l)
-			if running_image and expected_image and running_image == expected_image:
-				ok.append(l)
+			if isinstance(running_service, HasVersion):
+				expected_version = svc.get("labels", {}).get("org.brencher.version")
+				running_version = running_service.version if running_service is not None else None
+				l = {
+					"service": svc_name,
+					"expected_version": expected_version,
+					"actual_version": running_version,
+					"stack": self.stack_name,
+				}
+				logger.info(l)
+				if not running_version or not expected_version:
+					diffs.append(l)
+				elif running_version != expected_version:
+					diffs.append(l)
+				else:
+					ok.append(l)
+			elif isinstance(running_service, HasImage):
+				expected_image = svc.get("image")
+				running_image = running_service.image if running_service is not None else None
+				l = {
+					"service": svc_name,
+					"expected_image": expected_image,
+					"actual_image": running_image,
+					"stack": self.stack_name,
+				}
+				logger.info(l)
+				if not running_image or not expected_image:
+					diffs.append(l)
+				elif running_image != expected_image:
+					diffs.append(l)
+				else:
+					ok.append(l)
 			else:
-				diffs.append(l)
-
+				diffs.append({
+					"service": svc_name,
+					"stack": self.stack_name,
+				})
 		if len(diffs) == 0:
 			logger.info(f"No diff found, stack is already up-to-date.")
 			return ok
@@ -217,6 +243,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
 				"diffs": diffs,
 			}
 
+		# tmp_compose_path = os.path.join(tempfile.gettempdir(), f"{hashlib.sha1(content.encode()).hexdigest()[:5]}")
 		tmp_compose_path = docker_compose_absolute_path + ".tmp"
 		with open(tmp_compose_path, 'w') as f:
 			f.write(content)
@@ -238,6 +265,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
 		# merge_dicts(swarmEnv, env)
 		result = subprocess.run(cmd, capture_output=True, text=True)
 		# , cwd=os.path.dirname(tmp_compose_path), env=swarmEnv)
+		os.remove(tmp_compose_path)
 		if result.returncode != 0:
 			logger.error(f"Stack deploy failed: {result.stderr}")
 			raise RuntimeError(f"Stack deploy failed: {result.stderr}")

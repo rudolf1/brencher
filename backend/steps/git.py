@@ -3,7 +3,7 @@ import logging
 import os
 import tempfile
 from dataclasses import dataclass
-from typing import List, Tuple, Set, Dict, Any, Mapping
+from typing import List, Tuple, Set, Dict, Any, Mapping, runtime_checkable
 import shutil
 
 import git
@@ -104,7 +104,7 @@ def _commits_childs(repo: git.Repo) -> Dict[Commit, List[Commit]]:
 
 def ensure_clean(repo: git.Repo) -> None:
 	if repo.is_dirty() or len(repo.untracked_files) > 0:
-		raise BaseException(f"Changes in repo: I{repo.index.entries}, U{repo.untracked_files}")
+		raise BaseException(f"Changes in repo: U{repo.untracked_files}")
 
 
 class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
@@ -239,7 +239,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 
 from typing import Protocol, Any
 
-
+@runtime_checkable
 class HasVersion(Protocol):
 	version: str
 
