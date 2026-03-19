@@ -219,7 +219,7 @@ function renderBranches() {
             updateBranchCommit(envId, branch, commitId || 'HEAD');
         };
     });
-    renderedBranches = filterBranches;
+    renderedBranches = filteredBranches;
 }
 
 function updateBranchCommit(envId, branch, commit) {
