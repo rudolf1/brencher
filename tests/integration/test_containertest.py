@@ -6,6 +6,7 @@ from typing import Any, Generator
 
 import docker
 import pytest
+import requests
 
 from app import App
 from conftest import EventuallyFn  # type: ignore[import-not-found]
@@ -36,8 +37,6 @@ class TestDockerContainer:
 		# app.runWeb(5001)
 		processing = threading.Thread(target=lambda: app.runWeb(5001), daemon=True)
 		processing.start()
-
-		import requests
 
 		eventually(
 			lambda: requests.get("http://localhost:5001/state", timeout=5000).status_code == 200,

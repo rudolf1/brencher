@@ -10,7 +10,7 @@ import git
 import pytest
 
 from steps.git import CheckoutAndMergeResult
-from tests.test_remote_repo import RemoteRepoHelper
+from .test_remote_repo import RemoteRepoHelper
 
 
 class TestGitIntegration:
