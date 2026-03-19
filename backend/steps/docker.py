@@ -196,7 +196,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
 		ok = []
 		for svc_name, svc in expected_services.items():
 			running_service = current_services.get(svc_name)
-			if isinstance(current_services, HasVersion):
+			if isinstance(running_service, HasVersion):
 				expected_version = svc.get("labels", {}).get("org.brencher.version")
 				running_version = running_service.version if running_service is not None else None
 				l = {
@@ -212,7 +212,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
 					diffs.append(l)
 				else:
 					ok.append(l)
-			elif isinstance(current_services, HasImage):
+			elif isinstance(running_service, HasImage):
 				expected_image = svc.get("image")
 				running_image = running_service.image if running_service is not None else None
 				l = {
@@ -229,7 +229,10 @@ class DockerSwarmDeploy(AbstractStep[str]):
 				else:
 					ok.append(l)
 			else:
-				diffs.append({"Error, redeployiong"})
+				diffs.append({
+					"service": svc_name,
+					"stack": self.stack_name,
+				})
 		if len(diffs) == 0:
 			logger.info(f"No diff found, stack is already up-to-date.")
 			return ok

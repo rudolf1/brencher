@@ -318,13 +318,15 @@ class App:
 			if cli_env_ids and len(cli_env_ids) > 0:
 				environments = {k: e for k, e in environments.items() if k not in cli_env_ids}
 		else:
-			cli_env_ids = cli_env_ids_str.split(',')
-			cli_env_ids = [x.split(":") for x in cli_env_ids if len(x) > 0]
-			cli_env_ids = {x[0]: x[1] if len(x) > 1 else None for x in cli_env_ids}
-			logger.info(f"cli_env_ids {cli_env_ids}")
-			if cli_env_ids and len(cli_env_ids) > 0:
-				environments = {k: e for k, e in environments.items() if k in cli_env_ids.keys()}
-				for k, v in cli_env_ids.items():
+			cli_env_pairs = {x[0]: x[1] if len(x) > 1 else None for x in [x.split(":")
+							 for x in cli_env_ids_str.split(',')
+							 if len(x) > 0
+							 ]
+			                 }
+			logger.info(f"cli_env_ids {cli_env_pairs}")
+			if cli_env_pairs and len(cli_env_pairs) > 0:
+				environments = {k: e for k, e in environments.items() if k in cli_env_pairs.keys()}
+				for k, v in cli_env_pairs.items():
 					if v is not None:
 						if k in environments:
 							env = environments[k]
