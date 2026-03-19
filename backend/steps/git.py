@@ -3,7 +3,7 @@ import logging
 import os
 import tempfile
 from dataclasses import dataclass
-from typing import List, Tuple, Set, Dict, Any, Mapping
+from typing import List, Tuple, Set, Dict, Any, Mapping, runtime_checkable
 import shutil
 
 import git
@@ -239,7 +239,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 
 from typing import Protocol, Any
 
-
+@runtime_checkable
 class HasVersion(Protocol):
 	version: str
 
