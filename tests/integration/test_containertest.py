@@ -7,14 +7,15 @@
 # 	sys.path.insert(0, str(backend_path))
 
 import json
-
-import pytest
 import logging
-import asyncio
-from app import App
 import threading
-import docker
 from typing import Any, Generator
+
+import docker
+import pytest
+
+from app import App
+from conftest import eventually
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ class TestDockerContainer:
 		logger.info("Container brencher_plain-container stopped and removed")
 
 	@pytest.mark.asyncio
-	async def test_start(self) -> None:
+	async def test_start(self, eventually) -> None:
 		logger.info(f"Starting")
 
 		app = App(cli_env_ids_str="brencher_local1")
@@ -43,10 +44,10 @@ class TestDockerContainer:
 		processing = threading.Thread(target=lambda: app.runWeb(5001), daemon=True)
 		processing.start()
 
-		await asyncio.sleep(50)
-		# Verify container is still running
-		# Verify application is responding on /state endpoint
 		import requests
+
+		eventually(lambda: requests.get("http://localhost:5001/state", timeout=5000).status_code == 200, timeout=20.0,
+		           interval=1.0)
 
 		state_data = requests.get("http://localhost:5001/state", timeout=5000).json()
 		logger.info(f"Application state: {json.dumps(state_data, indent=2)}")
@@ -58,8 +59,6 @@ class TestDockerContainer:
 		logger.info(f"Application branches: {json.dumps(branches_data, indent=2)}")
 		assert "brencher_local1" in branches_data, "Missing 'brencher_local1' field in response"
 		assert len(branches_data["brencher_local1"]) > 0, "No branches found for 'brencher_local1'"
-
-		
 
 # TODO Verify DockerContainerDeploy step status is running and has correct image and ports
 # {

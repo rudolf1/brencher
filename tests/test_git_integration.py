@@ -5,12 +5,10 @@ These tests run in a Docker-like isolated environment to avoid harming the host 
 They simulate remote and local git repositories and test various merge scenarios.
 """
 import os
-from typing import Generator
 
 import git
 import pytest
 
-from enironment import wrap_in_cached
 from steps.git import CheckoutAndMergeResult
 from tests.test_remote_repo import RemoteRepoHelper
 
@@ -21,11 +19,11 @@ class TestGitIntegration:
 	def test_checkout_merged_one_branch(self, repo_helper: RemoteRepoHelper) -> None:
 		# Create main branch with initial commit
 		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
-											"Initial commit")  # noqa: F841
+		                                    "Initial commit")  # noqa: F841
 		commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2",
-											"Branch1 commit")  # noqa: F841
+		                                    "Branch1 commit")  # noqa: F841
 		commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file3.txt", "content3",
-											"Branch2 commit")  # noqa: F841
+		                                    "Branch2 commit")  # noqa: F841
 
 		repo_helper.env.branches = [("branch1", "HEAD")]
 		result = repo_helper.checkout_merged.progress()
@@ -61,11 +59,11 @@ class TestGitIntegration:
 
 		# Create main branch with initial commit
 		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
-											"Initial commit")  # noqa: F841
+		                                    "Initial commit")  # noqa: F841
 		commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2",
-											"Branch1 commit")  # noqa: F841
+		                                    "Branch1 commit")  # noqa: F841
 		commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file3.txt", "content3",
-											"Branch2 commit")  # noqa: F841
+		                                    "Branch2 commit")  # noqa: F841
 
 		# Create a GitClone-like working directory
 		repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD")]
@@ -91,15 +89,15 @@ class TestGitIntegration:
 
 		# Create main branch with initial commit
 		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
-											"Initial commit")  # noqa: F841
+		                                    "Initial commit")  # noqa: F841
 
 		# Create branch1, branch2, and branch3
 		commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2",
-											"Branch1 commit")  # noqa: F841
+		                                    "Branch1 commit")  # noqa: F841
 		commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file3.txt", "content3",
-											"Branch2 commit")  # noqa: F841
+		                                    "Branch2 commit")  # noqa: F841
 		commit4 = repo_helper.create_commit(repo_helper.repo, "master", "branch3", "file4.txt", "content4",
-											"Branch3 commit")  # noqa: F841
+		                                    "Branch3 commit")  # noqa: F841
 
 		repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD"), ("branch3", "HEAD")]
 
@@ -119,7 +117,7 @@ class TestGitIntegration:
 			('file4.txt', 'content4')
 		])
 
-		repo_helper.checkout_merged.push = True
+		repo_helper.checkout_merged.push = True  # type: ignore[attr-defined]
 		result = repo_helper.checkout_merged.progress()
 
 		# Verify result with specific field checks
@@ -135,11 +133,11 @@ class TestGitIntegration:
 
 		# Create branch1 from main with multiple commits
 		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
-											"Initial commit")  # noqa: F841
+		                                    "Initial commit")  # noqa: F841
 		commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2",
-											"Branch1 commit 1")  # noqa: F841
+		                                    "Branch1 commit 1")  # noqa: F841
 		commit3 = repo_helper.create_commit(repo_helper.repo, "branch1", "branch1", "file3.txt", "content3",
-											"Branch1 commit 2")  # noqa: F841
+		                                    "Branch1 commit 2")  # noqa: F841
 
 		repo_helper.env.branches = [("master", "HEAD"), ("branch1", "HEAD")]
 
@@ -160,11 +158,11 @@ class TestGitIntegration:
 	def test_checkout_conflict(self, repo_helper: RemoteRepoHelper) -> None:
 		# Create branch1 and branch2 with conflicting changes to same file
 		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
-											"Initial commit")  # noqa: F841
+		                                    "Initial commit")  # noqa: F841
 		commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file1.txt", "branch1 content",
-											"Branch1 change")  # noqa: F841
+		                                    "Branch1 change")  # noqa: F841
 		commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file1.txt", "branch2 content",
-											"Branch2 change")  # noqa: F841
+		                                    "Branch2 change")  # noqa: F841
 
 		# Create environment
 		repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD")]
@@ -178,13 +176,13 @@ class TestGitIntegration:
 
 		# Create main branch with initial commit
 		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
-											"Initial commit")  # noqa: F841
+		                                    "Initial commit")  # noqa: F841
 
 		# Create branch1 and branch2
 		commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2",
-											"Branch1 commit")  # noqa: F841
+		                                    "Branch1 commit")  # noqa: F841
 		commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file3.txt", "content3",
-											"Branch2 commit")  # noqa: F841
+		                                    "Branch2 commit")  # noqa: F841
 
 		repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD")]
 		result1 = repo_helper.checkout_merged.progress()
@@ -208,17 +206,17 @@ class TestGitIntegration:
 
 		# Create commits
 		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
-											"Initial commit")  # noqa: F841
+		                                    "Initial commit")  # noqa: F841
 		commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2",
-											"Branch1 commit")
+		                                    "Branch1 commit")
 		commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file3.txt", "content3",
-											"Branch2 commit")
+		                                    "Branch2 commit")
 
 		repo_helper.env.branches = []
 
 		# Mock DockerSwarmCheck with version string
 		version_str = f"auto-{commit2.hexsha[:8]}-{commit3.hexsha[:8]}"
-		repo_helper.mock_check.version = lambda: version_str
+		repo_helper.mock_check.version = lambda: version_str  # type: ignore[attr-defined]
 
 		# Test GitUnmerge
 		result = repo_helper.git_unmerge.progress()
@@ -238,11 +236,11 @@ class TestGitIntegration:
 		"""Test GitUnmerge with invalid version format"""
 
 		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
-											"Initial commit")  # noqa: F841
+		                                    "Initial commit")  # noqa: F841
 
 		repo_helper.env.branches = []
 		version_str = "invalid-version-format"
-		repo_helper.mock_check.version = lambda: version_str
+		repo_helper.mock_check.version = lambda: version_str  # type: ignore[attr-defined]
 
 		with pytest.raises(BaseException, match="Version format not recognized"):
 			repo_helper.git_unmerge.progress()
@@ -250,17 +248,17 @@ class TestGitIntegration:
 	def test_git_unmerge_nonhead_commit(self, repo_helper: RemoteRepoHelper) -> None:
 		# Create initial commit
 		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
-											"Initial commit")  # noqa: F841
+		                                    "Initial commit")  # noqa: F841
 
 		# Create branch1 with multiple commits and branch2
 		commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2",
-											"Branch1 commit 1")
+		                                    "Branch1 commit 1")
 		commit3 = repo_helper.create_commit(repo_helper.repo, "branch1", "branch1", "file3.txt", "content3",
-											"Branch1 commit 2")  # noqa: F841
+		                                    "Branch1 commit 2")  # noqa: F841
 
 		repo_helper.env.branches = []
 
-		repo_helper.mock_check.version = lambda: f"auto-{commit2.hexsha[:8]}"
+		repo_helper.mock_check.version = lambda: f"auto-{commit2.hexsha[:8]}"  # type: ignore[attr-defined]
 
 		result = repo_helper.git_unmerge.progress()
 
@@ -281,21 +279,21 @@ class TestGitIntegration:
 	def test_git_unmerge_two_nonhead_commit(self, repo_helper: RemoteRepoHelper) -> None:
 		# Create initial commit
 		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
-											"Initial commit")  # noqa: F841
+		                                    "Initial commit")  # noqa: F841
 
 		# Create branch1 with multiple commits and branch2
 		commit2 = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2",
-											"Branch1 commit 1")
+		                                    "Branch1 commit 1")
 		commit3 = repo_helper.create_commit(repo_helper.repo, "branch1", "branch1", "file3.txt", "content3",
-											"Branch1 commit 2")  # noqa: F841
+		                                    "Branch1 commit 2")  # noqa: F841
 		commit4 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file4.txt", "content4",
-											"Branch2 commit")
+		                                    "Branch2 commit")
 		commit5 = repo_helper.create_commit(repo_helper.repo, "branch2", "branch2", "file5.txt", "content5",
-											"Branch2 commit 2")
+		                                    "Branch2 commit 2")
 
 		repo_helper.env.branches = []
 
-		repo_helper.mock_check.version = lambda: f"auto-{commit2.hexsha[:8]}-{commit4.hexsha[:8]}"
+		repo_helper.mock_check.version = lambda: f"auto-{commit2.hexsha[:8]}-{commit4.hexsha[:8]}"  # type: ignore[attr-defined]
 
 		result = repo_helper.git_unmerge.progress()
 
@@ -327,7 +325,7 @@ class TestGitIntegration:
 		"""Test CheckoutMerged with empty branches list - should fail"""
 
 		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
-											"Initial commit")  # noqa: F841
+		                                    "Initial commit")  # noqa: F841
 
 		repo_helper.env.branches = []
 
@@ -340,12 +338,11 @@ class TestGitIntegration:
 		# Verify same auto branch is used with actual value checks
 		assert result.commit_hash == commit1.hexsha, f"Expected {commit1.hexsha}, got {result.commit_hash}"
 
-
 	def test_git_clone_recovers_from_corrupted_local_config(self, repo_helper: RemoteRepoHelper) -> None:
 		"""GitClone should delete and refetch when local .git/config is corrupted."""
 
 		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
-											"Initial commit")
+		                                    "Initial commit")
 
 		cloned_path = repo_helper.git_clone.progress()
 		assert cloned_path == repo_helper.local_dir
@@ -355,7 +352,7 @@ class TestGitIntegration:
 			config_file.write("grabadge")
 
 		commit2 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file2.txt", "content2",
-											"Second commit")
+		                                    "Second commit")
 
 		with pytest.raises(BaseException):
 			repo_helper.git_clone.progress()
