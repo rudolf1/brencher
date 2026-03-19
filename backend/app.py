@@ -63,10 +63,8 @@ environments_slaves: Dict[str, Any] = {}
 branches_slaves: Dict[str, Dict[str, Any]] = {}
 state_lock = threading.Lock()
 
-# WebSocket connection managers
-branches_connections: Set[WebSocket] = set()
-environment_connections: Set[WebSocket] = set()
-error_connections: Set[WebSocket] = set()
+# Single set of WebSocket connections
+ws_connections: Set[WebSocket] = set()
 
 # Event loop reference for thread-safe async calls
 _event_loop: Optional[asyncio.AbstractEventLoop] = None
@@ -203,12 +201,12 @@ def _schedule_async(coro: Any) -> None:
 
 # --- WebSocket Broadcasting Functions ---
 
-async def broadcast_to_connections(connections: Set[WebSocket], event: str, data: Any) -> None:
+async def broadcast(event: str, data: Any) -> None:
 	"""Broadcast a message to all connected WebSocket clients."""
 	disconnected = set()
 	message = custom_json_dumps({"event": event, "data": data})
 
-	for websocket in list(connections):
+	for websocket in list(ws_connections):
 		try:
 			await websocket.send_text(message)
 		except Exception as e:
@@ -216,54 +214,34 @@ async def broadcast_to_connections(connections: Set[WebSocket], event: str, data
 			disconnected.add(websocket)
 
 	for ws in disconnected:
-		connections.discard(ws)
+		ws_connections.discard(ws)
 
 
 async def broadcast_branches(data: Any) -> None:
-	await broadcast_to_connections(branches_connections, "branches", data)
+	await broadcast("branches", data)
 
 
 async def broadcast_environments(data: Any) -> None:
-	await broadcast_to_connections(environment_connections, "environments", data)
+	await broadcast("environments", data)
 
 
 async def broadcast_error(data: Any) -> None:
-	await broadcast_to_connections(error_connections, "error", data)
+	await broadcast("error", data)
 
 
-# --- WebSocket Endpoints ---
+# --- Single WebSocket Endpoint ---
 
-@app.websocket("/ws/branches")
-async def websocket_branches(websocket: WebSocket) -> None:
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket) -> None:
 	await websocket.accept()
-	branches_connections.add(websocket)
+	ws_connections.add(websocket)
 
 	try:
-		# Send initial data on connect
+		# Send initial state on connect
 		await websocket.send_text(custom_json_dumps({
 			"event": "branches",
 			"data": get_global_branches_to_emit(),
 		}))
-
-		while True:
-			data = await websocket.receive_text()
-			message = json.loads(data)
-			if message.get("event") == "update":
-				await broadcast_branches(get_global_branches_to_emit())
-	except WebSocketDisconnect:
-		branches_connections.discard(websocket)
-	except Exception as e:
-		logger.error(f"WebSocket error in /ws/branches: {e}")
-		branches_connections.discard(websocket)
-
-
-@app.websocket("/ws/environment")
-async def websocket_environment(websocket: WebSocket) -> None:
-	await websocket.accept()
-	environment_connections.add(websocket)
-
-	try:
-		# Send initial data on connect
 		await websocket.send_text(custom_json_dumps({
 			"event": "environments",
 			"data": get_global_envs_to_emit(),
@@ -272,10 +250,12 @@ async def websocket_environment(websocket: WebSocket) -> None:
 		while True:
 			data = await websocket.receive_text()
 			message = json.loads(data)
-			if message.get("event") == "update":
-				update_data = message.get("data", {})
+			event = message.get("event")
 
+			if event == "update":
+				update_data = message.get("data", {})
 				logger.info(f"Received environment update: {update_data}")
+
 				if update_data.get('id') == '':
 					reset_caches(list(environments.values()))
 				else:
@@ -290,84 +270,52 @@ async def websocket_environment(websocket: WebSocket) -> None:
 					await slave_send_queue.put({"event": "update", "data": update_data})
 
 				await broadcast_environments(get_global_envs_to_emit())
+
 	except WebSocketDisconnect:
-		environment_connections.discard(websocket)
+		ws_connections.discard(websocket)
 	except Exception as e:
-		logger.error(f"WebSocket error in /ws/environment: {e}")
-		environment_connections.discard(websocket)
-
-
-@app.websocket("/ws/errors")
-async def websocket_errors(websocket: WebSocket) -> None:
-	await websocket.accept()
-	error_connections.add(websocket)
-
-	try:
-		while True:
-			data = await websocket.receive_text()
-			message = json.loads(data)
-			if message.get("event") == "error":
-				await broadcast_error(message.get("data"))
-	except WebSocketDisconnect:
-		error_connections.discard(websocket)
-	except Exception as e:
-		logger.error(f"WebSocket error in /ws/errors: {e}")
-		error_connections.discard(websocket)
+		logger.error(f"WebSocket error: {e}")
+		ws_connections.discard(websocket)
 
 
 # --- Slave Connection ---
 
 async def connect_to_slave() -> None:
-	"""Connect to a slave brencher instance via native WebSockets."""
+	"""Connect to a slave brencher instance via a single WebSocket."""
 	global branches_slaves, environments_slaves
 
 	if not slave_url:
 		return
 
-	logger.info(f"SLAVE_BRENCHER set, will connect to master at {slave_url}")
+	logger.info(f"SLAVE_BRENCHER set, will connect to slave at {slave_url}")
 
 	while True:
 		try:
-			ws_url_branches = slave_url.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws/branches'
-			ws_url_env = slave_url.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws/environment'
-			ws_url_errors = slave_url.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws/errors'
+			ws_url = slave_url.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws'
 
-			async with (
-				websockets.connect(ws_url_branches) as ws_branches,
-				websockets.connect(ws_url_env) as ws_env,
-				websockets.connect(ws_url_errors) as ws_errors,
-			):
-				logger.info("Connected to slave WebSockets")
+			async with websockets.connect(ws_url) as ws:
+				logger.info("Connected to slave WebSocket")
 
-				async def handle_branches() -> None:
-					async for msg in ws_branches:
+				async def handle_messages() -> None:
+					async for msg in ws:
 						parsed = json.loads(msg)
-						if parsed.get("event") == "branches":
+						event = parsed.get("event")
+						if event == "branches":
 							branches_slaves = parsed.get("data", {})
 							await broadcast_branches(get_global_branches_to_emit())
-
-				async def handle_env() -> None:
-					async for msg in ws_env:
-						parsed = json.loads(msg)
-						if parsed.get("event") == "environments":
+						elif event == "environments":
 							environments_slaves = parsed.get("data", {})
 							await broadcast_environments(get_global_envs_to_emit())
-
-				async def handle_errors() -> None:
-					async for msg in ws_errors:
-						parsed = json.loads(msg)
-						if parsed.get("event") == "error":
+						elif event == "error":
 							await broadcast_error(parsed.get("data"))
 
 				async def handle_sends() -> None:
 					while True:
 						msg = await slave_send_queue.get()
-						await ws_env.send(json.dumps(msg))
+						await ws.send(json.dumps(msg))
 
 				await asyncio.gather(
-					handle_branches(),
-					handle_env(),
-					handle_errors(),
+					handle_messages(),
 					handle_sends(),
 				)
 

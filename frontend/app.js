@@ -2,10 +2,8 @@
 // You can add your Socket.IO and UI code here
 console.log('app.js loaded');
 
-// WebSocket namespaces
-const WS_BRANCHES = '/ws/branches';
-const WS_ENVIRONMENT = '/ws/environment';
-const WS_ERRORS = '/ws/errors';
+// WebSocket endpoint
+const WS_URL = '/ws';
 
 // DOM refs
 const branchesList = document.getElementById('branches-list');
@@ -35,10 +33,8 @@ const serverSelectedBranchesByEnv = {};
 // deployedCommitsByEnv: envId -> { branchName: deployedShortHash }
 const deployedCommitsByEnv = {};
 
-// Socket instances
-let wsBranches = null;
-let wsEnv = null;
-let wsErr = null;
+// Single WebSocket connection
+let ws = null;
 
 function showStatus(message, isError = false) {
     statusMessage.textContent = message;
@@ -311,8 +307,8 @@ toggleJobSpoiler = function(key, safeId) {
     }
 };
 refreshBranchesBtn.onclick = () => {
-    if (wsEnv && wsEnv.readyState === WebSocket.OPEN) {
-        wsEnv.send(JSON.stringify({ event: 'update', data: { id: "" } }));
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ event: 'update', data: { id: "" } }));
     }
     showStatus('Refreshing...');
 };
@@ -337,23 +333,20 @@ applyChangesBtn.onclick = () => {
     updateEnvironment();
 };
 
-// Native WebSocket setup (FastAPI compatible)
+// Single WebSocket setup
 function setupWebSockets() {
-    // Close any existing connections before reconnecting
-    [wsBranches, wsEnv, wsErr].forEach(ws => {
-        if (ws && ws.readyState !== WebSocket.CLOSED) {
-            ws.onclose = null; // Prevent recursive reconnect
-            ws.close();
-        }
-    });
+    // Close existing connection before reconnecting
+    if (ws && ws.readyState !== WebSocket.CLOSED) {
+        ws.onclose = null; // Prevent recursive reconnect
+        ws.close();
+    }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
 
-    // Setup branches WebSocket
-    wsBranches = new WebSocket(`${protocol}//${host}${WS_BRANCHES}`);
-    wsBranches.onopen = () => console.log('Branches WebSocket connected');
-    wsBranches.onmessage = (event) => {
+    ws = new WebSocket(`${protocol}//${host}${WS_URL}`);
+    ws.onopen = () => console.log('WebSocket connected');
+    ws.onmessage = (event) => {
         try {
             const message = JSON.parse(event.data);
             if (message.event === 'branches') {
@@ -367,26 +360,7 @@ function setupWebSockets() {
                 );
                 filterBranches();
                 showStatus('Branches updated.');
-            }
-        } catch (e) {
-            console.error('Error processing branches message:', e);
-        }
-    };
-    wsBranches.onclose = () => {
-        showStatus('Disconnected from branches websocket.', true);
-        setTimeout(() => setupWebSockets(), 5000);
-    };
-    wsBranches.onerror = (error) => {
-        console.error('Branches WebSocket error:', error);
-    };
-
-    // Setup environment WebSocket
-    wsEnv = new WebSocket(`${protocol}//${host}${WS_ENVIRONMENT}`);
-    wsEnv.onopen = () => console.log('Environment WebSocket connected');
-    wsEnv.onmessage = (event) => {
-        try {
-            const message = JSON.parse(event.data);
-            if (message.event === 'environments') {
+            } else if (message.event === 'environments') {
                 const data = message.data;
                 payload = data || {};
                 environmentsRaw = Object.values(payload);
@@ -432,38 +406,19 @@ function setupWebSockets() {
                 renderJobs();
                 checkForPendingChanges();
                 showStatus('Environments updated.');
-            }
-        } catch (e) {
-            console.error('Error processing environment message:', e);
-        }
-    };
-    wsEnv.onclose = () => {
-        showStatus('Disconnected from environment websocket.', true);
-        setTimeout(() => setupWebSockets(), 5000);
-    };
-    wsEnv.onerror = (error) => {
-        console.error('Environment WebSocket error:', error);
-    };
-
-    // Setup errors WebSocket
-    wsErr = new WebSocket(`${protocol}//${host}${WS_ERRORS}`);
-    wsErr.onopen = () => console.log('Errors WebSocket connected');
-    wsErr.onmessage = (event) => {
-        try {
-            const message = JSON.parse(event.data);
-            if (message.event === 'error') {
+            } else if (message.event === 'error') {
                 showStatus(message.data.message || 'Unknown error', true);
             }
         } catch (e) {
-            console.error('Error processing error message:', e);
+            console.error('Error processing WebSocket message:', e);
         }
     };
-    wsErr.onclose = () => {
-        console.log('Errors WebSocket closed');
+    ws.onclose = () => {
+        showStatus('Disconnected from server.', true);
         setTimeout(() => setupWebSockets(), 5000);
     };
-    wsErr.onerror = (error) => {
-        console.error('Errors WebSocket error:', error);
+    ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
     };
 }
 
@@ -473,8 +428,8 @@ function updateEnvironment() {
         const localSel = [...(selectedBranchesByEnv[envId] || [])].sort();
         const serverSel = [...(serverSelectedBranchesByEnv[envId] || [])].sort();
         if (JSON.stringify(localSel) !== JSON.stringify(serverSel)) {
-            if (wsEnv && wsEnv.readyState === WebSocket.OPEN) {
-                wsEnv.send(JSON.stringify({ event: 'update', data: { id: envId, branches: selectedBranchesByEnv[envId] } }));
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ event: 'update', data: { id: envId, branches: selectedBranchesByEnv[envId] } }));
             }
             // Optimistically sync server state
             serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
@@ -484,7 +439,6 @@ function updateEnvironment() {
     checkForPendingChanges();
     showStatus('Changes applied (pending server confirmation).');
 }
-
 // Initial load
 setupWebSockets();
 showStatus('Loading branches...');
