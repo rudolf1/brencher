@@ -9,23 +9,28 @@ Result saved to field of EnvironmentDto and declared in <output> section.
 After processing new EnvironmentDto save it to state via compareAndSet.
 
 ## Environment Data Structure
+
 - Environment branches field stores List[Tuple[str, str]] format
 - Each tuple represents [branch_name, desired_commit] pair
 - desired_commit can be "HEAD" or a specific commit ID
 - Maintains backward compatibility with simple branch name lists
 
-
 # Steps stored in folder `steps`
 
 All steps must inherit from BaseStep and implement idempotent behavior. This means that:
+
 - Each step should be able to safely run multiple times without changing the outcome beyond the first run
 - Steps should check if their work has already been done and skip redundant operations
 - All steps must handle edge cases and errors gracefully
 
 ## GitClone
+
 ### Input
+
     git url
+
 ### Logic
+
     - Inherits from BaseStep
     - Checks if repository is already cloned at the target location
     - If already cloned, performs a fetch to update the local repository
@@ -33,10 +38,14 @@ All steps must inherit from BaseStep and implement idempotent behavior. This mea
     - Ensures the operation is idempotent by validating repository state
 
 ## CheckoutMerged
+
 ### Input
+
     `clone` object of type GitClone
     branches - list of [branch_name, desired_commit] pairs where desired_commit can be "HEAD" or a specific commit ID
-### Logic    
+
+### Logic
+
     - Inherits from BaseStep
     - Process each branch pair to resolve desired commits:
       - If desired_commit is "HEAD", use the latest commit of the branch
@@ -55,10 +64,14 @@ All steps must inherit from BaseStep and implement idempotent behavior. This mea
     - If failed, save result to <output>
 
 ## GradleBuild
+
 ### Input
+
     checkout object of type CheckoutMerged
     task name - name of gradle task to execute
+
 ### Logic
+
     - Inherits from BaseStep
     - Checkout <environment.mergedBranch> to temporary folder, verifying if already checked out
     - Use <environment.merged> name to calculate <environment.buildVersion>. Use first 5 characters
@@ -71,12 +84,16 @@ All steps must inherit from BaseStep and implement idempotent behavior. This mea
     - If failed, save result to <output>
 
 ## DockerBuild
+
 ### Input
+
     docker_compose_path - path to docker-compose file
     docker_repo_url - docker repository url
     docker_repo_username - username for docker repository
     docker_repo_password - password for docker repository
+
 ### Logic
+
     - Inherits from BaseStep
     - Reads the docker-compose file and parses all defined services with build contexts
     - For each service, builds the Docker image using the specified context and tags it with the appropriate version/tag
@@ -87,10 +104,13 @@ All steps must inherit from BaseStep and implement idempotent behavior. This mea
     - If failed, save result to <output>
 
 ## DockerSwarmDeploy
+
 ### Logic
+
     Deploys to swarm service described in specified docker-compose.yaml
 
 # TODOs
+
     - brancher testing:
         dev stage
         dev stage deploys something 2 times
