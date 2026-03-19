@@ -240,7 +240,8 @@ class DockerSwarmDeploy(AbstractStep[str]):
 				"diffs": diffs,
 			}
 
-		tmp_compose_path = os.path.join(tempfile.gettempdir(), f"{hashlib.sha1(content.encode()).hexdigest()[:5]}")
+		# tmp_compose_path = os.path.join(tempfile.gettempdir(), f"{hashlib.sha1(content.encode()).hexdigest()[:5]}")
+		tmp_compose_path = docker_compose_absolute_path + ".tmp"
 		with open(tmp_compose_path, 'w') as f:
 			f.write(content)
 		logger.info(f"Deploying stack '{self.stack_name}' using {tmp_compose_path}")
@@ -261,6 +262,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
 		# merge_dicts(swarmEnv, env)
 		result = subprocess.run(cmd, capture_output=True, text=True)
 		# , cwd=os.path.dirname(tmp_compose_path), env=swarmEnv)
+		os.remove(tmp_compose_path)
 		if result.returncode != 0:
 			logger.error(f"Stack deploy failed: {result.stderr}")
 			raise RuntimeError(f"Stack deploy failed: {result.stderr}")
