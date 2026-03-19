@@ -9,7 +9,7 @@ from steps.step import CachingStep
 logger = logging.getLogger(__name__)
 
 _last_reset_time: float = 0
-RESET_INTERVAL = 3 * 60  # 3 minutes in seconds
+RESET_INTERVAL = 0 * 60  # 3 minutes in seconds
 
 def process_all_jobs(
 		environemnts: List[Environment],
