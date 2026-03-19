@@ -110,6 +110,8 @@ if slave_url:
 	# Handlers for events from master -> re-emit locally (marked so we don't loop)
 	@remote_sio.on('branches', namespace='/ws/branches')
 	def _remote_branches(data: Any) -> None:
+		global branches_slaves
+		branches_slaves = data
 		try:
 			socketio.emit('branches', get_global_branches_to_emit(), namespace='/ws/branches')
 		except Exception as e:
@@ -118,7 +120,7 @@ if slave_url:
 
 	@remote_sio.on('environments', namespace='/ws/environment')
 	def _remote_environments(data: Any) -> None:
-		global environments, environments_slaves
+		global environments_slaves
 		environments_slaves = data
 		try:
 			socketio.emit('environments', get_global_envs_to_emit(), namespace='/ws/environment')
@@ -200,7 +202,7 @@ def get_global_envs_to_emit() -> Any:
 	return merge_result
 
 def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
-	global branches_slaves, environments
+	global environments
 	branches: Dict[str, Dict[str, List[Any]]] = {}
 	for k, env in environments.items():
 		branches[k] = {}
@@ -216,7 +218,7 @@ def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 	return branches
 
 def get_global_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
-	global branches, branches_slaves
+	global branches_slaves
 	local_branches: Dict[str, Dict[str, List[Any]]] = get_local_branches_to_emit()
 	return merge_dicts(local_branches, branches_slaves)
 
@@ -318,12 +320,24 @@ class App:
 			if cli_env_ids and len(cli_env_ids) > 0:
 				environments = {k: e for k, e in environments.items() if k not in cli_env_ids}
 		else:
-			cli_env_ids = cli_env_ids_str.split(',')
-			cli_env_ids = [x for x in cli_env_ids if len(x) > 0]
-			logger.info(f"cli_env_ids {cli_env_ids}")
-			if cli_env_ids and len(cli_env_ids) > 0:
-				environments = {k: e for k, e in environments.items() if k in cli_env_ids}
-
+			cli_env_pairs = {x[0]: x[1] if len(x) > 1 else None for x in [x.split(":")
+							 for x in cli_env_ids_str.split(',')
+							 if len(x) > 0
+							 ]
+			                 }
+			logger.info(f"cli_env_ids {cli_env_pairs}")
+			if cli_env_pairs and len(cli_env_pairs) > 0:
+				environments = {k: e for k, e in environments.items() if k in cli_env_pairs.keys()}
+				for k, v in cli_env_pairs.items():
+					if v is not None:
+						if k in environments:
+							env = environments[k]
+							env.branches = [(v, 'HEAD')]
+							logger.info(f"Overriding environment {k} branches to {env.branches}")
+						else:
+							logger.warning(f"Environment {k} not found to override branches")
+					else:
+						logger.info(f"No branch override for environment {k}")
 		if dry_run:
 			for id, e in environments.items():
 				e.dry = True
@@ -390,4 +404,4 @@ if __name__ == '__main__':
 		cli_env_ids_str = cli_env_ids_list[0]
 
 	app1 = App(cli_env_ids_str, 'dry' in sys.argv[1:])
-	app1.runWeb(port=(5000 if 'noweb' in sys.argv[1:] else 5001))
+	app1.runWeb(port=(5007 if 'noweb' in sys.argv[1:] else 5001))

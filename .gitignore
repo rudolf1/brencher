@@ -6,3 +6,4 @@ venv
 .venv
 LOCAL.md
 .idea
+docker-compose.yml.tmp
