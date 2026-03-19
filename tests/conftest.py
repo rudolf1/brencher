@@ -6,7 +6,7 @@ and provides shared fixtures for all tests.
 """
 import sys
 from pathlib import Path
-from typing import Generator, Callable
+from typing import Generator, Callable, Protocol
 
 import pytest
 
@@ -30,9 +30,18 @@ import time
 import pytest
 
 
+class EventuallyFn(Protocol):
+	def __call__(
+			self,
+			assert_fn: Callable[[], bool],
+			timeout: float = 2.0,
+			interval: float = 0.05,
+	) -> None: ...
+
+
 @pytest.fixture
-def eventually():
-	def _eventually(assert_fn: Callable[[], bool], timeout: float=2.0, interval:float=0.05):
+def eventually() -> EventuallyFn:
+	def _eventually(assert_fn: Callable[[], bool], timeout: float=2.0, interval:float=0.05) -> None:
 		deadline = time.monotonic() + timeout
 		last_error = None
 		while time.monotonic() < deadline:
