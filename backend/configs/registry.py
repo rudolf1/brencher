@@ -1,63 +1,54 @@
-from steps.git import GitClone, CheckoutMerged, GitUnmerge
-from steps.docker import DockerSwarmCheck, DockerSwarmDeploy
 from enironment import Environment
-from typing import List, Tuple
-from steps.step import AbstractStep
 from steps.checks import SimpleLog, UrlCheck
+from steps.docker import DockerSwarmCheck, DockerSwarmDeploy
+from steps.git import GitClone, CheckoutMerged, GitUnmerge
 
-env = Environment(
-    id="registry",
-    branches=[("ansible/master", "HEAD")],
-    dry=False,
-    repo="https://github.com/rudolf1/uber_backup.git",
+clone = GitClone(branchNamePrefix="ansible")
+checkoutMerged = CheckoutMerged(clone,
+								push=False,
+								git_user_email="rudolfss13@gmail.com",
+								git_user_name="brencher_bot"
+								)
+
+dockerSwarmCheck = DockerSwarmCheck(
+	stack_name="registry",
 )
 
+deployDocker = DockerSwarmDeploy(
+	wd=clone,
+	buildDocker=None,
+	stackChecker=dockerSwarmCheck,
+	envs=lambda: {
+		"version": "auto-" + checkoutMerged.progress().version
+	},
+	stack_name="registry",
+	docker_compose_path="docker-compose-registry.yaml",
+)
+unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
-def create_pipeline(env: Environment) -> List[AbstractStep]:
-    clone = GitClone(env, branchNamePrefix="ansible")
-    checkoutMerged = CheckoutMerged(clone, env=env,
-                        push = False,
-                        git_user_email="rudolfss13@gmail.com",
-                        git_user_name="brencher_bot"
-            )
-    
+checkPing = UrlCheck(
+	url="https://registry.rudolf.keenetic.link/TODO",
+	expected={"res": "pong"},
+)
+logUrls = SimpleLog(message={
+	"userLinks": {
+		"App": "https://registry.rudolf.keenetic.link",
+	}
+})
 
-    dockerSwarmCheck = DockerSwarmCheck(
-        stack_name = "registry",
-        env=env, 
-    )
-    deployDocker = DockerSwarmDeploy(
-        wd=clone,
-        buildDocker=None,
-        stackChecker=dockerSwarmCheck,
-        envs = lambda: { 
-            "version": "auto-" + checkoutMerged.result.version
-       },
-        stack_name = "registry",
-        docker_compose_path = "docker-compose-registry.yaml", 
-        env=env, 
-    )
-    unmerge = GitUnmerge(clone, dockerSwarmCheck, env=env)
-
-    checkPing = UrlCheck(
-        url="https://registry.rudolf.keenetic.link/TODO",
-        expected = {"res":"pong"},
-        env=env
-    )
-    logUrls = SimpleLog(env=env,message = {
-        "userLinks": {
-            "App": "https://registry.rudolf.keenetic.link",
-        }
-    })
-    return [
-        clone,
-        checkoutMerged,
-        dockerSwarmCheck, 
-        unmerge,       
-        deployDocker,
-        checkPing,
-        logUrls
-    ]
-
-config: Tuple[Environment, List[AbstractStep]] = (env, create_pipeline(env))
-
+__all__ = ["registry"]
+registry = Environment(
+	id="registry",
+	branches=[("ansible/master", "HEAD")],
+	dry=False,
+	repo="https://github.com/rudolf1/uber_backup.git",
+	pipeline=[
+		clone,
+		checkoutMerged,
+		dockerSwarmCheck,
+		unmerge,
+		deployDocker,
+		checkPing,
+		logUrls
+	]
+)

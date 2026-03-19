@@ -310,7 +310,7 @@ class App:
 			configs.brencher_local1.brencher_local1,
 			configs.torrserv_proxy.torrserv_proxy,
 			configs.immich.immich,
-	        configs.registry.config,
+	        configs.registry.registry,
 		]
 		environments = {e.id: e for e in environments_l}
 

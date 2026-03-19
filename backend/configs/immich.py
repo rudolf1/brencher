@@ -6,7 +6,6 @@ from steps.git import GitClone, CheckoutMerged, GitUnmerge
 clone = GitClone(branchNamePrefix="ansible")
 checkoutMerged = CheckoutMerged(clone,
 								push=False,
-
 								git_user_email="rudolfss13@gmail.com",
 								git_user_name="brencher_bot"
 								)
@@ -14,6 +13,7 @@ checkoutMerged = CheckoutMerged(clone,
 dockerSwarmCheck = DockerSwarmCheck(
 	stack_name="immich",
 )
+
 deployDocker = DockerSwarmDeploy(
 	wd=clone,
 	buildDocker=None,
