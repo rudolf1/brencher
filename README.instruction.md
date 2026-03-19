@@ -16,7 +16,7 @@ Generate docker compose file to deploy to docker swarm.
 
 # Local start
 
-python ./backend/app.py brencher_local1 noweb
+python ./backend/app.py brencher_local1:docker_swarm_check_by_version noweb
 
 # Local start
 
