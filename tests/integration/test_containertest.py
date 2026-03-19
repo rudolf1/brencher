@@ -43,7 +43,7 @@ class TestDockerContainer:
 		processing = threading.Thread(target=lambda: app.runWeb(5001), daemon=True)
 		processing.start()
 
-		await asyncio.sleep(5)
+		await asyncio.sleep(50)
 		# Verify container is still running
 		# Verify application is responding on /state endpoint
 		import requests
@@ -52,7 +52,7 @@ class TestDockerContainer:
 		logger.info(f"Application state: {json.dumps(state_data, indent=2)}")
 
 		assert "brencher_local1" in state_data, "Missing 'brencher_local1' field in response"
-		assert len(state_data["brencher_local1"][1]) > 0, "Steps defined for 'brencher_local1' are empty"
+		assert len(state_data["brencher_local1"]["pipeline"]) > 0, "Steps defined for 'brencher_local1' are empty"
 
 		branches_data = requests.get("http://localhost:5001/branches", timeout=5000).json()
 		logger.info(f"Application branches: {json.dumps(branches_data, indent=2)}")

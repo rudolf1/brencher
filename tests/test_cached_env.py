@@ -1,8 +1,3 @@
-import os
-from typing import Generator
-
-from flask import request
-import git
 import pytest
 
 from enironment import wrap_in_cached
@@ -13,17 +8,6 @@ from tests.test_remote_repo import RemoteRepoHelper
 class TestCachedEnv:
     """Tests for the CachedEnv wrapper around GitEnv."""
     
-    @pytest.fixture
-    def repo_helper(self, request: pytest.FixtureRequest) -> Generator[RemoteRepoHelper, None, None]:
-        helper = RemoteRepoHelper()
-
-        yield helper
-
-        report = getattr(request.node, "rep_call", None)
-        if report is not None and report.failed:
-            helper.print_git_logs()
-        helper.teardown()
-
 
     def test_checkout_merged_empty_branches(self, repo_helper: RemoteRepoHelper) -> None:
         """Test CheckoutMerged with empty branches list - should fail"""

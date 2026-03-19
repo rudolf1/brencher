@@ -326,7 +326,7 @@ class App:
 
 		logger.info(f"Resulting profiles {environments.keys()}")
 
-		environments = {id: wrap_in_cached(e) for id, e in environments.items()}
+		# environments = {id: wrap_in_cached(e) for id, e in environments.items()}
 
 
 	def processing_thread(self) -> None:
