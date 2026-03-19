@@ -302,6 +302,7 @@ class App:
 		import configs.brencher_local1
 		import configs.torrserv_proxy
 		import configs.immich
+		import configs.registry
 		environments_l: List[Environment] = [
 			configs.brencher.brencher,
 			configs.brencher2.brencher2,
@@ -309,6 +310,7 @@ class App:
 			configs.brencher_local1.brencher_local1,
 			configs.torrserv_proxy.torrserv_proxy,
 			configs.immich.immich,
+	        configs.registry.config,
 		]
 		environments = {e.id: e for e in environments_l}
 
