@@ -168,6 +168,7 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 					pipeline_state.append({
 						"name": r.name,
 						"status": [str(result), stack],
+						"error": True,
 					})
 				else:
 					pipeline_state.append({
@@ -179,6 +180,7 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 				pipeline_state.append({
 					"name": r.name,
 					"status": [str(e), stack],
+					"error": True,
 				})
 		env_dtos[env.id] = asdict(replace(env, pipeline=[]))
 		env_dtos[env.id]['pipeline'] = pipeline_state

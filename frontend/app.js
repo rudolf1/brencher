@@ -270,7 +270,7 @@ function renderJobs() {
                 const key = `${envObj.id}::${job.name}`;
                 const storageKey = 'jobSpoiler:' + key;
                 const safeId = 'spoiler-' + encodeURIComponent(key).replace(/[^a-zA-Z0-9_-]/g, '_');
-                const isError = /error|exception/i.test(statusDisplay);
+                const isError = job.status.error;
                 const openByDefault = isError || (window._jobSpoilerState && window._jobSpoilerState[storageKey] === 'open');
 
                 return `
