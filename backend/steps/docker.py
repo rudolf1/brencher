@@ -1,7 +1,9 @@
+import hashlib
 import logging
 import os
 import re
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from typing import List, Dict, Callable, Any, Mapping, Protocol, Union, runtime_checkable
 
@@ -238,7 +240,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
 				"diffs": diffs,
 			}
 
-		tmp_compose_path = docker_compose_absolute_path + ".tmp"
+		tmp_compose_path = os.path.join(tempfile.gettempdir(), f"{hashlib.sha1(content.encode()).hexdigest()[:5]}")
 		with open(tmp_compose_path, 'w') as f:
 			f.write(content)
 		logger.info(f"Deploying stack '{self.stack_name}' using {tmp_compose_path}")
