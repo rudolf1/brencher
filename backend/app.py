@@ -110,6 +110,8 @@ if slave_url:
 	# Handlers for events from master -> re-emit locally (marked so we don't loop)
 	@remote_sio.on('branches', namespace='/ws/branches')
 	def _remote_branches(data: Any) -> None:
+		global branches_slaves
+		branches_slaves = data
 		try:
 			socketio.emit('branches', get_global_branches_to_emit(), namespace='/ws/branches')
 		except Exception as e:
@@ -118,7 +120,7 @@ if slave_url:
 
 	@remote_sio.on('environments', namespace='/ws/environment')
 	def _remote_environments(data: Any) -> None:
-		global environments, environments_slaves
+		global environments_slaves
 		environments_slaves = data
 		try:
 			socketio.emit('environments', get_global_envs_to_emit(), namespace='/ws/environment')
@@ -200,7 +202,7 @@ def get_global_envs_to_emit() -> Any:
 	return merge_result
 
 def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
-	global branches_slaves, environments
+	global environments
 	branches: Dict[str, Dict[str, List[Any]]] = {}
 	for k, env in environments.items():
 		branches[k] = {}
@@ -216,7 +218,7 @@ def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 	return branches
 
 def get_global_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
-	global branches, branches_slaves
+	global branches_slaves
 	local_branches: Dict[str, Dict[str, List[Any]]] = get_local_branches_to_emit()
 	return merge_dicts(local_branches, branches_slaves)
 
