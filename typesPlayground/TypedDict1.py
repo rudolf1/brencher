@@ -19,6 +19,8 @@ class C2(TypedDict):
 @dataclass
 class C1V(C1, C2):
 	name: str
+
+
 # version: str
 # version1: str
 

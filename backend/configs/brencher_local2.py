@@ -5,23 +5,23 @@ from steps.git import GitClone, CheckoutMerged, GitUnmerge
 
 clone = GitClone()
 checkoutMerged = CheckoutMerged(clone,
-								push=False,
-								git_user_email="rudolfss13@gmail.com",
-								git_user_name="brencher_bot"
-								)
+                                push=False,
+                                git_user_email="rudolfss13@gmail.com",
+                                git_user_name="brencher_bot"
+                                )
 
 buildDocker = DockerComposeBuild(clone,
-								 docker_repo_username="",
-								 docker_repo_password="",
-								 docker_compose_path="docker-compose.yml",
-								 docker_repo_url="https://registry.rudolf.keenetic.link",
-								 publish=False,
-								 envs=lambda: {
+                                 docker_repo_username="",
+                                 docker_repo_password="",
+                                 docker_compose_path="docker-compose.yml",
+                                 docker_repo_url="https://registry.rudolf.keenetic.link",
+                                 publish=False,
+                                 envs=lambda: {
 									 "version": "auto-" + checkoutMerged.progress().version,
 									 "user_group": "1000:998"
 								 },
 
-								 )
+                                 )
 dockerSwarmCheck = DockerSwarmCheck(
 	stack_name="brencher_local2",
 )
