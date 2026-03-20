@@ -96,7 +96,7 @@ class RemoteRepoHelper:
 		if self.local_dir:
 			shutil.rmtree(self.local_dir, ignore_errors=True)
 
-	def progress(self):
+	def progress(self) -> None:
 		reset_caches([self.env])
 		for i in self.env.pipeline:
 			i.progress()
