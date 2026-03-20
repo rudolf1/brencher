@@ -7,9 +7,8 @@ from dataclasses import dataclass
 from typing import List, Tuple, Set, Dict, Any, Mapping, runtime_checkable
 
 import git
-from git.objects import Commit
-
 from enironment import AbstractStep
+from git.objects import Commit
 
 logger = logging.getLogger(__name__)
 

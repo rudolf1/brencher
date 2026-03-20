@@ -10,7 +10,6 @@ import tempfile
 from typing import Dict, Tuple, List, Callable
 
 import git
-
 from enironment import Environment, AbstractStep
 from steps.docker import DockerSwarmCheckResult
 from steps.git import CheckoutAndMergeResult, CheckoutMerged, GitUnmerge, GitClone, HasVersion

@@ -46,6 +46,7 @@ function showStatus(message, isError = false) {
     statusBar.style.background = isError ? '#f8d7da' : '#e9ecef';
     statusMessage.style.color = isError ? '#721c24' : '#333';
 }
+
 closeStatus.onclick = () => statusBar.classList.add('hidden');
 
 function checkForPendingChanges() {
@@ -61,14 +62,14 @@ function checkForPendingChanges() {
 
 function filterBranches() {
     const filterText = branchFilter.value.toLowerCase().trim();
-    filteredBranches = branches.filter(({ envId, branch, commits }) => {
+    filteredBranches = branches.filter(({envId, branch, commits}) => {
         const selList = selectedBranchesByEnv[envId] || [];
         const deployedMap = deployedCommitsByEnv[envId] || {};
         const isSelected = selList.some(([b]) => b === branch);
         const isDeployed = deployedMap[branch] && deployedMap[branch] !== 'N/A';
         const isFiltered = !!filterText && branch.toLowerCase().includes(filterText);
         const isFilteredByCommit = !!filterText && Array.isArray(commits) && commits.some(c => {
-            const shortHash = c.hexsha ? c.hexsha.substring(0,8).toLowerCase() : '';
+            const shortHash = c.hexsha ? c.hexsha.substring(0, 8).toLowerCase() : '';
             return (c.hexsha && c.hexsha.toLowerCase().includes(filterText)) ||
                 shortHash.includes(filterText) ||
                 (c.message && c.message.toLowerCase().includes(filterText)) ||
@@ -86,13 +87,13 @@ function getCommitDropdownOptions(envId, branchName, desiredCommit) {
 
     if (commits.length) {
         const head = commits[0];
-        const headShort = head.hexsha ? head.hexsha.substring(0,8) : '';
-        options += `<option value="HEAD" ${desiredCommit === 'HEAD' ? 'selected' : ''}>HEAD (${headShort} - ${(head.author||'').substring(0,25)} - ${head.message ? head.message.substring(0,50) + (head.message.length>50?'...':'') : ''})</option>`;
+        const headShort = head.hexsha ? head.hexsha.substring(0, 8) : '';
+        options += `<option value="HEAD" ${desiredCommit === 'HEAD' ? 'selected' : ''}>HEAD (${headShort} - ${(head.author || '').substring(0, 25)} - ${head.message ? head.message.substring(0, 50) + (head.message.length > 50 ? '...' : '') : ''})</option>`;
         commits.forEach(c => {
             const full = c.hexsha;
-            const shortHash = full ? full.substring(0,8) : '';
+            const shortHash = full ? full.substring(0, 8) : '';
             const isSelected = desiredCommit === full || desiredCommit === shortHash;
-            options += `<option value="${full}" ${isSelected ? 'selected' : ''}>${shortHash} - ${(c.author||'').substring(0,25)} - ${c.message ? c.message.substring(0,50)+(c.message.length>50?'...':'') : ''}</option>`;
+            options += `<option value="${full}" ${isSelected ? 'selected' : ''}>${shortHash} - ${(c.author || '').substring(0, 25)} - ${c.message ? c.message.substring(0, 50) + (c.message.length > 50 ? '...' : '') : ''}</option>`;
         });
     } else {
         options += `<option value="HEAD" ${desiredCommit === 'HEAD' ? 'selected' : ''}>HEAD (no commits)</option>`;
@@ -100,7 +101,7 @@ function getCommitDropdownOptions(envId, branchName, desiredCommit) {
 
     const hasMatch = commits.some(c => {
         const full = c.hexsha;
-        const shortHash = full ? full.substring(0,8) : '';
+        const shortHash = full ? full.substring(0, 8) : '';
         return desiredCommit === full || desiredCommit === shortHash || desiredCommit === 'HEAD';
     });
     const isCustom = desiredCommit && desiredCommit !== 'HEAD' && !hasMatch;
@@ -114,7 +115,7 @@ function branchHasCommit(envId, branchName, commit) {
     if (!branchObj) return false;
     return branchObj.commits?.some(c => {
         const full = c.hexsha;
-        const shortHash = full ? full.substring(0,8) : '';
+        const shortHash = full ? full.substring(0, 8) : '';
         return commit === full || commit === shortHash;
     }) || false;
 }
@@ -135,12 +136,12 @@ function renderBranches() {
 
     // Group by envId for clearer separation
     const groups = branchesToShow.reduce((acc, b) => {
-        acc[b.envId] = acc[b.envId] || { envName: b.envName, rows: [] };
+        acc[b.envId] = acc[b.envId] || {envName: b.envName, rows: []};
         acc[b.envId].rows.push(b);
         return acc;
     }, {});
 
-    branchesList.innerHTML = Object.entries(groups).map(([envId, { envName, rows }]) => {
+    branchesList.innerHTML = Object.entries(groups).map(([envId, {envName, rows}]) => {
         return `
         <div class="env-block">
             <h3 class="env-title">Environment: ${envName || envId}</h3>
@@ -154,14 +155,14 @@ function renderBranches() {
                     </tr>
                 </thead>
                 <tbody>
-                    ${rows.map(({ envId: eId, branch }) => {
-                        const selList = selectedBranchesByEnv[eId] || [];
-                        const pair = selList.find(([b]) => b === branch);
-                        const desiredCommit = pair ? pair[1] : 'HEAD';
-                        const deployedMap = deployedCommitsByEnv[eId] || {};
-                        const deployedCommit = deployedMap[branch] || 'N/A';
-                        const hasCommit = branchHasCommit(eId, branch, desiredCommit);
-                        return `
+                    ${rows.map(({envId: eId, branch}) => {
+            const selList = selectedBranchesByEnv[eId] || [];
+            const pair = selList.find(([b]) => b === branch);
+            const desiredCommit = pair ? pair[1] : 'HEAD';
+            const deployedMap = deployedCommitsByEnv[eId] || {};
+            const deployedCommit = deployedMap[branch] || 'N/A';
+            const hasCommit = branchHasCommit(eId, branch, desiredCommit);
+            return `
                         <tr class="branch-row" data-env="${eId}" data-branch="${branch}">
                             <td><input type="checkbox" value="${branch}" data-env="${eId}" ${pair ? 'checked' : ''}></td>
                             <td>${branch}</td>
@@ -175,7 +176,7 @@ function renderBranches() {
                             </td>
                             <td>${deployedCommit}</td>
                         </tr>`;
-                    }).join('')}
+        }).join('')}
                 </tbody>
             </table>
         </div>`;
@@ -256,11 +257,11 @@ function renderJobs() {
                     }
                 };
                 extractUserLinks(job.status);
-                return userLinks.map(([title, url]) => 
+                return userLinks.map(([title, url]) =>
                     `<a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a>`
-                    )
+                )
             })
-            .join(' | ');
+                .join(' | ');
         }
 
         return `
@@ -268,7 +269,7 @@ function renderJobs() {
             <h4>Environment: ${envObj.name || envObj.id || ''}</h4> 
             ${linksHtml ? `<div style="float:right">${linksHtml}</div>` : ''}
             ${Array.isArray(jobsArr) && jobsArr.length > 0
-                ? jobsArr.map(job => {
+            ? jobsArr.map(job => {
                 let statusDisplay = `<pre>` + JSON.stringify(job.status, null, 2) + `</pre>`;
                 statusDisplay = statusDisplay.replace(
                     /(https?:\/\/[^\s"']+)/g,
@@ -285,21 +286,21 @@ function renderJobs() {
                         <div class="job-header" style="cursor:pointer;font-weight:bold;"
                              onclick="toggleJobSpoiler('${key}', '${safeId}')">
                             ${isError
-                                ? `<span style="color:#dc3545;font-weight:bold;margin-right:6px;" title="Error">!</span>`
-                                : `<span style="color:#28a745;font-weight:bold;margin-right:6px;" title="OK">✔</span>`}
+                    ? `<span style="color:#dc3545;font-weight:bold;margin-right:6px;" title="Error">!</span>`
+                    : `<span style="color:#28a745;font-weight:bold;margin-right:6px;" title="OK">✔</span>`}
                             ${envObj.id} - ${job.name}
                         </div>
                         <div id="${safeId}" class="job-spoiler" style="display: ${openByDefault ? 'block' : 'none'}; margin-top:8px;">
                             ${statusDisplay}
                         </div>
                     </div>`;
-                }).join('')
-                : '<div class="job-item">No jobs found.</div>'}
+            }).join('')
+            : '<div class="job-item">No jobs found.</div>'}
             </div>`;
     }).join('');
 }
 
-toggleJobSpoiler = function(key, safeId) {
+toggleJobSpoiler = function (key, safeId) {
     try {
         const el = document.getElementById(safeId);
         if (!el) return;
@@ -318,7 +319,7 @@ toggleJobSpoiler = function(key, safeId) {
     }
 };
 refreshBranchesBtn.onclick = () => {
-    wsEnv.emit('update', { id: "" });
+    wsEnv.emit('update', {id: ""});
     showStatus('Refreshing...');
 };
 
@@ -353,7 +354,12 @@ function setupSocketIO() {
         branches = Object.entries(data).flatMap(([envId, branchMap]) =>
             Object.entries(branchMap).map(([branchName, commitList]) => {
                 const envObj = (environmentsRaw.find((e) => e.id === envId) || [null])[0];
-                return { envId, envName: envObj ? (envObj.name || envObj.id) : envId, branch: branchName, commits: commitList };
+                return {
+                    envId,
+                    envName: envObj ? (envObj.name || envObj.id) : envId,
+                    branch: branchName,
+                    commits: commitList
+                };
             })
         );
         filterBranches();
@@ -398,7 +404,7 @@ function setupSocketIO() {
         // Rebuild branches list environment names for rows already present
         branches = branches.map(b => {
             const envEntry = environmentsRaw.find((e) => (e.id || e.name) === b.envId);
-            return { ...b, envName: envEntry ? (envEntry.name || envEntry.id) : b.envName };
+            return {...b, envName: envEntry ? (envEntry.name || envEntry.id) : b.envName};
         });
 
         filterBranches();
@@ -417,7 +423,7 @@ function updateEnvironment() {
         const localSel = [...(selectedBranchesByEnv[envId] || [])].sort();
         const serverSel = [...(serverSelectedBranchesByEnv[envId] || [])].sort();
         if (JSON.stringify(localSel) !== JSON.stringify(serverSel)) {
-            wsEnv.emit('update', { id: envId, branches: selectedBranchesByEnv[envId] });
+            wsEnv.emit('update', {id: envId, branches: selectedBranchesByEnv[envId]});
             // Optimistically sync server state
             serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
             branchFilter.value = '';
