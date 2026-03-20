@@ -11,7 +11,7 @@ checkoutMerged = CheckoutMerged(clone,
 								)
 
 dockerSwarmCheck = DockerSwarmCheck(
-	stack_name="immich",
+	stack_name="registry",
 )
 
 deployDocker = DockerSwarmDeploy(
@@ -21,24 +21,24 @@ deployDocker = DockerSwarmDeploy(
 	envs=lambda: {
 		"version": "auto-" + checkoutMerged.progress().version
 	},
-	stack_name="immich",
-	docker_compose_path="poc/immich/stack-compose.yml",
+	stack_name="registry",
+	docker_compose_path="docker-compose-registry.yaml",
 )
 unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
 checkPing = UrlCheck(
-	url="https://immich.rudolf.keenetic.link/api/server/ping",
-	expected={"res": "pong"},
+	url="https://registry.rudolf.keenetic.link/v2/",
+	expected={},
 )
 logUrls = SimpleLog(message={
 	"userLinks": {
-		"App": "https://immich.rudolf.keenetic.link",
+		"App": "https://registry.rudolf.keenetic.link",
 	}
 })
 
-__all__ = ["immich"]
-immich = Environment(
-	id="immich",
+__all__ = ["registry"]
+registry = Environment(
+	id="registry",
 	branches=[("ansible/master", "HEAD")],
 	dry=False,
 	repo="https://github.com/rudolf1/uber_backup.git",

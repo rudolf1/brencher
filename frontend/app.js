@@ -119,7 +119,14 @@ function branchHasCommit(envId, branchName, commit) {
     }) || false;
 }
 
+let renderedBranches = []
+
 function renderBranches() {
+    if (JSON.stringify(filteredBranches) === JSON.stringify(renderedBranches)) {
+        return
+    }
+    checkForPendingChanges();
+
     const branchesToShow = filteredBranches.length > 0 || branchFilter.value.trim() ? filteredBranches : branches;
     if (!branchesToShow.length) {
         branchesList.innerHTML = '<p class="loading">No branches found.</p>';
@@ -173,7 +180,6 @@ function renderBranches() {
             </table>
         </div>`;
     }).join('');
-
     // Event wiring
     branchesList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
         cb.onchange = e => {
@@ -215,6 +221,7 @@ function renderBranches() {
             updateBranchCommit(envId, branch, commitId || 'HEAD');
         };
     });
+    renderedBranches = filteredBranches;
 }
 
 function updateBranchCommit(envId, branch, commit) {
@@ -396,7 +403,6 @@ function setupSocketIO() {
 
         filterBranches();
         renderJobs();
-        checkForPendingChanges();
         showStatus('Environments updated.');
     });
 
