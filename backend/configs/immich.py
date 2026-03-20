@@ -5,10 +5,10 @@ from steps.git import GitClone, CheckoutMerged, GitUnmerge
 
 clone = GitClone(branchNamePrefix="ansible")
 checkoutMerged = CheckoutMerged(clone,
-								push=False,
-								git_user_email="rudolfss13@gmail.com",
-								git_user_name="brencher_bot"
-								)
+                                push=False,
+                                git_user_email="rudolfss13@gmail.com",
+                                git_user_name="brencher_bot"
+                                )
 
 dockerSwarmCheck = DockerSwarmCheck(
 	stack_name="immich",

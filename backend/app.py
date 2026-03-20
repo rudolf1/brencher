@@ -6,7 +6,7 @@ import time
 import traceback
 import types
 from dataclasses import asdict, replace
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from typing import TypeVar
 
 import socketio as socketio_client
@@ -15,7 +15,7 @@ from flask import Flask, send_from_directory
 from flask.json.provider import DefaultJSONProvider
 from flask_socketio import SocketIO, emit
 
-from enironment import AbstractStep, Environment, wrap_in_cached
+from enironment import Environment, wrap_in_cached
 from processing import reset_caches
 from steps.git import GitClone
 from steps.step import CachingStep
@@ -174,9 +174,9 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 					})
 				else:
 					pipeline_state.append({
-					"name": r.name,
-					"status": result,
-				})
+						"name": r.name,
+						"status": result,
+					})
 			except BaseException as e:
 				stack = traceback.format_exception(type(e), e, e.__traceback__)
 				pipeline_state.append({
@@ -198,8 +198,9 @@ def get_global_envs_to_emit() -> Any:
 	common_keys = set(local_envs.keys()) & set(environments_slaves.keys())
 	if len(common_keys) > 0:
 		socketio.emit('error', {'message': f"Conflict: both master and slave have environment with id {common_keys}"},
-					  namespace='/ws/errors')
+		              namespace='/ws/errors')
 	return merge_result
+
 
 def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 	global environments
@@ -208,14 +209,15 @@ def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 		branches[k] = {}
 		try:
 			for step in env.pipeline:
-					if isinstance(step, GitClone):
-						branches[k] = {**step.get_branches()}
-					if isinstance(step, CachingStep) and isinstance(step.step, GitClone):
-						branches[k] = {**step.step.get_branches()}
+				if isinstance(step, GitClone):
+					branches[k] = {**step.get_branches()}
+				if isinstance(step, CachingStep) and isinstance(step.step, GitClone):
+					branches[k] = {**step.step.get_branches()}
 		except BaseException as e:
 			logger.error(f"Error fetching branches for environment {env.id}: {str(e)}")
 
 	return branches
+
 
 def get_global_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 	global branches_slaves
@@ -230,10 +232,10 @@ environment_update_event = threading.Event()
 def serve_state() -> Any:
 	return get_global_envs_to_emit()
 
+
 @app.route('/branches')
 def serve_branches() -> Any:
 	return get_global_branches_to_emit()
-
 
 
 class EnvironmentNamespace(Namespace):
@@ -310,7 +312,7 @@ class App:
 			configs.brencher_local1.brencher_local1,
 			configs.torrserv_proxy.torrserv_proxy,
 			configs.immich.immich,
-	        configs.registry.registry,
+			configs.registry.registry,
 		]
 		environments = {e.id: e for e in environments_l}
 
@@ -323,9 +325,9 @@ class App:
 				environments = {k: e for k, e in environments.items() if k not in cli_env_ids}
 		else:
 			cli_env_pairs = {x[0]: x[1] if len(x) > 1 else None for x in [x.split(":")
-							 for x in cli_env_ids_str.split(',')
-							 if len(x) > 0
-							 ]
+			                                                              for x in cli_env_ids_str.split(',')
+			                                                              if len(x) > 0
+			                                                              ]
 			                 }
 			logger.info(f"cli_env_ids {cli_env_pairs}")
 			if cli_env_pairs and len(cli_env_pairs) > 0:
@@ -347,7 +349,6 @@ class App:
 		logger.info(f"Resulting profiles {environments.keys()}")
 
 		environments = {id: wrap_in_cached(e) for id, e in environments.items()}
-
 
 	def processing_thread(self) -> None:
 		while True:

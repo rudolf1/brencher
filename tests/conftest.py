@@ -10,6 +10,7 @@ import pytest
 
 from tests.test_remote_repo import RemoteRepoHelper
 
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[object]) -> object:
 	"""Expose test phase reports on the test item for fixture finalizers."""
@@ -33,7 +34,7 @@ class EventuallyFn(Protocol):
 
 @pytest.fixture
 def eventually() -> EventuallyFn:
-	def _eventually(assert_fn: Callable[[], bool], timeout: float=2.0, interval:float=0.05) -> None:
+	def _eventually(assert_fn: Callable[[], bool], timeout: float = 2.0, interval: float = 0.05) -> None:
 		deadline = time.monotonic() + timeout
 		last_error = None
 		while time.monotonic() < deadline:

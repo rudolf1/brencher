@@ -4,10 +4,10 @@ from steps.git import GitClone, CheckoutMerged, GitUnmerge
 
 clone = GitClone()
 checkoutMerged = CheckoutMerged(clone,
-								push=False,
-								git_user_email="rudolfss13@gmail.com",
-								git_user_name="brencher_bot"
-								)
+                                push=False,
+                                git_user_email="rudolfss13@gmail.com",
+                                git_user_name="brencher_bot"
+                                )
 
 # Step 1: Build the image
 image_build = DockerImageBuild(

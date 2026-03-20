@@ -11,11 +11,13 @@ logger = logging.getLogger(__name__)
 _last_reset_time: float = 0
 RESET_INTERVAL = 3 * 60  # 3 minutes in seconds
 
+
 def reset_caches(environemnts: List[Environment]) -> None:
 	for env in environemnts:
 		for step in env.pipeline:
 			if isinstance(step, CachingStep):
 				step.reset()
+
 
 def process_all_jobs(
 		environemnts: List[Environment],
@@ -32,7 +34,9 @@ def process_all_jobs(
 		for step in env.pipeline:
 			try:
 				step.progress()
-				if (isinstance(step, GitUnmerge) or (isinstance(step, CachingStep) and isinstance(step.step, GitUnmerge))) and len(env.branches) == 0:
+				if (isinstance(step, GitUnmerge) or (
+						isinstance(step, CachingStep) and isinstance(step.step, GitUnmerge))) and len(
+						env.branches) == 0:
 					# TODO Move to separate job.
 					# If branches list empty, need to find any brunch which includes commit and add pair (branch, commit)
 					# If branches not empty, need to find most priority branch (project specific) and add (branch, HEAD)

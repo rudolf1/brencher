@@ -6,7 +6,6 @@
 # from inline_snapshot import snapshot
 
 
-
 # from dirty_equals import IsInt, IsNow
 # from pydantic import TypeAdapter
 
@@ -20,5 +19,3 @@
 # 		"created_at": IsNow(),  # Проверит время, близкое к текущему
 # 		"status": "active"
 # 	})
-
-
