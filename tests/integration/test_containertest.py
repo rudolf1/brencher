@@ -7,7 +7,6 @@ from typing import Any, Generator
 import docker
 import pytest
 import requests
-
 from app import App
 from conftest import EventuallyFn  # type: ignore[import-not-found]
 

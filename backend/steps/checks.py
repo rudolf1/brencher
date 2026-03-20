@@ -2,7 +2,6 @@ import logging
 from typing import Any
 
 import requests
-
 from enironment import AbstractStep
 
 logger = logging.getLogger(__name__)

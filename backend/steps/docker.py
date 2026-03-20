@@ -9,7 +9,6 @@ import docker
 import yaml
 from docker import errors as docker_errors
 from dotenv import dotenv_values
-
 from enironment import AbstractStep
 from steps.git import GitClone, HasVersion
 

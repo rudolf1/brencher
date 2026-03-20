@@ -7,7 +7,6 @@ from typing import List, Dict, Callable, Any, Optional, cast
 import docker
 from docker.models.containers import Container
 from docker.models.images import Image
-
 from enironment import AbstractStep
 from steps.git import CheckoutMerged
 
@@ -20,6 +19,8 @@ class DockerImageBuildResult:
 	image_name: str
 	image_tag: str
 	full_image: str
+
+
 # build_logs: List[str]
 
 

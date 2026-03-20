@@ -8,8 +8,8 @@ import os
 
 import git
 import pytest
-
 from steps.git import CheckoutAndMergeResult
+
 from .test_remote_repo import RemoteRepoHelper
 
 

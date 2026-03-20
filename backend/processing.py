@@ -36,7 +36,7 @@ def process_all_jobs(
 				step.progress()
 				if (isinstance(step, GitUnmerge) or (
 						isinstance(step, CachingStep) and isinstance(step.step, GitUnmerge))) and len(
-						env.branches) == 0:
+					env.branches) == 0:
 					# TODO Move to separate job.
 					# If branches list empty, need to find any brunch which includes commit and add pair (branch, commit)
 					# If branches not empty, need to find most priority branch (project specific) and add (branch, HEAD)
