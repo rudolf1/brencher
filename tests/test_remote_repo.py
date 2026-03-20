@@ -11,7 +11,7 @@ from typing import Dict, Tuple, List, Callable
 
 import git
 
-from enironment import Environment, AbstractStep
+from enironment import Environment, AbstractStep, wrap_in_cached
 from processing import reset_caches
 from steps.docker import DockerSwarmCheckResult
 from steps.git import CheckoutAndMergeResult, CheckoutMerged, GitUnmerge, GitClone, HasVersion
@@ -95,6 +95,10 @@ class RemoteRepoHelper:
 			shutil.rmtree(self.remote_dir, ignore_errors=True)
 		if self.local_dir:
 			shutil.rmtree(self.local_dir, ignore_errors=True)
+
+	def enable_caching(self) -> None:
+		"""Wrap environment pipeline in caching steps"""
+		self.env = wrap_in_cached(self.env)
 
 	def progress(self) -> None:
 		reset_caches([self.env])

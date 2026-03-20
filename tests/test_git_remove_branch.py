@@ -16,7 +16,8 @@ class TestGitRemoveBranch:
 		commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file3.txt", "content3",
 		                                    "Branch2 commit")  # noqa: F841
 
-		repo_helper.env = wrap_in_cached(repo_helper.env)
+		repo_helper.enable_caching()
+
 		repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD")]
 		repo_helper.progress()
 
@@ -27,7 +28,7 @@ class TestGitRemoveBranch:
 		])
 
 		repo_helper.remove_branch(repo_helper.repo, "branch2")
-		with pytest.raises(Exception): # TODO , match="Ref 'origin/branch2' did not resolve to an object"
+		with pytest.raises(BaseException, match="Ref 'origin/branch2' did not resolve to an object"):
 			repo_helper.progress()
 
 
