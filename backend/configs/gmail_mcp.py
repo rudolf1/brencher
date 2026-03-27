@@ -37,8 +37,8 @@ deployDocker = DockerSwarmDeploy(
 unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
 checkPing = UrlCheck(
-	url="https://gmail_mcp.rudolf.keenetic.link",
-	expected={},
+	url="https://gmail_mcp.rudolf.keenetic.link/health",
+	expected={ "ok": True, "service": "gmail-mcp-server" },
 )
 logUrls = SimpleLog(message={
 	"userLinks": {
