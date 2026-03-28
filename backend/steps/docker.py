@@ -57,9 +57,15 @@ class DockerComposeBuild(AbstractStep[List[str]]):
 			services = compose.get('services', {})
 
 			for name, svc in services.items():
-				if svc.get('build') is None:
+				build_section = svc.get('build')
+				if build_section is None:
 					continue
-				build_ctx = os.path.join(os.path.dirname(docker_compose_absolute_path), svc.get('build'))
+				if isinstance(build_section, dict):
+					build_ctx = build_section.get('context', '.')
+					build_dockerfile = build_section.get('dockerfile', 'Dockerfile')
+				else:
+					build_ctx = os.path.join(os.path.dirname(docker_compose_absolute_path), build_section)
+					build_dockerfile = None
 				image = svc.get('image')
 				if not build_ctx or not image:
 					continue
@@ -80,8 +86,8 @@ class DockerComposeBuild(AbstractStep[List[str]]):
 					except docker_errors.ImageNotFound:
 						pass
 
-				logger.info(f"Building image {image} from {build_ctx}")
-				client.images.build(path=build_ctx, tag=image, nocache=True, rm=True)
+				logger.info(f"Building image {image} from {build_ctx}, {build_dockerfile}")
+				client.images.build(path=build_ctx, dockerfile=build_dockerfile, tag=image, nocache=True, rm=True)
 
 				if self.publish:
 					logger.info(f"Pushing image {image}")
