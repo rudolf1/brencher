@@ -47,7 +47,8 @@ checkPing2 = UrlCheck(
 
 logUrls = SimpleLog(message={
 	"userLinks": {
-		"App": "https://gmail_mcp.rudolf.keenetic.link",
+		"AppGm": "http://100.70.193.97:3000/health",
+		"AppTg": "http://100.70.193.97:3001/health",
 	}
 })
 
