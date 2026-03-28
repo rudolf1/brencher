@@ -64,8 +64,12 @@ class DockerComposeBuild(AbstractStep[List[str]]):
 					build_ctx = build_section.get('context', '.')
 					build_dockerfile = build_section.get('dockerfile', 'Dockerfile')
 				else:
-					build_ctx = os.path.join(os.path.dirname(docker_compose_absolute_path), build_section)
-					build_dockerfile = None
+					build_ctx = build_section
+					build_dockerfile = 'Dockerfile'
+
+				build_ctx = os.path.join(os.path.dirname(docker_compose_absolute_path), build_ctx) 
+				build_dockerfile = os.path.join(os.path.dirname(docker_compose_absolute_path), build_dockerfile) 
+
 				image = svc.get('image')
 				if not build_ctx or not image:
 					continue
