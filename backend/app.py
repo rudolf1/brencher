@@ -15,6 +15,7 @@ from flask import Flask, send_from_directory
 from flask.json.provider import DefaultJSONProvider
 from flask_socketio import SocketIO, emit
 
+from configs.gmail_mcp import gmail_mcp
 from enironment import Environment, wrap_in_cached
 from processing import reset_caches
 from steps.git import GitClone
@@ -305,6 +306,7 @@ class App:
 		import configs.torrserv_proxy
 		import configs.immich
 		import configs.registry
+		import configs.gmail_mcp
 		environments_l: List[Environment] = [
 			configs.brencher.brencher,
 			configs.brencher2.brencher2,
@@ -313,6 +315,7 @@ class App:
 			configs.torrserv_proxy.torrserv_proxy,
 			configs.immich.immich,
 			configs.registry.registry,
+			configs.gmail_mcp.gmail_mcp,
 		]
 		environments = {e.id: e for e in environments_l}
 
