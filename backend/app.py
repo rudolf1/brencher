@@ -299,6 +299,7 @@ async def connect_to_slave() -> None:
 				logger.info("Connected to slave WebSocket")
 
 				async def handle_messages() -> None:
+					global branches_slaves, environments_slaves
 					async for msg in ws:
 						parsed = json.loads(msg)
 						logger.debug(f"Received message from slave: {parsed}")
