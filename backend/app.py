@@ -147,9 +147,6 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 						"name": r.name,
 						"status": result,
 					})
-						"name": r.name,
-						"status": result,
-					})
 			except BaseException as e:
 				stack = traceback.format_exception(type(e), e, e.__traceback__)
 				pipeline_state.append({

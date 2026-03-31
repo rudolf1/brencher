@@ -384,36 +384,53 @@ function setupWebSockets() {
                 payload = data || {};
                 environmentsRaw = Object.values(payload);
 
-            // Extract columns from all job statuses
-            columnsByEnv[envId] = {};
-            const jobsArr = envObj.pipeline || [];
-            if (Array.isArray(jobsArr)) {
-                jobsArr.forEach(job => {
-                    if (job.status == null || job.error) return;
-                    const status = job.status;
-                    // New structured format: status is an object with a `columns` key
-                    if (typeof status === 'object' && !Array.isArray(status) && status.columns &&
-                            typeof status.columns === 'object') {
-                        Object.entries(status.columns).forEach(([colName, colData]) => {
-                            if (colData && typeof colData === 'object' && !Array.isArray(colData)) {
-                                columnsByEnv[envId][colName] = {...colData};
-                            }
-                        });
-                    }
-                    // Legacy list format from GitUnmerge: array of [branch_name, commit_hash]
-                    if (job.name === 'GitUnmerge' && Array.isArray(status)) {
-                        const deployedCol = {};
-                        status.forEach(([branchName, commitHash]) => {
-                            if (typeof branchName === 'string' && typeof commitHash === 'string') {
-                                deployedCol[branchName] = commitHash.substring(0, 8);
-                            }
-                        });
-                        if (Object.keys(deployedCol).length > 0) {
-                            columnsByEnv[envId]['Deployed'] = deployedCol;
+                // Sync selections and column data per environment
+                environmentsRaw.forEach((envObj) => {
+                    if (!envObj) return;
+                    const envId = envObj.id || envObj.name || 'unknown';
+                    // Branch selections
+                    if (Array.isArray(envObj.branches) && envObj.branches.length > 0) {
+                        if (Array.isArray(envObj.branches[0])) {
+                            selectedBranchesByEnv[envId] = [...envObj.branches];
+                        } else {
+                            selectedBranchesByEnv[envId] = envObj.branches.map(b => [b, 'HEAD']);
                         }
+                        serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
+                    } else if (!selectedBranchesByEnv[envId]) {
+                        selectedBranchesByEnv[envId] = [];
+                        serverSelectedBranchesByEnv[envId] = [];
+                    }
+                    // Extract columns from all job statuses
+                    columnsByEnv[envId] = {};
+                    const jobsArr = envObj.pipeline || [];
+                    if (Array.isArray(jobsArr)) {
+                        jobsArr.forEach(job => {
+                            if (job.status == null || job.error) return;
+                            const status = job.status;
+                            // New structured format: status is an object with a `columns` key
+                            if (typeof status === 'object' && !Array.isArray(status) && status.columns &&
+                                    typeof status.columns === 'object') {
+                                Object.entries(status.columns).forEach(([colName, colData]) => {
+                                    if (colData && typeof colData === 'object' && !Array.isArray(colData)) {
+                                        columnsByEnv[envId][colName] = {...colData};
+                                    }
+                                });
+                            }
+                            // Legacy list format from GitUnmerge: array of [branch_name, commit_hash]
+                            if (job.name === 'GitUnmerge' && Array.isArray(status)) {
+                                const deployedCol = {};
+                                status.forEach(([branchName, commitHash]) => {
+                                    if (typeof branchName === 'string' && typeof commitHash === 'string') {
+                                        deployedCol[branchName] = commitHash.substring(0, 8);
+                                    }
+                                });
+                                if (Object.keys(deployedCol).length > 0) {
+                                    columnsByEnv[envId]['Deployed'] = deployedCol;
+                                }
+                            }
+                        });
                     }
                 });
-            }
 
                 // Rebuild branches list environment names for rows already present
                 branches = branches.map(b => {
@@ -423,6 +440,7 @@ function setupWebSockets() {
 
                 filterBranches();
                 renderJobs();
+                checkForPendingChanges();
                 showStatus('Environments updated.');
             } else if ('error' in message) {
                 showStatus(message.error.message || 'Unknown error', true);
