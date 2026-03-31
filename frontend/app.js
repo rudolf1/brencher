@@ -46,14 +46,16 @@ function showStatus(message, isError = false) {
 
 closeStatus.onclick = () => statusBar.classList.add('hidden');
 
-function checkForPendingChanges() {
+function isChangesPending() {
     // Determine if any environment has changed selections
-    const changed = Object.keys(selectedBranchesByEnv).some(envId => {
+    return Object.keys(selectedBranchesByEnv).some(envId => {
         const localSel = [...(selectedBranchesByEnv[envId] || [])].sort();
         const serverSel = [...(serverSelectedBranchesByEnv[envId] || [])].sort();
         return JSON.stringify(localSel) !== JSON.stringify(serverSel);
     });
-    if (changed) applyChangesBtn.classList.remove('hidden');
+}
+function checkForPendingChanges() {
+    if (isChangesPending()) applyChangesBtn.classList.remove('hidden');
     else applyChangesBtn.classList.add('hidden');
 }
 
@@ -388,17 +390,18 @@ function setupWebSockets() {
                 environmentsRaw.forEach((envObj) => {
                     if (!envObj) return;
                     const envId = envObj.id || envObj.name || 'unknown';
-                    // Branch selections
-                    if (Array.isArray(envObj.branches) && envObj.branches.length > 0) {
-                        if (Array.isArray(envObj.branches[0])) {
-                            selectedBranchesByEnv[envId] = [...envObj.branches];
-                        } else {
-                            selectedBranchesByEnv[envId] = envObj.branches.map(b => [b, 'HEAD']);
+                    if (!isChangesPending()) {
+                        if (Array.isArray(envObj.branches) && envObj.branches.length > 0) {
+                            if (Array.isArray(envObj.branches[0])) {
+                                selectedBranchesByEnv[envId] = [...envObj.branches];
+                            } else {
+                                selectedBranchesByEnv[envId] = envObj.branches.map(b => [b, 'HEAD']);
+                            }
+                            serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
+                        } else if (!selectedBranchesByEnv[envId]) {
+                            selectedBranchesByEnv[envId] = [];
+                            serverSelectedBranchesByEnv[envId] = [];
                         }
-                        serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
-                    } else if (!selectedBranchesByEnv[envId]) {
-                        selectedBranchesByEnv[envId] = [];
-                        serverSelectedBranchesByEnv[envId] = [];
                     }
                     // Extract columns from all job statuses
                     columnsByEnv[envId] = {};
@@ -415,18 +418,6 @@ function setupWebSockets() {
                                         columnsByEnv[envId][colName] = {...colData};
                                     }
                                 });
-                            }
-                            // Legacy list format from GitUnmerge: array of [branch_name, commit_hash]
-                            if (job.name === 'GitUnmerge' && Array.isArray(status)) {
-                                const deployedCol = {};
-                                status.forEach(([branchName, commitHash]) => {
-                                    if (typeof branchName === 'string' && typeof commitHash === 'string') {
-                                        deployedCol[branchName] = commitHash.substring(0, 8);
-                                    }
-                                });
-                                if (Object.keys(deployedCol).length > 0) {
-                                    columnsByEnv[envId]['Deployed'] = deployedCol;
-                                }
                             }
                         });
                     }
