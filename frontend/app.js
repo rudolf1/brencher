@@ -2,10 +2,8 @@
 // You can add your Socket.IO and UI code here
 console.log('app.js loaded');
 
-// WebSocket namespaces
-const WS_BRANCHES = '/ws/branches';
-const WS_ENVIRONMENT = '/ws/environment';
-const WS_ERRORS = '/ws/errors';
+// WebSocket endpoint
+const WS_URL = '/ws';
 
 // DOM refs
 const branchesList = document.getElementById('branches-list');
@@ -36,10 +34,8 @@ const serverSelectedBranchesByEnv = {};
 // Populated from any step result that contains a `columns` key (e.g. GitUnmerge)
 const columnsByEnv = {};
 
-// Socket instances
-let wsBranches = null;
-let wsEnv = null;
-let wsErr = null;
+// Single WebSocket connection
+let ws = null;
 
 function showStatus(message, isError = false) {
     statusMessage.textContent = message;
@@ -50,14 +46,16 @@ function showStatus(message, isError = false) {
 
 closeStatus.onclick = () => statusBar.classList.add('hidden');
 
-function checkForPendingChanges() {
+function isChangesPending() {
     // Determine if any environment has changed selections
-    const changed = Object.keys(selectedBranchesByEnv).some(envId => {
+    return Object.keys(selectedBranchesByEnv).some(envId => {
         const localSel = [...(selectedBranchesByEnv[envId] || [])].sort();
         const serverSel = [...(serverSelectedBranchesByEnv[envId] || [])].sort();
         return JSON.stringify(localSel) !== JSON.stringify(serverSel);
     });
-    if (changed) applyChangesBtn.classList.remove('hidden');
+}
+function checkForPendingChanges() {
+    if (isChangesPending()) applyChangesBtn.classList.remove('hidden');
     else applyChangesBtn.classList.add('hidden');
 }
 
@@ -330,7 +328,9 @@ toggleJobSpoiler = function (key, safeId) {
     }
 };
 refreshBranchesBtn.onclick = () => {
-    wsEnv.emit('update', {id: ""});
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ update: { id: "" } }));
+    }
     showStatus('Refreshing...');
 };
 
@@ -354,95 +354,100 @@ applyChangesBtn.onclick = () => {
     updateEnvironment();
 };
 
-// Socket.IO setup
-function setupSocketIO() {
-    wsBranches = io(WS_BRANCHES);
-    wsEnv = io(WS_ENVIRONMENT);
-    wsErr = io(WS_ERRORS);
+// Single WebSocket setup
+function setupWebSockets() {
+    // Close existing connection before reconnecting
+    if (ws && ws.readyState !== WebSocket.CLOSED) {
+        ws.onclose = null; // Prevent recursive reconnect
+        ws.close();
+    }
 
-    wsBranches.on('branches', data => {
-        // data: { envId: { branchName: commits[] } }
-        branches = Object.entries(data).flatMap(([envId, branchMap]) =>
-            Object.entries(branchMap).map(([branchName, commitList]) => {
-                const envObj = (environmentsRaw.find((e) => e.id === envId) || [null])[0];
-                return {
-                    envId,
-                    envName: envObj ? (envObj.name || envObj.id) : envId,
-                    branch: branchName,
-                    commits: commitList
-                };
-            })
-        );
-        filterBranches();
-        showStatus('Branches updated.');
-    });
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
 
-    wsEnv.on('environments', data => {
-        payload = data || {};
-        environmentsRaw = Object.values(payload);
+    ws = new WebSocket(`${protocol}//${host}${WS_URL}`);
+    ws.onopen = () => console.log('WebSocket connected');
+    ws.onmessage = (event) => {
+        try {
+            const message = JSON.parse(event.data);
+            if ('branches' in message) {
+                const data = message.branches;
+                // data: { envId: { branchName: commits[] } }
+                branches = Object.entries(data).flatMap(([envId, branchMap]) =>
+                    Object.entries(branchMap).map(([branchName, commitList]) => {
+                        const envObj = (environmentsRaw.find((e) => e.id === envId) || [null])[0];
+                        return { envId, envName: envObj ? (envObj.name || envObj.id) : envId, branch: branchName, commits: commitList };
+                    })
+                );
+                filterBranches();
+                showStatus('Branches updated.');
+            } else if ('environments' in message) {
+                const data = message.environments;
+                payload = data || {};
+                environmentsRaw = Object.values(payload);
 
-        // Sync selections and deployed commits per environment
-        environmentsRaw.forEach((envObj) => {
-            if (!envObj) return;
-            const envId = envObj.id || envObj.name || 'unknown';
-            // Branch selections
-            if (Array.isArray(envObj.branches) && envObj.branches.length > 0) {
-                if (Array.isArray(envObj.branches[0])) {
-                    selectedBranchesByEnv[envId] = [...envObj.branches];
-                } else {
-                    selectedBranchesByEnv[envId] = envObj.branches.map(b => [b, 'HEAD']);
-                }
-                serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
-            } else if (!selectedBranchesByEnv[envId]) {
-                selectedBranchesByEnv[envId] = [];
-                serverSelectedBranchesByEnv[envId] = [];
-            }
-            // Extract columns from all job statuses
-            columnsByEnv[envId] = {};
-            const jobsArr = envObj.pipeline || [];
-            if (Array.isArray(jobsArr)) {
-                jobsArr.forEach(job => {
-                    if (job.status == null || job.error) return;
-                    const status = job.status;
-                    // New structured format: status is an object with a `columns` key
-                    if (typeof status === 'object' && !Array.isArray(status) && status.columns &&
-                            typeof status.columns === 'object') {
-                        Object.entries(status.columns).forEach(([colName, colData]) => {
-                            if (colData && typeof colData === 'object' && !Array.isArray(colData)) {
-                                columnsByEnv[envId][colName] = {...colData};
+                // Sync selections and column data per environment
+                environmentsRaw.forEach((envObj) => {
+                    if (!envObj) return;
+                    const envId = envObj.id || envObj.name || 'unknown';
+                    if (!isChangesPending()) {
+                        if (Array.isArray(envObj.branches) && envObj.branches.length > 0) {
+                            if (Array.isArray(envObj.branches[0])) {
+                                selectedBranchesByEnv[envId] = [...envObj.branches];
+                            } else {
+                                selectedBranchesByEnv[envId] = envObj.branches.map(b => [b, 'HEAD']);
                             }
-                        });
-                    }
-                    // Legacy list format from GitUnmerge: array of [branch_name, commit_hash]
-                    if (job.name === 'GitUnmerge' && Array.isArray(status)) {
-                        const deployedCol = {};
-                        status.forEach(([branchName, commitHash]) => {
-                            if (typeof branchName === 'string' && typeof commitHash === 'string') {
-                                deployedCol[branchName] = commitHash.substring(0, 8);
-                            }
-                        });
-                        if (Object.keys(deployedCol).length > 0) {
-                            columnsByEnv[envId]['Deployed'] = deployedCol;
+                            serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
+                        } else if (!selectedBranchesByEnv[envId]) {
+                            selectedBranchesByEnv[envId] = [];
+                            serverSelectedBranchesByEnv[envId] = [];
                         }
                     }
+                    // Extract columns from all job statuses
+                    columnsByEnv[envId] = {};
+                    const jobsArr = envObj.pipeline || [];
+                    if (Array.isArray(jobsArr)) {
+                        jobsArr.forEach(job => {
+                            if (job.status == null || job.error) return;
+                            const status = job.status;
+                            // New structured format: status is an object with a `columns` key
+                            if (typeof status === 'object' && !Array.isArray(status) && status.columns &&
+                                    typeof status.columns === 'object') {
+                                Object.entries(status.columns).forEach(([colName, colData]) => {
+                                    if (colData && typeof colData === 'object' && !Array.isArray(colData)) {
+                                        columnsByEnv[envId][colName] = {...colData};
+                                    }
+                                });
+                            }
+                        });
+                    }
                 });
+
+                // Rebuild branches list environment names for rows already present
+                branches = branches.map(b => {
+                    const envEntry = environmentsRaw.find((e) => (e.id || e.name) === b.envId);
+                    return { ...b, envName: envEntry ? (envEntry.name || envEntry.id) : b.envName };
+                });
+
+                filterBranches();
+                renderJobs();
+                showStatus('Environments updated.');
+            } else if ('error' in message) {
+                console.error('Error from server:', message.error);
+                showStatus(message.error.message || 'Unknown error', true);
             }
-        });
-
-        // Rebuild branches list environment names for rows already present
-        branches = branches.map(b => {
-            const envEntry = environmentsRaw.find((e) => (e.id || e.name) === b.envId);
-            return {...b, envName: envEntry ? (envEntry.name || envEntry.id) : b.envName};
-        });
-
-        filterBranches();
-        renderJobs();
-        showStatus('Environments updated.');
-    });
-
-    wsEnv.on('disconnect', () => showStatus('Disconnected from environment websocket.', true));
-    wsBranches.on('disconnect', () => showStatus('Disconnected from branches websocket.', true));
-    wsErr.on('error', data => showStatus(data.message || 'Unknown error', true));
+            checkForPendingChanges();
+        } catch (e) {
+            console.error('Error processing WebSocket message:', e);
+        }
+    };
+    ws.onclose = () => {
+        showStatus('Disconnected from server.', true);
+        setTimeout(() => setupWebSockets(), 5000);
+    };
+    ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+    };
 }
 
 function updateEnvironment() {
@@ -451,7 +456,9 @@ function updateEnvironment() {
         const localSel = [...(selectedBranchesByEnv[envId] || [])].sort();
         const serverSel = [...(serverSelectedBranchesByEnv[envId] || [])].sort();
         if (JSON.stringify(localSel) !== JSON.stringify(serverSel)) {
-            wsEnv.emit('update', {id: envId, branches: selectedBranchesByEnv[envId]});
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ update: { id: envId, branches: selectedBranchesByEnv[envId] } }));
+            }
             // Optimistically sync server state
             serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
             branchFilter.value = '';
@@ -460,9 +467,8 @@ function updateEnvironment() {
     checkForPendingChanges();
     showStatus('Changes applied (pending server confirmation).');
 }
-
 // Initial load
-setupSocketIO();
+setupWebSockets();
 showStatus('Loading branches...');
 renderBranches();
 renderJobs();

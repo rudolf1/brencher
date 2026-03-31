@@ -1,10 +1,10 @@
-flask
-flask-socketio
+fastapi
+uvicorn[standard]
+websockets
 gitpython
 python-dotenv
 docker
 PyYAML
-websocket-client
 
 pytest
 pytest-asyncio
@@ -12,6 +12,5 @@ mypy
 ty
 types-PyYAML
 types-requests
-types-flask-socketio
 types-docker
 testcontainers
