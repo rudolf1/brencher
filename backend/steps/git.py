@@ -4,6 +4,7 @@ import os
 import shutil
 import tempfile
 from dataclasses import dataclass
+import traceback
 from typing import List, Tuple, Set, Dict, Any, Mapping, runtime_checkable
 
 import git
@@ -140,12 +141,16 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 		# Extract commit ids for the selected branches
 		commit_ids: Dict[Commit, str] = {}
 		for branch_pair in self.env.branches:
-			branch_name, desired_commit = branch_pair
-			if desired_commit == 'HEAD':
-				commit = repo.commit(f'origin/{branch_name}')
-			else:
-				commit = repo.commit(desired_commit)
-			commit_ids[commit] = branch_name
+			try:
+				branch_name, desired_commit = branch_pair
+				if desired_commit == 'HEAD':
+					commit = repo.commit(f'origin/{branch_name}')
+				else:
+					commit = repo.commit(desired_commit)
+				commit_ids[commit] = branch_name
+			except BaseException as e:
+				stack = traceback.format_exception(type(e), e, e.__traceback__)
+				logger.error(f"Error finding desired commits for branch {branch_pair}: {str(e)}\n{''.join(stack)}")
 		return commit_ids
 
 	def progress(self) -> CheckoutAndMergeResult:

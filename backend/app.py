@@ -302,7 +302,6 @@ async def connect_to_slave() -> None:
 					global branches_slaves, environments_slaves
 					async for msg in ws:
 						parsed = json.loads(msg)
-						logger.debug(f"Received message from slave: {parsed}")
 						if "branches" in parsed:
 							branches_slaves = parsed["branches"]
 							await broadcast_branches(get_global_branches_to_emit())
@@ -315,7 +314,6 @@ async def connect_to_slave() -> None:
 				async def handle_sends() -> None:
 					while True:
 						msg = await slave_send_queue.get()
-						logger.debug(f"Sending message to slave: {msg}")
 						await ws.send(json.dumps(msg))
 
 				await asyncio.gather(
