@@ -440,11 +440,11 @@ function setupWebSockets() {
 
                 filterBranches();
                 renderJobs();
-                checkForPendingChanges();
                 showStatus('Environments updated.');
             } else if ('error' in message) {
                 showStatus(message.error.message || 'Unknown error', true);
             }
+            checkForPendingChanges();
         } catch (e) {
             console.error('Error processing WebSocket message:', e);
         }
