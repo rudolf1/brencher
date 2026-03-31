@@ -10,10 +10,9 @@ import tempfile
 from typing import Dict, Tuple, List, Callable
 
 import git
-
 from enironment import Environment, AbstractStep
 from steps.docker import DockerSwarmCheckResult
-from steps.git import CheckoutAndMergeResult, CheckoutMerged, GitUnmerge, GitClone, HasVersion
+from steps.git import CheckoutAndMergeResult, CheckoutMerged, GitUnmerge, GitClone, HasVersion, GitUnmergeResult
 from steps.step import CachingStep  # noqa: F401
 
 
@@ -72,21 +71,26 @@ class RemoteRepoHelper:
 				git_unmerge
 			]
 		)
-	@property
-	def checkout_merged(self) -> AbstractStep[CheckoutAndMergeResult]:
-		return [i for i in self.env.pipeline if isinstance(i, CheckoutMerged) or (isinstance(i, CachingStep) and isinstance(i.step, CheckoutMerged))][0]
-	
-	@property
-	def git_clone(self) -> AbstractStep[str]:
-		return [i for i in self.env.pipeline if isinstance(i, GitClone) or (isinstance(i, CachingStep) and isinstance(i.step, GitClone))][0]
 
 	@property
-	def git_unmerge(self) -> AbstractStep[List[Tuple[str, str]]]:
-		return [i for i in self.env.pipeline if isinstance(i, GitUnmerge) or (isinstance(i, CachingStep) and isinstance(i.step, GitUnmerge))][0]
+	def checkout_merged(self) -> AbstractStep[CheckoutAndMergeResult]:
+		return [i for i in self.env.pipeline if
+		        isinstance(i, CheckoutMerged) or (isinstance(i, CachingStep) and isinstance(i.step, CheckoutMerged))][0]
+
+	@property
+	def git_clone(self) -> AbstractStep[str]:
+		return [i for i in self.env.pipeline if
+		        isinstance(i, GitClone) or (isinstance(i, CachingStep) and isinstance(i.step, GitClone))][0]
+
+	@property
+	def git_unmerge(self) -> AbstractStep[GitUnmergeResult]:
+		return [i for i in self.env.pipeline if
+		        isinstance(i, GitUnmerge) or (isinstance(i, CachingStep) and isinstance(i.step, GitUnmerge))][0]
 
 	@property
 	def mock_check(self) -> AbstractStep[Dict[str, HasVersion]]:
-		return [i for i in self.env.pipeline if isinstance(i, MockDockerSwarmCheck) or (isinstance(i, CachingStep) and isinstance(i.step, MockDockerSwarmCheck))][0]
+		return [i for i in self.env.pipeline if isinstance(i, MockDockerSwarmCheck) or (
+				isinstance(i, CachingStep) and isinstance(i.step, MockDockerSwarmCheck))][0]
 
 	def teardown(self) -> None:
 		"""Clean up temporary directories"""
@@ -96,7 +100,7 @@ class RemoteRepoHelper:
 			shutil.rmtree(self.local_dir, ignore_errors=True)
 
 	def create_commit(self, repo: git.Repo, from_branch: str, to_branch: str, filename: str, content: str,
-					  message: str) -> git.Commit:
+	                  message: str) -> git.Commit:
 		"""Create a commit in the repository
 
 		If to_branch doesn't exist, it will be created from from_branch and checked out.
@@ -154,6 +158,6 @@ class RemoteRepoHelper:
 	def print_git_logs(self) -> None:
 		"""Print remote and local repository logs for debugging failed tests."""
 		print(f"Version: {git.__version__}")
-		
+
 		print(self._safe_git_log(self.remote_dir, "remote"))
 		print(self._safe_git_log(self.local_dir, "local"))

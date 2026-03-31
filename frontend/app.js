@@ -30,8 +30,9 @@ let environmentsRaw = [];
 const selectedBranchesByEnv = {};
 // serverSelectedBranchesByEnv mirrors server's last known selection for diffing
 const serverSelectedBranchesByEnv = {};
-// deployedCommitsByEnv: envId -> { branchName: deployedShortHash }
-const deployedCommitsByEnv = {};
+// columnsByEnv: envId -> { columnName: { branchName: value } }
+// Populated from any step result that contains a `columns` key (e.g. GitUnmerge)
+const columnsByEnv = {};
 
 // Single WebSocket connection
 let ws = null;
@@ -42,6 +43,7 @@ function showStatus(message, isError = false) {
     statusBar.style.background = isError ? '#f8d7da' : '#e9ecef';
     statusMessage.style.color = isError ? '#721c24' : '#333';
 }
+
 closeStatus.onclick = () => statusBar.classList.add('hidden');
 
 function checkForPendingChanges() {
@@ -57,20 +59,21 @@ function checkForPendingChanges() {
 
 function filterBranches() {
     const filterText = branchFilter.value.toLowerCase().trim();
-    filteredBranches = branches.filter(({ envId, branch, commits }) => {
+    filteredBranches = branches.filter(({envId, branch, commits}) => {
         const selList = selectedBranchesByEnv[envId] || [];
-        const deployedMap = deployedCommitsByEnv[envId] || {};
         const isSelected = selList.some(([b]) => b === branch);
-        const isDeployed = deployedMap[branch] && deployedMap[branch] !== 'N/A';
+        // Always show branches that appear in any column (e.g. deployed branches from GitUnmerge)
+        const envCols = columnsByEnv[envId] || {};
+        const isInColumns = Object.values(envCols).some(colData => branch in colData);
         const isFiltered = !!filterText && branch.toLowerCase().includes(filterText);
         const isFilteredByCommit = !!filterText && Array.isArray(commits) && commits.some(c => {
-            const shortHash = c.hexsha ? c.hexsha.substring(0,8).toLowerCase() : '';
+            const shortHash = c.hexsha ? c.hexsha.substring(0, 8).toLowerCase() : '';
             return (c.hexsha && c.hexsha.toLowerCase().includes(filterText)) ||
                 shortHash.includes(filterText) ||
                 (c.message && c.message.toLowerCase().includes(filterText)) ||
                 (c.author && c.author.toLowerCase().includes(filterText));
         });
-        return showAllBranches || isSelected || isDeployed || isFiltered || isFilteredByCommit;
+        return showAllBranches || isSelected || isInColumns || isFiltered || isFilteredByCommit;
     });
     renderBranches();
 }
@@ -82,13 +85,13 @@ function getCommitDropdownOptions(envId, branchName, desiredCommit) {
 
     if (commits.length) {
         const head = commits[0];
-        const headShort = head.hexsha ? head.hexsha.substring(0,8) : '';
-        options += `<option value="HEAD" ${desiredCommit === 'HEAD' ? 'selected' : ''}>HEAD (${headShort} - ${(head.author||'').substring(0,25)} - ${head.message ? head.message.substring(0,50) + (head.message.length>50?'...':'') : ''})</option>`;
+        const headShort = head.hexsha ? head.hexsha.substring(0, 8) : '';
+        options += `<option value="HEAD" ${desiredCommit === 'HEAD' ? 'selected' : ''}>HEAD (${headShort} - ${(head.author || '').substring(0, 25)} - ${head.message ? head.message.substring(0, 50) + (head.message.length > 50 ? '...' : '') : ''})</option>`;
         commits.forEach(c => {
             const full = c.hexsha;
-            const shortHash = full ? full.substring(0,8) : '';
+            const shortHash = full ? full.substring(0, 8) : '';
             const isSelected = desiredCommit === full || desiredCommit === shortHash;
-            options += `<option value="${full}" ${isSelected ? 'selected' : ''}>${shortHash} - ${(c.author||'').substring(0,25)} - ${c.message ? c.message.substring(0,50)+(c.message.length>50?'...':'') : ''}</option>`;
+            options += `<option value="${full}" ${isSelected ? 'selected' : ''}>${shortHash} - ${(c.author || '').substring(0, 25)} - ${c.message ? c.message.substring(0, 50) + (c.message.length > 50 ? '...' : '') : ''}</option>`;
         });
     } else {
         options += `<option value="HEAD" ${desiredCommit === 'HEAD' ? 'selected' : ''}>HEAD (no commits)</option>`;
@@ -96,7 +99,7 @@ function getCommitDropdownOptions(envId, branchName, desiredCommit) {
 
     const hasMatch = commits.some(c => {
         const full = c.hexsha;
-        const shortHash = full ? full.substring(0,8) : '';
+        const shortHash = full ? full.substring(0, 8) : '';
         return desiredCommit === full || desiredCommit === shortHash || desiredCommit === 'HEAD';
     });
     const isCustom = desiredCommit && desiredCommit !== 'HEAD' && !hasMatch;
@@ -110,9 +113,18 @@ function branchHasCommit(envId, branchName, commit) {
     if (!branchObj) return false;
     return branchObj.commits?.some(c => {
         const full = c.hexsha;
-        const shortHash = full ? full.substring(0,8) : '';
+        const shortHash = full ? full.substring(0, 8) : '';
         return commit === full || commit === shortHash;
     }) || false;
+}
+
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 let renderedBranches = []
@@ -131,12 +143,14 @@ function renderBranches() {
 
     // Group by envId for clearer separation
     const groups = branchesToShow.reduce((acc, b) => {
-        acc[b.envId] = acc[b.envId] || { envName: b.envName, rows: [] };
+        acc[b.envId] = acc[b.envId] || {envName: b.envName, rows: []};
         acc[b.envId].rows.push(b);
         return acc;
     }, {});
 
-    branchesList.innerHTML = Object.entries(groups).map(([envId, { envName, rows }]) => {
+    branchesList.innerHTML = Object.entries(groups).map(([envId, {envName, rows}]) => {
+        const envCols = columnsByEnv[envId] || {};
+        const colNames = Object.keys(envCols);
         return `
         <div class="env-block">
             <h3 class="env-title">Environment: ${envName || envId}</h3>
@@ -146,18 +160,16 @@ function renderBranches() {
                         <th>Deploy</th>
                         <th>Branch</th>
                         <th>Desired Commit</th>
-                        <th>Deployed</th>
+                        ${colNames.map(n => `<th>${escapeHtml(n)}</th>`).join('')}
                     </tr>
                 </thead>
                 <tbody>
-                    ${rows.map(({ envId: eId, branch }) => {
-                        const selList = selectedBranchesByEnv[eId] || [];
-                        const pair = selList.find(([b]) => b === branch);
-                        const desiredCommit = pair ? pair[1] : 'HEAD';
-                        const deployedMap = deployedCommitsByEnv[eId] || {};
-                        const deployedCommit = deployedMap[branch] || 'N/A';
-                        const hasCommit = branchHasCommit(eId, branch, desiredCommit);
-                        return `
+                    ${rows.map(({envId: eId, branch}) => {
+            const selList = selectedBranchesByEnv[eId] || [];
+            const pair = selList.find(([b]) => b === branch);
+            const desiredCommit = pair ? pair[1] : 'HEAD';
+            const hasCommit = branchHasCommit(eId, branch, desiredCommit);
+            return `
                         <tr class="branch-row" data-env="${eId}" data-branch="${branch}">
                             <td><input type="checkbox" value="${branch}" data-env="${eId}" ${pair ? 'checked' : ''}></td>
                             <td>${branch}</td>
@@ -169,9 +181,9 @@ function renderBranches() {
                                        value="${desiredCommit !== 'HEAD' && !hasCommit ? desiredCommit : ''}"
                                        placeholder="Enter commit ID" style="display: ${desiredCommit !== 'HEAD' && !hasCommit ? 'inline-block' : 'none'};" />
                             </td>
-                            <td>${deployedCommit}</td>
+                            ${colNames.map(n => `<td>${escapeHtml((envCols[n] && envCols[n][branch]) || '')}</td>`).join('')}
                         </tr>`;
-                    }).join('')}
+        }).join('')}
                 </tbody>
             </table>
         </div>`;
@@ -252,11 +264,11 @@ function renderJobs() {
                     }
                 };
                 extractUserLinks(job.status);
-                return userLinks.map(([title, url]) => 
+                return userLinks.map(([title, url]) =>
                     `<a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a>`
-                    )
+                )
             })
-            .join(' | ');
+                .join(' | ');
         }
 
         return `
@@ -264,7 +276,7 @@ function renderJobs() {
             <h4>Environment: ${envObj.name || envObj.id || ''}</h4> 
             ${linksHtml ? `<div style="float:right">${linksHtml}</div>` : ''}
             ${Array.isArray(jobsArr) && jobsArr.length > 0
-                ? jobsArr.map(job => {
+            ? jobsArr.map(job => {
                 let statusDisplay = `<pre>` + JSON.stringify(job.status, null, 2) + `</pre>`;
                 statusDisplay = statusDisplay.replace(
                     /(https?:\/\/[^\s"']+)/g,
@@ -281,21 +293,21 @@ function renderJobs() {
                         <div class="job-header" style="cursor:pointer;font-weight:bold;"
                              onclick="toggleJobSpoiler('${key}', '${safeId}')">
                             ${isError
-                                ? `<span style="color:#dc3545;font-weight:bold;margin-right:6px;" title="Error">!</span>`
-                                : `<span style="color:#28a745;font-weight:bold;margin-right:6px;" title="OK">✔</span>`}
+                    ? `<span style="color:#dc3545;font-weight:bold;margin-right:6px;" title="Error">!</span>`
+                    : `<span style="color:#28a745;font-weight:bold;margin-right:6px;" title="OK">✔</span>`}
                             ${envObj.id} - ${job.name}
                         </div>
                         <div id="${safeId}" class="job-spoiler" style="display: ${openByDefault ? 'block' : 'none'}; margin-top:8px;">
                             ${statusDisplay}
                         </div>
                     </div>`;
-                }).join('')
-                : '<div class="job-item">No jobs found.</div>'}
+            }).join('')
+            : '<div class="job-item">No jobs found.</div>'}
             </div>`;
     }).join('');
 }
 
-toggleJobSpoiler = function(key, safeId) {
+toggleJobSpoiler = function (key, safeId) {
     try {
         const el = document.getElementById(safeId);
         if (!el) return;
@@ -372,36 +384,36 @@ function setupWebSockets() {
                 payload = data || {};
                 environmentsRaw = Object.values(payload);
 
-                // Sync selections and deployed commits per environment
-                environmentsRaw.forEach((envObj) => {
-                    if (!envObj) return;
-                    const envId = envObj.id || envObj.name || 'unknown';
-                    // Branch selections
-                    if (Array.isArray(envObj.branches) && envObj.branches.length > 0) {
-                        if (Array.isArray(envObj.branches[0])) {
-                            selectedBranchesByEnv[envId] = [...envObj.branches];
-                        } else {
-                            selectedBranchesByEnv[envId] = envObj.branches.map(b => [b, 'HEAD']);
-                        }
-                        serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
-                    } else if (!selectedBranchesByEnv[envId]) {
-                        selectedBranchesByEnv[envId] = [];
-                        serverSelectedBranchesByEnv[envId] = [];
-                    }
-                    const jobsArr = envObj.pipeline || []
-                    // Deployed commits from GitUnmerge job
-                    const gitUnmergeJob = Array.isArray(jobsArr) ? jobsArr.find(j => j.name === 'GitUnmerge') : null;
-                    deployedCommitsByEnv[envId] = {};
-                    if (gitUnmergeJob && Array.isArray(gitUnmergeJob.status)) {
-                        gitUnmergeJob.status.forEach(([commitHash, branchNames]) => {
-                            if (Array.isArray(branchNames)) {
-                                branchNames.forEach(bName => {
-                                    deployedCommitsByEnv[envId][bName] = commitHash.substring(0, 8);
-                                });
+            // Extract columns from all job statuses
+            columnsByEnv[envId] = {};
+            const jobsArr = envObj.pipeline || [];
+            if (Array.isArray(jobsArr)) {
+                jobsArr.forEach(job => {
+                    if (job.status == null || job.error) return;
+                    const status = job.status;
+                    // New structured format: status is an object with a `columns` key
+                    if (typeof status === 'object' && !Array.isArray(status) && status.columns &&
+                            typeof status.columns === 'object') {
+                        Object.entries(status.columns).forEach(([colName, colData]) => {
+                            if (colData && typeof colData === 'object' && !Array.isArray(colData)) {
+                                columnsByEnv[envId][colName] = {...colData};
                             }
                         });
                     }
+                    // Legacy list format from GitUnmerge: array of [branch_name, commit_hash]
+                    if (job.name === 'GitUnmerge' && Array.isArray(status)) {
+                        const deployedCol = {};
+                        status.forEach(([branchName, commitHash]) => {
+                            if (typeof branchName === 'string' && typeof commitHash === 'string') {
+                                deployedCol[branchName] = commitHash.substring(0, 8);
+                            }
+                        });
+                        if (Object.keys(deployedCol).length > 0) {
+                            columnsByEnv[envId]['Deployed'] = deployedCol;
+                        }
+                    }
                 });
+            }
 
                 // Rebuild branches list environment names for rows already present
                 branches = branches.map(b => {

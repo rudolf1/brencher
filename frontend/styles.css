@@ -5,14 +5,16 @@ body {
     margin: 0;
     padding: 0;
 }
+
 .container {
     max-width: 900px;
     margin: 40px auto;
     background: #fff;
     border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     padding: 32px;
 }
+
 .primary-button {
     background: #007bff;
     color: #fff;
@@ -22,9 +24,11 @@ body {
     cursor: pointer;
     font-size: 1rem;
 }
+
 .primary-button:hover {
     background: #0056b3;
 }
+
 .refresh-button {
     background: #28a745;
     color: #fff;
@@ -36,6 +40,7 @@ body {
     margin-bottom: 16px;
     margin-left: 8px;
 }
+
 .refresh-button:hover {
     background: #218838;
 }
@@ -51,6 +56,7 @@ body {
     margin-bottom: 16px;
     margin-left: 8px;
 }
+
 .apply-button:hover {
     background: #218838;
 }
@@ -66,6 +72,7 @@ body {
     margin-bottom: 16px;
     margin-left: 8px;
 }
+
 .toggle-button:hover {
     background: #218838;
 }
@@ -74,14 +81,17 @@ body {
     text-align: center;
     margin: 16px 0;
 }
+
 .control-bar {
     text-align: center;
     margin: 16px 0;
 }
+
 .loading {
     color: #888;
     font-style: italic;
 }
+
 .status-bar {
     background: #e9ecef;
     padding: 8px 16px;
@@ -90,9 +100,11 @@ body {
     display: flex;
     align-items: center;
 }
+
 .status-bar.hidden {
     display: none;
 }
+
 .hidden {
     display: none;
 }

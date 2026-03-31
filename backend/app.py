@@ -15,6 +15,7 @@ from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+from configs.gmail_mcp import gmail_mcp
 from enironment import AbstractStep, Environment, wrap_in_cached
 from processing import reset_caches
 from steps.git import GitClone
@@ -146,6 +147,9 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 						"name": r.name,
 						"status": result,
 					})
+						"name": r.name,
+						"status": result,
+					})
 			except BaseException as e:
 				stack = traceback.format_exception(type(e), e, e.__traceback__)
 				pipeline_state.append({
@@ -168,6 +172,7 @@ def get_global_envs_to_emit() -> Any:
 	return merge_result
 
 
+
 def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 	global environments
 	branches: Dict[str, Dict[str, List[Any]]] = {}
@@ -175,14 +180,15 @@ def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 		branches[k] = {}
 		try:
 			for step in env.pipeline:
-					if isinstance(step, GitClone):
-						branches[k] = {**step.get_branches()}
-					if isinstance(step, CachingStep) and isinstance(step.step, GitClone):
-						branches[k] = {**step.step.get_branches()}
+				if isinstance(step, GitClone):
+					branches[k] = {**step.get_branches()}
+				if isinstance(step, CachingStep) and isinstance(step.step, GitClone):
+					branches[k] = {**step.step.get_branches()}
 		except BaseException as e:
 			logger.error(f"Error fetching branches for environment {env.id}: {str(e)}")
 
 	return branches
+
 
 
 def get_global_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
@@ -358,6 +364,7 @@ class App:
 		import configs.torrserv_proxy
 		import configs.immich
 		import configs.registry
+		import configs.gmail_mcp
 		environments_l: List[Environment] = [
 			configs.brencher.brencher,
 			configs.brencher2.brencher2,
@@ -365,7 +372,8 @@ class App:
 			configs.brencher_local1.brencher_local1,
 			configs.torrserv_proxy.torrserv_proxy,
 			configs.immich.immich,
-	        configs.registry.registry,
+			configs.registry.registry,
+			configs.gmail_mcp.gmail_mcp,
 		]
 		environments = {e.id: e for e in environments_l}
 
@@ -378,9 +386,9 @@ class App:
 				environments = {k: e for k, e in environments.items() if k not in cli_env_ids}
 		else:
 			cli_env_pairs = {x[0]: x[1] if len(x) > 1 else None for x in [x.split(":")
-							 for x in cli_env_ids_str.split(',')
-							 if len(x) > 0
-							 ]
+			                                                              for x in cli_env_ids_str.split(',')
+			                                                              if len(x) > 0
+			                                                              ]
 			                 }
 			logger.info(f"cli_env_ids {cli_env_pairs}")
 			if cli_env_pairs and len(cli_env_pairs) > 0:

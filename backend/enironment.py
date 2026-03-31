@@ -50,11 +50,12 @@ class AbstractStep[T](ABC):
 	def progress(self) -> T:
 		pass
 
+
 def wrap_in_cached(e: Environment) -> Environment:
 	from dataclasses import replace
 	from steps.step import CachingStep
 	result = replace(e, pipeline=[CachingStep(step) for step in e.pipeline])
-	cached = {it.step: it for it in result.pipeline if isinstance(it, CachingStep) }
+	cached = {it.step: it for it in result.pipeline if isinstance(it, CachingStep)}
 	for step in result.pipeline:
 		if isinstance(step, CachingStep):
 			step.step.env = result
@@ -67,4 +68,3 @@ def wrap_in_cached(e: Environment) -> Environment:
 							setattr(step.step, attr_name, cached_step)
 
 	return result
-

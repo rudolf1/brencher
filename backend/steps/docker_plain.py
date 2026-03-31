@@ -7,7 +7,6 @@ from typing import List, Dict, Callable, Any, Optional, cast
 import docker
 from docker.models.containers import Container
 from docker.models.images import Image
-
 from enironment import AbstractStep
 from steps.git import CheckoutMerged
 
@@ -20,21 +19,23 @@ class DockerImageBuildResult:
 	image_name: str
 	image_tag: str
 	full_image: str
-	# build_logs: List[str]
+
+
+# build_logs: List[str]
 
 
 class DockerImageBuild(AbstractStep[DockerImageBuildResult]):
 	"""Build a single Docker image from a Dockerfile"""
 
 	def __init__(self,
-				 wd: CheckoutMerged,
-				 dockerfile_path: str,
-				 image_name: str,
-				 image_tag: Callable[[], str] | str,
-				 build_context: Optional[str] = None,
-				 build_args: Optional[Dict[str, str]] = None,
-				 nocache: bool = False,
-				 **kwargs: Any) -> None:
+	             wd: CheckoutMerged,
+	             dockerfile_path: str,
+	             image_name: str,
+	             image_tag: Callable[[], str] | str,
+	             build_context: Optional[str] = None,
+	             build_args: Optional[Dict[str, str]] = None,
+	             nocache: bool = False,
+	             **kwargs: Any) -> None:
 		super().__init__(**kwargs)
 		self.wd = wd
 		self.dockerfile_path = dockerfile_path
@@ -117,8 +118,8 @@ class DockerContainerCheck(AbstractStep[Dict[str, DockerContainerCheckResult]]):
 	"""Check if a Docker container exists and get its status"""
 
 	def __init__(self,
-				 container_name: str,
-				 **kwargs: Any) -> None:
+	             container_name: str,
+	             **kwargs: Any) -> None:
 		super().__init__(**kwargs)
 		self.container_name = container_name
 
@@ -169,14 +170,14 @@ class DockerContainerDeploy(AbstractStep[DockerContainerDeployResult]):
 	"""Deploy a single Docker container"""
 
 	def __init__(self,
-				 image_build: DockerImageBuild,
-				 container_name: str,
-				 ports: Optional[Dict[str, int]] = None,
-				 environment: Optional[Dict[str, str]] = None,
-				 volumes: Optional[Dict[str, Dict[str, str]]] = None,
-				 network: Optional[str] = None,
-				 restart_policy: Optional[Dict[str, Any]] = None,
-				 **kwargs: Any) -> None:
+	             image_build: DockerImageBuild,
+	             container_name: str,
+	             ports: Optional[Dict[str, int]] = None,
+	             environment: Optional[Dict[str, str]] = None,
+	             volumes: Optional[Dict[str, Dict[str, str]]] = None,
+	             network: Optional[str] = None,
+	             restart_policy: Optional[Dict[str, Any]] = None,
+	             **kwargs: Any) -> None:
 		super().__init__(**kwargs)
 		self.image_build = image_build
 		self.container_name = container_name

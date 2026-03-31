@@ -7,12 +7,12 @@ from typing import Any, Generator
 import docker
 import pytest
 import requests
-
 from app import App
 from conftest import EventuallyFn  # type: ignore[import-not-found]
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
 
 class TestDockerContainer:
 

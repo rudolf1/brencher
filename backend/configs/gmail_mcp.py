@@ -1,10 +1,9 @@
-from configs.brencher2 import checkPingF
 from enironment import Environment
 from steps.checks import SimpleLog, UrlCheck
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
 
-clone = GitClone()
+clone = GitClone(branchNamePrefix="immoscout")
 checkoutMerged = CheckoutMerged(clone,
                                 push=False,
                                 git_user_email="rudolfss13@gmail.com",
@@ -14,17 +13,16 @@ checkoutMerged = CheckoutMerged(clone,
 buildDocker = DockerComposeBuild(clone,
                                  docker_repo_username="",
                                  docker_repo_password="",
-                                 docker_compose_path="docker-compose.yml",
+                                 docker_compose_path="gmail-mcp-server/docker-compose.yml",
                                  docker_repo_url="https://registry.rudolf.keenetic.link",
                                  publish=False,
                                  envs=lambda: {
 									 "version": "auto-" + checkoutMerged.progress().version,
-									 "user_group": "1000:137"
 								 },
                                  )
 
 dockerSwarmCheck = DockerSwarmCheck(
-	stack_name="brencher",
+	stack_name="gmail_mcp",
 )
 deployDocker = DockerSwarmDeploy(
 	wd=clone,
@@ -33,28 +31,33 @@ deployDocker = DockerSwarmDeploy(
 	envs=lambda: {
 		"version": "auto-" + checkoutMerged.progress().version,
 	},
-	stack_name="brencher",
-	docker_compose_path="docker-compose.yml",
+	stack_name="gmail_mcp",
+	docker_compose_path="gmail-mcp-server/docker-compose.yml",
 )
 unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
-checkPing = UrlCheck(
-	url="https://brencher.rudolf.keenetic.link/state",
-	expected=checkPingF,
+checkPing1 = UrlCheck(
+	url="http://100.70.193.97:3000/health",
+	expected={ "ok": True, "service": "gmail-mcp-server" },
 )
+checkPing2 = UrlCheck(
+	url="http://100.70.193.97:3001/health",
+	expected={ "ok": True, "service": "telegram-mcp-server" },
+)
+
 logUrls = SimpleLog(message={
 	"userLinks": {
-		"App": "https://brencher.rudolf.keenetic.link/",
-		"Status": "https://brencher.rudolf.keenetic.link/state",
+		"AppGm": "http://100.70.193.97:3000/health",
+		"AppTg": "http://100.70.193.97:3001/health",
 	}
 })
 
-__all__ = ["brencher"]
-brencher = Environment(
-	id="brencher",
-	branches=[],
+__all__ = ["gmail_mcp"]
+gmail_mcp = Environment(
+	id="gmail_mcp",
+	branches=[("immoscout/main", "HEAD")],
 	dry=False,
-	repo="https://github.com/rudolf1/brencher.git",
+	repo="https://github.com/rudolf1/uber_backup.git",
 	pipeline=[
 		clone,
 		checkoutMerged,
@@ -62,7 +65,8 @@ brencher = Environment(
 		dockerSwarmCheck,
 		unmerge,
 		deployDocker,
-		checkPing,
+		checkPing1,
+		checkPing2,
 		logUrls
 	]
 )

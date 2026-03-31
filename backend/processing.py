@@ -3,7 +3,7 @@ import time
 from typing import List, Callable
 
 from enironment import Environment
-from steps.git import GitUnmerge
+from steps.git import GitUnmerge, GitUnmergeResult
 from steps.step import CachingStep
 
 logger = logging.getLogger(__name__)
@@ -11,11 +11,13 @@ logger = logging.getLogger(__name__)
 _last_reset_time: float = 0
 RESET_INTERVAL = 3 * 60  # 3 minutes in seconds
 
+
 def reset_caches(environemnts: List[Environment]) -> None:
 	for env in environemnts:
 		for step in env.pipeline:
 			if isinstance(step, CachingStep):
 				step.reset()
+
 
 def process_all_jobs(
 		environemnts: List[Environment],
@@ -32,11 +34,19 @@ def process_all_jobs(
 		for step in env.pipeline:
 			try:
 				step.progress()
-				if (isinstance(step, GitUnmerge) or (isinstance(step, CachingStep) and isinstance(step.step, GitUnmerge))) and len(env.branches) == 0:
+				if (isinstance(step, GitUnmerge) or (
+						isinstance(step, CachingStep) and isinstance(step.step, GitUnmerge))) and len(
+					env.branches) == 0:
 					# TODO Move to separate job.
 					# If branches list empty, need to find any brunch which includes commit and add pair (branch, commit)
 					# If branches not empty, need to find most priority branch (project specific) and add (branch, HEAD)
-					env.branches = step.progress()
+					result = step.progress()
+					if isinstance(result, GitUnmergeResult):
+						env.branches = result.branches
+					else:
+						# Backward compatibility: older or custom step implementations may
+						# return a plain list of (branch, commit) tuples directly.
+						env.branches = result
 					logger.info(f"Branches on startup resolved {env.id}, job {step.name}: {env.branches}")
 			except BaseException as e:
 				error_msg = f"Error processing release {env.id}, job {step.name}: {str(e)}"

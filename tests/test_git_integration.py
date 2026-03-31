@@ -8,8 +8,8 @@ import os
 
 import git
 import pytest
+from steps.git import CheckoutAndMergeResult, GitUnmergeResult
 
-from steps.git import CheckoutAndMergeResult
 from .test_remote_repo import RemoteRepoHelper
 
 
@@ -37,7 +37,7 @@ class TestGitIntegration:
 			('file1.txt', 'content1'),
 			('file2.txt', 'content2'),
 		])
-		assert repo_helper.git_unmerge.progress() == [('branch1', commit2.hexsha)], f"Invalid Unmerge result"
+		assert repo_helper.git_unmerge.progress().branches == [('branch1', commit2.hexsha)], f"Invalid Unmerge result"
 
 		repo_helper.env.branches = [("branch2", "HEAD")]
 		result = repo_helper.checkout_merged.progress()
@@ -52,7 +52,7 @@ class TestGitIntegration:
 			('file3.txt', 'content3'),
 		])
 		print(commit1.hexsha, commit2.hexsha, commit3.hexsha)
-		assert repo_helper.git_unmerge.progress() == [("branch2", commit3.hexsha)], f"Invalid Unmerge result"
+		assert repo_helper.git_unmerge.progress().branches == [("branch2", commit3.hexsha)], f"Invalid Unmerge result"
 
 	def test_checkout_merged_two_branches(self, repo_helper: RemoteRepoHelper) -> None:
 		"""Test merging two branches successfully"""
@@ -221,16 +221,22 @@ class TestGitIntegration:
 		# Test GitUnmerge
 		result = repo_helper.git_unmerge.progress()
 
-		# Verify result contains branch information with specific value checks
-		assert isinstance(result, list), "Result should be a list"
-		assert len(result) > 0, "Result should not be empty"
+		# Verify result is a GitUnmergeResult with branch information
+		assert isinstance(result, GitUnmergeResult), "Result should be a GitUnmergeResult"
+		assert len(result.branches) > 0, "branches should not be empty"
 
-		for branch_name, commit_hash in result:
+		for branch_name, commit_hash in result.branches:
 			assert isinstance(branch_name, str), f"Branch name should be string, got {type(branch_name)}"
 			assert len(branch_name) > 0, "Branch name should not be empty"
 			assert isinstance(commit_hash, str), f"Commit hash should be string, got {type(commit_hash)}"
 			assert len(commit_hash) == 40, f"Commit hash should be 40 chars, got {len(commit_hash)}: {commit_hash}"
 			assert commit_hash.isalnum(), f"Commit hash should be alphanumeric: {commit_hash}"
+
+		assert "Deployed" in result.columns, "GitUnmergeResult should have a 'Deployed' column"
+		for branch_name, short_hash in result.columns["Deployed"].items():
+			assert isinstance(branch_name, str)
+			assert isinstance(short_hash, str)
+			assert len(short_hash) == 8, f"Deployed column should contain 8-char short hashes, got: {short_hash}"
 
 	def test_git_unmerge_invalid_version(self, repo_helper: RemoteRepoHelper) -> None:
 		"""Test GitUnmerge with invalid version format"""
@@ -262,16 +268,16 @@ class TestGitIntegration:
 
 		result = repo_helper.git_unmerge.progress()
 
-		assert isinstance(result, list)
-		assert len(result) >= 1
+		assert isinstance(result, GitUnmergeResult)
+		assert len(result.branches) >= 1
 
 		# Extract branch names and commit hashes
-		result_dict = {commit_hash: branch_name for branch_name, commit_hash in result}
+		result_dict = {commit_hash: branch_name for branch_name, commit_hash in result.branches}
 
 		assert commit2.hexsha in result_dict, \
 			f"Expected commit2 {commit2.hexsha} (non-HEAD commit in branch1) to be in results. " \
 			f"GitUnmerge should return branch1 even when commit2 is not HEAD. " \
-			f"Current results: {result}"
+			f"Current results: {result.branches}"
 
 		assert result_dict[commit2.hexsha] == "branch1", \
 			f"branch1 should be associated with commit2. Got: {result_dict.get(commit2.hexsha)}"
@@ -298,11 +304,11 @@ class TestGitIntegration:
 		result = repo_helper.git_unmerge.progress()
 
 		# Verify result contains branch information
-		assert isinstance(result, list)
-		assert len(result) >= 1  # At least branch2 should be found
+		assert isinstance(result, GitUnmergeResult)
+		assert len(result.branches) >= 1  # At least branch2 should be found
 
 		# Extract branch names and commit hashes
-		result_dict = {commit_hash: branch_name for branch_name, commit_hash in result}
+		result_dict = {commit_hash: branch_name for branch_name, commit_hash in result.branches}
 
 		# commit4 should be in the results (HEAD of branch2)
 		assert commit4.hexsha in result_dict, f"Expected commit4 {commit4.hexsha} (HEAD of branch2) in results"
@@ -316,7 +322,7 @@ class TestGitIntegration:
 		assert commit2.hexsha in result_dict, \
 			f"Expected commit2 {commit2.hexsha} (non-HEAD commit in branch1) to be in results. " \
 			f"GitUnmerge should return branch1 even when commit2 is not HEAD. " \
-			f"Current results: {result}"
+			f"Current results: {result.branches}"
 
 		assert result_dict[commit2.hexsha] == "branch1", \
 			f"branch1 should be associated with commit2. Got: {result_dict.get(commit2.hexsha)}"

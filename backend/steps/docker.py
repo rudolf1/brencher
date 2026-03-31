@@ -1,9 +1,7 @@
-import hashlib
 import logging
 import os
 import re
 import subprocess
-import tempfile
 from dataclasses import dataclass
 from typing import List, Dict, Callable, Any, Mapping, Protocol, Union, runtime_checkable
 
@@ -11,7 +9,6 @@ import docker
 import yaml
 from docker import errors as docker_errors
 from dotenv import dotenv_values
-
 from enironment import AbstractStep
 from steps.git import GitClone, HasVersion
 
@@ -20,13 +17,13 @@ logger = logging.getLogger(__name__)
 
 class DockerComposeBuild(AbstractStep[List[str]]):
 	def __init__(self,
-				 wd: GitClone,  # TODO should be CheckoutMerged
-				 docker_repo_username: str,
-				 docker_repo_password: str,
-				 docker_compose_path: str,
-				 docker_repo_url: str,
-				 publish: bool,
-				 envs: Callable[[], Dict[str, Any]], **kwargs: Any) -> None:
+	             wd: GitClone,  # TODO should be CheckoutMerged
+	             docker_repo_username: str,
+	             docker_repo_password: str,
+	             docker_compose_path: str,
+	             docker_repo_url: str,
+	             publish: bool,
+	             envs: Callable[[], Dict[str, Any]], **kwargs: Any) -> None:
 		super().__init__(**kwargs)
 		self.wd = wd
 		self.envs = envs
@@ -60,9 +57,19 @@ class DockerComposeBuild(AbstractStep[List[str]]):
 			services = compose.get('services', {})
 
 			for name, svc in services.items():
-				if svc.get('build') is None:
+				build_section = svc.get('build')
+				if build_section is None:
 					continue
-				build_ctx = os.path.join(os.path.dirname(docker_compose_absolute_path), svc.get('build'))
+				if isinstance(build_section, dict):
+					build_ctx = build_section.get('context', '.')
+					build_dockerfile = build_section.get('dockerfile', 'Dockerfile')
+				else:
+					build_ctx = build_section
+					build_dockerfile = 'Dockerfile'
+
+				build_ctx = os.path.join(os.path.dirname(docker_compose_absolute_path), build_ctx) 
+				build_dockerfile = os.path.join(os.path.dirname(docker_compose_absolute_path), build_dockerfile) 
+
 				image = svc.get('image')
 				if not build_ctx or not image:
 					continue
@@ -83,8 +90,8 @@ class DockerComposeBuild(AbstractStep[List[str]]):
 					except docker_errors.ImageNotFound:
 						pass
 
-				logger.info(f"Building image {image} from {build_ctx}")
-				client.images.build(path=build_ctx, tag=image, nocache=True, rm=True)
+				logger.info(f"Building image {image} from {build_ctx}, {build_dockerfile}")
+				client.images.build(path=build_ctx, dockerfile=build_dockerfile, tag=image, nocache=True, rm=True)
 
 				if self.publish:
 					logger.info(f"Pushing image {image}")
@@ -107,8 +114,8 @@ class DockerSwarmCheckResult:
 class DockerSwarmCheck(AbstractStep[Dict[str, DockerSwarmCheckResult]]):
 
 	def __init__(self,
-				 stack_name: str,
-				 **kwargs: Any) -> None:
+	             stack_name: str,
+	             **kwargs: Any) -> None:
 		super().__init__(**kwargs)
 		self.stack_name = stack_name
 
@@ -139,13 +146,13 @@ class HasImage(Protocol):
 
 class DockerSwarmDeploy(AbstractStep[str]):
 	def __init__(self,
-				 wd: GitClone,
-				 buildDocker: DockerComposeBuild | None,
-				 stackChecker: AbstractStep[Mapping[str, Union[HasImage, HasVersion]]],
-				 docker_compose_path: str,
-				 envs: Callable[[], Dict[str, Any]],
-				 stack_name: str,
-				 **kwargs: Any) -> None:
+	             wd: GitClone,
+	             buildDocker: DockerComposeBuild | None,
+	             stackChecker: AbstractStep[Mapping[str, Union[HasImage, HasVersion]]],
+	             docker_compose_path: str,
+	             envs: Callable[[], Dict[str, Any]],
+	             stack_name: str,
+	             **kwargs: Any) -> None:
 		super().__init__(**kwargs)
 		self.wd = wd
 		self.buildDocker = buildDocker
@@ -261,7 +268,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
 		swarmEnv: dict[str, str] = {}
 		if os.path.exists(os.path.join(os.path.dirname(tmp_compose_path), ".env")):
 			swarmEnv = {k: v for k, v in dotenv_values(os.path.join(os.path.dirname(tmp_compose_path), ".env")).items()
-						if v is not None}
+			            if v is not None}
 		# merge_dicts(swarmEnv, env)
 		result = subprocess.run(cmd, capture_output=True, text=True)
 		# , cwd=os.path.dirname(tmp_compose_path), env=swarmEnv)

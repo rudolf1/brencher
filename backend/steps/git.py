@@ -1,22 +1,21 @@
 import hashlib
 import logging
 import os
+import shutil
 import tempfile
 from dataclasses import dataclass
 from typing import List, Tuple, Set, Dict, Any, Mapping, runtime_checkable
-import shutil
 
 import git
-from git.objects import Commit
-
 from enironment import AbstractStep
+from git.objects import Commit
 
 logger = logging.getLogger(__name__)
 
 
 class GitClone(AbstractStep[str]):
 	def __init__(self, repo_path: str | None = None, branchNamePrefix: str = "", credEnvPrefix: str = "GIT",
-				 **kwargs: Any):
+	             **kwargs: Any):
 		super().__init__(**kwargs)
 		self.repo_path = repo_path
 		self.branchNamePrefix = branchNamePrefix
@@ -35,7 +34,7 @@ class GitClone(AbstractStep[str]):
 	def progress(self) -> str:
 
 		self.repo_path = self.repo_path or os.path.join(tempfile.gettempdir(),
-														f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
+		                                                f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
 		logger.info(f"Cloning repository {self.env.repo} to {self.repo_path}")
 		os.makedirs(self.repo_path, exist_ok=True)
 		try:
@@ -55,7 +54,7 @@ class GitClone(AbstractStep[str]):
 				))
 				if self.branchNamePrefix != "":
 					repo.config_writer().set_value('remote "origin"', "fetch",
-												f"+refs/heads/{self.branchNamePrefix}/*:refs/remotes/origin/{self.branchNamePrefix}/*").release()
+					                               f"+refs/heads/{self.branchNamePrefix}/*:refs/remotes/origin/{self.branchNamePrefix}/*").release()
 				repo.remotes.origin.fetch(prune=True)
 				if not os.path.exists(os.path.join(self.repo_path, ".git")):
 					raise BaseException(f"Failed to clone repository {self.env.repo} to {self.repo_path}")
@@ -102,6 +101,7 @@ def _commits_childs(repo: git.Repo) -> Dict[Commit, List[Commit]]:
 			childs.setdefault(p, []).append(c)
 	return childs
 
+
 def ensure_clean(repo: git.Repo) -> None:
 	if repo.is_dirty() or len(repo.untracked_files) > 0:
 		raise BaseException(f"Changes in repo: U{repo.untracked_files}")
@@ -111,10 +111,10 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 	wd: GitClone
 
 	def __init__(self, wd: GitClone,
-				 git_user_email: str,
-				 git_user_name: str,
-				 push: bool = True,
-				 **kwargs: Any):
+	             git_user_email: str,
+	             git_user_name: str,
+	             push: bool = True,
+	             **kwargs: Any):
 		super().__init__(**kwargs)
 		self.wd = wd
 		self.git_user_email = git_user_email
@@ -171,7 +171,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 
 		def find_common_merge_commits() -> Set[Commit]:
 			merge_commit: list[tuple[Commit, list[Commit]]] = [(c, self._find_merge_childs(childs, c)) for c in
-															   commit_ids.keys()]
+			                                                   commit_ids.keys()]
 			legal_merge_commits = [set(l) for c, l in merge_commit]
 			result = legal_merge_commits[0]
 			for l in legal_merge_commits[1:]:
@@ -239,22 +239,29 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 
 from typing import Protocol, Any
 
+
 @runtime_checkable
 class HasVersion(Protocol):
 	version: str
 
 
-class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
+@dataclass
+class GitUnmergeResult:
+	branches: List[Tuple[str, str]]  # (branch_name, commit_hash) pairs
+	columns: Dict[str, Dict[str, str]]  # column_name -> {branch_name: value}
+
+
+class GitUnmerge(AbstractStep[GitUnmergeResult]):
 	wd: GitClone
 
 	def __init__(self, wd: GitClone,
-				 check: AbstractStep[Mapping[str, HasVersion]],
-				 **kwargs: Any):
+	             check: AbstractStep[Mapping[str, HasVersion]],
+	             **kwargs: Any):
 		super().__init__(**kwargs)
 		self.wd = wd
 		self.check = check
 
-	def progress(self) -> List[Tuple[str, str]]:
+	def progress(self) -> GitUnmergeResult:
 		wd = self.wd.progress()
 		deployState: Mapping[str, HasVersion] = self.check.progress()
 
@@ -276,7 +283,7 @@ class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
 				# branches = [head.name for head in repo.heads if head.commit.hexsha == commit.hexsha]
 				branches = [ref.name for ref in repo.remotes.origin.refs if ref.commit.hexsha == commit.hexsha]
 				branches = [b[len('origin/'):] for b in branches if
-							b.startswith('origin/') and not b.startswith('origin/HEAD')]
+				            b.startswith('origin/') and not b.startswith('origin/HEAD')]
 
 				if len(branches) == 0 or branches[0].startswith('auto/'):
 					if childs is None:
@@ -286,9 +293,9 @@ class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
 						current = commitsSet.pop()
 						for child in childs.get(current, []):
 							branches = [ref.name for ref in repo.remotes.origin.refs if
-										ref.commit.hexsha == child.hexsha]
+							            ref.commit.hexsha == child.hexsha]
 							branches = [b[len('origin/'):] for b in branches if
-										b.startswith('origin/') and not b.startswith('origin/HEAD')]
+							            b.startswith('origin/') and not b.startswith('origin/HEAD')]
 
 							if len(branches) > 0:
 								commitsSet = set()
@@ -299,6 +306,11 @@ class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
 
 			if len(commits) == 0:
 				raise BaseException(f"Unable to unmerge version: {version}")
-			return commits
+
+			deployed_col: Dict[str, str] = {b: c[:8] for b, c in commits}
+			return GitUnmergeResult(
+				branches=commits,
+				columns={"Deployed": deployed_col},
+			)
 		else:
 			raise BaseException(f"Version format not recognized: {version}")
