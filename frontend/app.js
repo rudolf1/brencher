@@ -433,6 +433,7 @@ function setupWebSockets() {
                 renderJobs();
                 showStatus('Environments updated.');
             } else if ('error' in message) {
+                console.error('Error from server:', message.error);
                 showStatus(message.error.message || 'Unknown error', true);
             }
             checkForPendingChanges();

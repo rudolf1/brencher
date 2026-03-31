@@ -271,10 +271,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
 				await broadcast_environments(get_global_envs_to_emit())
 
-	except WebSocketDisconnect:
+	except WebSocketDisconnect as e:
 		ws_connections.discard(websocket)
 	except Exception as e:
 		logger.error(f"WebSocket error: {e}")
+		await broadcast_error({'message': 'WebSocket exception'})
 		ws_connections.discard(websocket)
 
 
