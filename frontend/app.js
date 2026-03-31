@@ -32,8 +32,9 @@ let environmentsRaw = [];
 const selectedBranchesByEnv = {};
 // serverSelectedBranchesByEnv mirrors server's last known selection for diffing
 const serverSelectedBranchesByEnv = {};
-// deployedCommitsByEnv: envId -> { branchName: deployedShortHash }
-const deployedCommitsByEnv = {};
+// columnsByEnv: envId -> { columnName: { branchName: value } }
+// Populated from any step result that contains a `columns` key (e.g. GitUnmerge)
+const columnsByEnv = {};
 
 // Socket instances
 let wsBranches = null;
@@ -64,9 +65,10 @@ function filterBranches() {
     const filterText = branchFilter.value.toLowerCase().trim();
     filteredBranches = branches.filter(({envId, branch, commits}) => {
         const selList = selectedBranchesByEnv[envId] || [];
-        const deployedMap = deployedCommitsByEnv[envId] || {};
         const isSelected = selList.some(([b]) => b === branch);
-        const isDeployed = deployedMap[branch] && deployedMap[branch] !== 'N/A';
+        // Always show branches that appear in any column (e.g. deployed branches from GitUnmerge)
+        const envCols = columnsByEnv[envId] || {};
+        const isInColumns = Object.values(envCols).some(colData => branch in colData);
         const isFiltered = !!filterText && branch.toLowerCase().includes(filterText);
         const isFilteredByCommit = !!filterText && Array.isArray(commits) && commits.some(c => {
             const shortHash = c.hexsha ? c.hexsha.substring(0, 8).toLowerCase() : '';
@@ -75,7 +77,7 @@ function filterBranches() {
                 (c.message && c.message.toLowerCase().includes(filterText)) ||
                 (c.author && c.author.toLowerCase().includes(filterText));
         });
-        return showAllBranches || isSelected || isDeployed || isFiltered || isFilteredByCommit;
+        return showAllBranches || isSelected || isInColumns || isFiltered || isFilteredByCommit;
     });
     renderBranches();
 }
@@ -120,6 +122,15 @@ function branchHasCommit(envId, branchName, commit) {
     }) || false;
 }
 
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 let renderedBranches = []
 
 function renderBranches() {
@@ -142,6 +153,8 @@ function renderBranches() {
     }, {});
 
     branchesList.innerHTML = Object.entries(groups).map(([envId, {envName, rows}]) => {
+        const envCols = columnsByEnv[envId] || {};
+        const colNames = Object.keys(envCols);
         return `
         <div class="env-block">
             <h3 class="env-title">Environment: ${envName || envId}</h3>
@@ -151,7 +164,7 @@ function renderBranches() {
                         <th>Deploy</th>
                         <th>Branch</th>
                         <th>Desired Commit</th>
-                        <th>Deployed</th>
+                        ${colNames.map(n => `<th>${escapeHtml(n)}</th>`).join('')}
                     </tr>
                 </thead>
                 <tbody>
@@ -159,8 +172,6 @@ function renderBranches() {
             const selList = selectedBranchesByEnv[eId] || [];
             const pair = selList.find(([b]) => b === branch);
             const desiredCommit = pair ? pair[1] : 'HEAD';
-            const deployedMap = deployedCommitsByEnv[eId] || {};
-            const deployedCommit = deployedMap[branch] || 'N/A';
             const hasCommit = branchHasCommit(eId, branch, desiredCommit);
             return `
                         <tr class="branch-row" data-env="${eId}" data-branch="${branch}">
@@ -174,7 +185,7 @@ function renderBranches() {
                                        value="${desiredCommit !== 'HEAD' && !hasCommit ? desiredCommit : ''}"
                                        placeholder="Enter commit ID" style="display: ${desiredCommit !== 'HEAD' && !hasCommit ? 'inline-block' : 'none'};" />
                             </td>
-                            <td>${deployedCommit}</td>
+                            ${colNames.map(n => `<td>${escapeHtml((envCols[n] && envCols[n][branch]) || '')}</td>`).join('')}
                         </tr>`;
         }).join('')}
                 </tbody>
@@ -386,16 +397,33 @@ function setupSocketIO() {
                 selectedBranchesByEnv[envId] = [];
                 serverSelectedBranchesByEnv[envId] = [];
             }
-            const jobsArr = envObj.pipeline || []
-            // Deployed commits from GitUnmerge job
-            const gitUnmergeJob = Array.isArray(jobsArr) ? jobsArr.find(j => j.name === 'GitUnmerge') : null;
-            deployedCommitsByEnv[envId] = {};
-            if (gitUnmergeJob && Array.isArray(gitUnmergeJob.status)) {
-                gitUnmergeJob.status.forEach(([commitHash, branchNames]) => {
-                    if (Array.isArray(branchNames)) {
-                        branchNames.forEach(bName => {
-                            deployedCommitsByEnv[envId][bName] = commitHash.substring(0, 8);
+            // Extract columns from all job statuses
+            columnsByEnv[envId] = {};
+            const jobsArr = envObj.pipeline || [];
+            if (Array.isArray(jobsArr)) {
+                jobsArr.forEach(job => {
+                    if (job.status == null || job.error) return;
+                    const status = job.status;
+                    // New structured format: status is an object with a `columns` key
+                    if (typeof status === 'object' && !Array.isArray(status) && status.columns &&
+                            typeof status.columns === 'object') {
+                        Object.entries(status.columns).forEach(([colName, colData]) => {
+                            if (colData && typeof colData === 'object' && !Array.isArray(colData)) {
+                                columnsByEnv[envId][colName] = {...colData};
+                            }
                         });
+                    }
+                    // Legacy list format from GitUnmerge: array of [branch_name, commit_hash]
+                    if (job.name === 'GitUnmerge' && Array.isArray(status)) {
+                        const deployedCol = {};
+                        status.forEach(([branchName, commitHash]) => {
+                            if (typeof branchName === 'string' && typeof commitHash === 'string') {
+                                deployedCol[branchName] = commitHash.substring(0, 8);
+                            }
+                        });
+                        if (Object.keys(deployedCol).length > 0) {
+                            columnsByEnv[envId]['Deployed'] = deployedCol;
+                        }
                     }
                 });
             }

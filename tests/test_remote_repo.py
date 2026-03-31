@@ -12,7 +12,7 @@ from typing import Dict, Tuple, List, Callable
 import git
 from enironment import Environment, AbstractStep
 from steps.docker import DockerSwarmCheckResult
-from steps.git import CheckoutAndMergeResult, CheckoutMerged, GitUnmerge, GitClone, HasVersion
+from steps.git import CheckoutAndMergeResult, CheckoutMerged, GitUnmerge, GitClone, HasVersion, GitUnmergeResult
 from steps.step import CachingStep  # noqa: F401
 
 
@@ -83,7 +83,7 @@ class RemoteRepoHelper:
 		        isinstance(i, GitClone) or (isinstance(i, CachingStep) and isinstance(i.step, GitClone))][0]
 
 	@property
-	def git_unmerge(self) -> AbstractStep[List[Tuple[str, str]]]:
+	def git_unmerge(self) -> AbstractStep[GitUnmergeResult]:
 		return [i for i in self.env.pipeline if
 		        isinstance(i, GitUnmerge) or (isinstance(i, CachingStep) and isinstance(i.step, GitUnmerge))][0]
 

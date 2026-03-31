@@ -245,7 +245,13 @@ class HasVersion(Protocol):
 	version: str
 
 
-class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
+@dataclass
+class GitUnmergeResult:
+	branches: List[Tuple[str, str]]  # (branch_name, commit_hash) pairs
+	columns: Dict[str, Dict[str, str]]  # column_name -> {branch_name: value}
+
+
+class GitUnmerge(AbstractStep[GitUnmergeResult]):
 	wd: GitClone
 
 	def __init__(self, wd: GitClone,
@@ -255,7 +261,7 @@ class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
 		self.wd = wd
 		self.check = check
 
-	def progress(self) -> List[Tuple[str, str]]:
+	def progress(self) -> GitUnmergeResult:
 		wd = self.wd.progress()
 		deployState: Mapping[str, HasVersion] = self.check.progress()
 
@@ -300,6 +306,11 @@ class GitUnmerge(AbstractStep[List[Tuple[str, str]]]):
 
 			if len(commits) == 0:
 				raise BaseException(f"Unable to unmerge version: {version}")
-			return commits
+
+			deployed_col: Dict[str, str] = {b: c[:8] for b, c in commits}
+			return GitUnmergeResult(
+				branches=commits,
+				columns={"Deployed": deployed_col},
+			)
 		else:
 			raise BaseException(f"Version format not recognized: {version}")
