@@ -124,6 +124,12 @@ def merge_dicts(a: Dict[str, T], b: Dict[str, T]) -> Dict[str, T]:
 	return result
 
 
+def _get_step_dry_run_aware(r: Any) -> bool:
+	"""Return dry_run_aware for a step, unwrapping CachingStep if needed."""
+	inner = r.step if isinstance(r, CachingStep) else r
+	return bool(getattr(inner, 'dry_run_aware', False))
+
+
 def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 	env_dtos: Dict[str, Dict[str, Any]] = {}
 	for env in environments.values():
@@ -135,17 +141,20 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 				else:
 					result = r.progress()
 
+				dry_run_aware = _get_step_dry_run_aware(r)
 				if isinstance(result, BaseException):
 					stack = traceback.format_exception(type(result), result, result.__traceback__)
 					pipeline_state.append({
 						"name": r.name,
 						"status": [str(result), stack],
 						"error": True,
+						"dry_run_aware": dry_run_aware,
 					})
 				else:
 					pipeline_state.append({
 						"name": r.name,
 						"status": result,
+						"dry_run_aware": dry_run_aware,
 					})
 			except BaseException as e:
 				stack = traceback.format_exception(type(e), e, e.__traceback__)
@@ -153,6 +162,7 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 					"name": r.name,
 					"status": [str(e), stack],
 					"error": True,
+					"dry_run_aware": _get_step_dry_run_aware(r),
 				})
 		env_dtos[env.id] = asdict(replace(env, pipeline=[]))
 		env_dtos[env.id]['pipeline'] = pipeline_state
@@ -263,7 +273,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 					for env in environments.values():
 						if env.id == update_data.get('id'):
 							env.branches = update_data.get('branches', env.branches)
-							logger.info(f"Updated environment {env.id} branches to {env.branches}")
+							if 'dry' in update_data:
+								env.dry = bool(update_data['dry'])
+							logger.info(f"Updated environment {env.id} branches to {env.branches}, dry={env.dry}")
 
 				environment_update_event.set()
 

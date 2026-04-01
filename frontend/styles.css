@@ -193,3 +193,82 @@ input[type="checkbox"] {
     margin: 0;
     transform: scale(1.2);
 }
+
+/* Dry run toggle switch */
+.env-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.dry-run-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: normal;
+    color: #6c757d;
+    user-select: none;
+    margin-left: 8px;
+}
+
+.dry-run-toggle input[type="checkbox"] {
+    display: none;
+}
+
+.dry-run-slider {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    background: #ced4da;
+    border-radius: 20px;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.dry-run-slider::after {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 2px;
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.dry-run-toggle input:checked + .dry-run-slider {
+    background: #fd7e14;
+}
+
+.dry-run-toggle input:checked + .dry-run-slider::after {
+    transform: translateX(16px);
+}
+
+.dry-run-label {
+    color: #495057;
+    font-weight: 500;
+}
+
+.dry-run-toggle input:checked ~ .dry-run-label {
+    color: #fd7e14;
+    font-weight: 600;
+}
+
+/* Highlight pipeline steps not handling dry run */
+.dry-run-unaware {
+    background: #fff8e1;
+    border-left: 3px solid #ffc107;
+}
+
+.dry-run-warn {
+    color: #ffc107;
+    font-weight: bold;
+    margin-right: 4px;
+    font-size: 1em;
+}
