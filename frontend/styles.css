@@ -259,16 +259,3 @@ input[type="checkbox"] {
     color: #fd7e14;
     font-weight: 600;
 }
-
-/* Highlight pipeline steps not handling dry run */
-.dry-run-unaware {
-    background: #fff8e1;
-    border-left: 3px solid #ffc107;
-}
-
-.dry-run-warn {
-    color: #ffc107;
-    font-weight: bold;
-    margin-right: 4px;
-    font-size: 1em;
-}

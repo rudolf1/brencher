@@ -169,8 +169,6 @@ class DockerContainerDeployResult:
 class DockerContainerDeploy(AbstractStep[DockerContainerDeployResult]):
 	"""Deploy a single Docker container"""
 
-	dry_run_aware: bool = True
-
 	def __init__(self,
 	             image_build: DockerImageBuild,
 	             container_name: str,

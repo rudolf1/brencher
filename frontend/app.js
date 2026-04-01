@@ -308,17 +308,14 @@ function renderJobs() {
                 const safeId = 'spoiler-' + encodeURIComponent(key).replace(/[^a-zA-Z0-9_-]/g, '_');
                 const isError = job.error;
                 const openByDefault = isError || (window._jobSpoilerState && window._jobSpoilerState[storageKey] === 'open');
-                const envDry = dryRunByEnv[envObj.id] ?? envObj.dry ?? false;
-                const notDryAware = envDry && !job.dry_run_aware;
 
                 return `
-                    <div class="job-item${notDryAware ? ' dry-run-unaware' : ''}">
+                    <div class="job-item">
                         <div class="job-header" style="cursor:pointer;font-weight:bold;"
                              onclick="toggleJobSpoiler('${key}', '${safeId}')">
                             ${isError
                     ? `<span style="color:#dc3545;font-weight:bold;margin-right:6px;" title="Error">!</span>`
                     : `<span style="color:#28a745;font-weight:bold;margin-right:6px;" title="OK">✔</span>`}
-                            ${notDryAware ? `<span class="dry-run-warn" title="This step does not handle dry run — it will execute normally even in dry run mode">⚠</span>` : ''}
                             ${envObj.id} - ${job.name}
                         </div>
                         <div id="${safeId}" class="job-spoiler" style="display: ${openByDefault ? 'block' : 'none'}; margin-top:8px;">
@@ -412,10 +409,8 @@ function setupWebSockets() {
                 environmentsRaw.forEach((envObj) => {
                     if (!envObj) return;
                     const envId = envObj.id || envObj.name || 'unknown';
-                    // Sync dry run state from server
-                    if (typeof envObj.dry === 'boolean') {
-                        dryRunByEnv[envId] = envObj.dry;
-                    }
+                    // Sync dry run state from server (use ?? to preserve explicit false)
+                    dryRunByEnv[envId] = dryRunByEnv[envId] ?? (envObj.dry || false);
                     if (!isChangesPending()) {
                         if (Array.isArray(envObj.branches) && envObj.branches.length > 0) {
                             if (Array.isArray(envObj.branches[0])) {

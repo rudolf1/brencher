@@ -145,8 +145,6 @@ class HasImage(Protocol):
 
 
 class DockerSwarmDeploy(AbstractStep[str]):
-	dry_run_aware: bool = True
-
 	def __init__(self,
 	             wd: GitClone,
 	             buildDocker: DockerComposeBuild | None,
