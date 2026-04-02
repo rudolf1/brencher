@@ -135,7 +135,7 @@ function escapeHtml(str) {
 let renderedBranches = []
 
 function renderBranches() {
-    if (JSON.stringify(filteredBranches) === JSON.stringify(renderedBranches)) {
+    if (JSON.stringify(filteredBranches) === JSON.stringify(renderedBranches) && JSON.stringify(dryRunByEnv) === JSON.stringify(renderedDryRunState)) {
         return
     }
     checkForPendingChanges();
@@ -250,6 +250,7 @@ function renderBranches() {
         };
     });
     renderedBranches = filteredBranches;
+    renderedDryRunState = {...dryRunByEnv};
 }
 
 function updateBranchCommit(envId, branch, commit) {
