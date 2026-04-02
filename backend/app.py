@@ -419,10 +419,11 @@ class App:
 				global prev_submitted
 				new_branches = get_global_branches_to_emit()
 				new_envs = get_global_envs_to_emit()
-				if json.dumps([new_branches, new_envs]) != prev_submitted:
+				serialized_submission = json.dumps([new_branches, new_envs], sort_keys=True)
+				if serialized_submission != prev_submitted:
 					_schedule_async(broadcast_branches(new_branches))
 					_schedule_async(broadcast_environments(new_envs))
-					prev_submitted = json.dumps([new_branches, new_envs])
+					prev_submitted = serialized_submission
 
 			with state_lock:
 				logger.info(f"Processing")
