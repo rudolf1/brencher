@@ -408,8 +408,8 @@ function setupWebSockets() {
                 environmentsRaw.forEach((envObj) => {
                     if (!envObj) return;
                     const envId = envObj.id || envObj.name || 'unknown';
-                    // Sync dry run state from server (use ?? to preserve explicit false)
-                    dryRunByEnv[envId] = dryRunByEnv[envId] ?? (envObj.dry || false);
+                    // Always sync dry run state from server
+                    dryRunByEnv[envId] = !!envObj.dry;
                     if (!isChangesPending()) {
                         if (Array.isArray(envObj.branches) && envObj.branches.length > 0) {
                             if (Array.isArray(envObj.branches[0])) {
