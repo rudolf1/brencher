@@ -414,10 +414,15 @@ class App:
 	def processing_thread(self) -> None:
 		while True:
 			import processing
-
+			prev_submitted = None
 			def emit_envs() -> None:
-				_schedule_async(broadcast_branches(get_global_branches_to_emit()))
-				_schedule_async(broadcast_environments(get_global_envs_to_emit()))
+				global prev_submitted
+				new_branches = get_global_branches_to_emit()
+				new_envs = get_global_envs_to_emit()
+				if (new_branches, new_envs) != prev_submitted:
+					_schedule_async(broadcast_branches(new_branches))
+					_schedule_async(broadcast_environments(new_envs))
+					prev_submitted = (new_branches, new_envs)
 
 			with state_lock:
 				logger.info(f"Processing")
