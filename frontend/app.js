@@ -160,11 +160,9 @@ function renderBranches() {
         <div class="env-block">
             <h3 class="env-title">
                 Environment: ${envName || envId}
-                <label class="dry-run-toggle" title="Dry Run: steps with side-effects will be skipped">
-                    <input type="checkbox" class="dry-run-checkbox" data-env="${envId}" ${dryRunByEnv[envId] ? 'checked' : ''}>
-                    <span class="dry-run-slider"></span>
-                    <span class="dry-run-label">Dry Run</span>
-                </label>
+                <button class="dry-run-btn ${dryRunByEnv[envId] ? 'dry-run-active' : ''}" data-env="${envId}" title="${dryRunByEnv[envId] ? 'Dry run on — click to resume' : 'Running — click to pause (dry run)'}">
+                    ${dryRunByEnv[envId] ? '⏸' : '▶'}
+                </button>
             </h3>
             <table class="branches-table">
                 <thead>
@@ -241,13 +239,14 @@ function renderBranches() {
             updateBranchCommit(envId, branch, commitId || 'HEAD');
         };
     });
-    branchesList.querySelectorAll('.dry-run-checkbox').forEach(cb => {
-        cb.onchange = e => {
-            const envId = e.target.dataset.env;
-            dryRunByEnv[envId] = e.target.checked;
+    branchesList.querySelectorAll('.dry-run-btn').forEach(btn => {
+        btn.onclick = e => {
+            const envId = e.currentTarget.dataset.env;
+            dryRunByEnv[envId] = !dryRunByEnv[envId];
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ update: { id: envId, dry: e.target.checked } }));
+                ws.send(JSON.stringify({ update: { id: envId, dry: dryRunByEnv[envId] } }));
             }
+            filterBranches();
         };
     });
     renderedBranches = filteredBranches;
