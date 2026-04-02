@@ -416,7 +416,7 @@ class App:
 			import processing
 			prev_submitted = None
 			def emit_envs() -> None:
-				global prev_submitted
+				nonlocal prev_submitted
 				new_branches = get_global_branches_to_emit()
 				new_envs = get_global_envs_to_emit()
 				serialized_submission = json.dumps([new_branches, new_envs], sort_keys=True)
