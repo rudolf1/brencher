@@ -263,7 +263,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 					for env in environments.values():
 						if env.id == update_data.get('id'):
 							env.branches = update_data.get('branches', env.branches)
-							logger.info(f"Updated environment {env.id} branches to {env.branches}")
+							if 'dry' in update_data:
+								env.dry = bool(update_data['dry'])
+							logger.info(f"Updated environment {env.id} branches to {env.branches}, dry={env.dry}")
 
 				environment_update_event.set()
 
