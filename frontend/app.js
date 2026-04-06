@@ -34,6 +34,9 @@ const serverSelectedBranchesByEnv = {};
 // Populated from any step result that contains a `columns` key (e.g. GitUnmerge)
 const columnsByEnv = {};
 
+// Per-environment dry run state: envId -> bool
+const dryRunByEnv = {};
+
 // Single WebSocket connection
 let ws = null;
 
@@ -132,7 +135,7 @@ function escapeHtml(str) {
 let renderedBranches = []
 
 function renderBranches() {
-    if (JSON.stringify(filteredBranches) === JSON.stringify(renderedBranches)) {
+    if (JSON.stringify(filteredBranches) === JSON.stringify(renderedBranches) && JSON.stringify(dryRunByEnv) === JSON.stringify(renderedDryRunState)) {
         return
     }
     checkForPendingChanges();
@@ -155,7 +158,12 @@ function renderBranches() {
         const colNames = Object.keys(envCols);
         return `
         <div class="env-block">
-            <h3 class="env-title">Environment: ${envName || envId}</h3>
+            <h3 class="env-title">
+                Environment: ${envName || envId}
+                <button class="dry-run-btn ${dryRunByEnv[envId] ? 'dry-run-active' : ''}" data-env="${envId}" title="${dryRunByEnv[envId] ? 'Dry run on — click to resume' : 'Running — click to pause (dry run)'}">
+                    ${dryRunByEnv[envId] ? '⏸' : '▶'}
+                </button>
+            </h3>
             <table class="branches-table">
                 <thead>
                     <tr>
@@ -231,7 +239,18 @@ function renderBranches() {
             updateBranchCommit(envId, branch, commitId || 'HEAD');
         };
     });
+    branchesList.querySelectorAll('.dry-run-btn').forEach(btn => {
+        btn.onclick = e => {
+            const envId = e.currentTarget.dataset.env;
+            dryRunByEnv[envId] = !dryRunByEnv[envId];
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ update: { id: envId, dry: dryRunByEnv[envId] } }));
+            }
+            filterBranches();
+        };
+    });
     renderedBranches = filteredBranches;
+    renderedDryRunState = {...dryRunByEnv};
 }
 
 function updateBranchCommit(envId, branch, commit) {
@@ -390,6 +409,8 @@ function setupWebSockets() {
                 environmentsRaw.forEach((envObj) => {
                     if (!envObj) return;
                     const envId = envObj.id || envObj.name || 'unknown';
+                    // Always sync dry run state from server
+                    dryRunByEnv[envId] = !!envObj.dry;
                     if (!isChangesPending()) {
                         if (Array.isArray(envObj.branches) && envObj.branches.length > 0) {
                             if (Array.isArray(envObj.branches[0])) {
