@@ -141,11 +141,13 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 						"name": r.name,
 						"status": [str(result), stack],
 						"error": True,
+						"is_running": r.is_running,
 					})
 				else:
 					pipeline_state.append({
 						"name": r.name,
 						"status": result,
+						"is_running": r.is_running,
 					})
 			except BaseException as e:
 				stack = traceback.format_exception(type(e), e, e.__traceback__)
@@ -153,6 +155,7 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 					"name": r.name,
 					"status": [str(e), stack],
 					"error": True,
+					"is_running": r.is_running,
 				})
 		env_dtos[env.id] = asdict(replace(env, pipeline=[]))
 		env_dtos[env.id]['pipeline'] = pipeline_state
@@ -241,7 +244,7 @@ async def broadcast_error(data: Any) -> None:
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
 	await websocket.accept()
-	websocket.state.last_payloads: Dict[str, str] = {}
+	websocket.state.last_payloads: Dict[str, str] = {}  # type: ignore[misc]
 	ws_connections.add(websocket)
 
 	try:

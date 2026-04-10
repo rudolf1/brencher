@@ -310,15 +310,18 @@ function renderJobs() {
                 const storageKey = 'jobSpoiler:' + key;
                 const safeId = 'spoiler-' + encodeURIComponent(key).replace(/[^a-zA-Z0-9_-]/g, '_');
                 const isError = job.error;
+                const isRunning = !!job.is_running;
                 const openByDefault = isError || (window._jobSpoilerState && window._jobSpoilerState[storageKey] === 'open');
 
                 return `
                     <div class="job-item">
                         <div class="job-header" style="cursor:pointer;font-weight:bold;"
                              onclick="toggleJobSpoiler('${key}', '${safeId}')">
-                            ${isError
-                    ? `<span style="color:#dc3545;font-weight:bold;margin-right:6px;" title="Error">!</span>`
-                    : `<span style="color:#28a745;font-weight:bold;margin-right:6px;" title="OK">✔</span>`}
+                            ${isRunning
+                    ? `<span class="step-spinner" title="Running"></span>`
+                    : isError
+                        ? `<span style="color:#dc3545;font-weight:bold;margin-right:6px;" title="Error">!</span>`
+                        : `<span style="color:#28a745;font-weight:bold;margin-right:6px;" title="OK">✔</span>`}
                             ${envObj.id} - ${job.name}
                         </div>
                         <div id="${safeId}" class="job-spoiler" style="display: ${openByDefault ? 'block' : 'none'}; margin-top:8px;">
