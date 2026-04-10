@@ -244,7 +244,7 @@ async def broadcast_error(data: Any) -> None:
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
 	await websocket.accept()
-	websocket.state.last_payloads: Dict[str, str] = {}
+	websocket.state.last_payloads: Dict[str, str] = {}  # type: ignore[misc]
 	ws_connections.add(websocket)
 
 	try:

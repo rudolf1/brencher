@@ -82,7 +82,8 @@ class DockerComposeBuild(AbstractStep[Dict[str, str]]):
 					try:
 						img = client.images.pull(image)
 						logger.info(f"Image {image} already exists in repo, skipping build.")
-						image_shas[image] = img.id
+						if img.id is not None:
+							image_shas[image] = img.id
 						continue
 					except Exception:
 						pass
@@ -91,7 +92,8 @@ class DockerComposeBuild(AbstractStep[Dict[str, str]]):
 					try:
 						img = client.images.get(image)
 						logger.info(f"Image {image} already exists locally, skipping build.")
-						image_shas[image] = img.id
+						if img.id is not None:
+							image_shas[image] = img.id
 						continue
 					except docker_errors.ImageNotFound:
 						pass
@@ -103,7 +105,8 @@ class DockerComposeBuild(AbstractStep[Dict[str, str]]):
 					logger.info(f"Pushing image {image}")
 					for line in client.images.push(image, stream=True, decode=True):
 						logger.debug(line)
-				image_shas[image] = img.id
+				if img.id is not None:
+					image_shas[image] = img.id
 			return image_shas
 		except Exception as e:
 			raise e
