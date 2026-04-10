@@ -267,7 +267,10 @@ function renderJobs() {
         jobsList.innerHTML = '<p class="loading">No jobs found.</p>';
         return;
     }
-    jobsList.innerHTML = environmentsRaw.map((envObj) => {
+    jobsList.innerHTML = environmentsRaw
+        .slice()
+        .sort((a, b) => (a.name || a.id || '').localeCompare(b.name || b.id || ''))
+        .map((envObj) => {
         var linksHtml = ""
         const jobsArr = envObj.pipeline || [];
         if (Array.isArray(jobsArr)) {
