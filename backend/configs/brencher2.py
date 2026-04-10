@@ -33,6 +33,7 @@ buildDocker = DockerComposeBuild(clone,
                                  docker_compose_path="docker-compose.yml",
                                  docker_repo_url="https://registry.rudolf.keenetic.link",
                                  publish=False,
+								 build_cache = True,
                                  envs=lambda: {
 									 "version": "auto-" + checkoutMerged.progress().version,
 									 "user_group": "1000:137"
