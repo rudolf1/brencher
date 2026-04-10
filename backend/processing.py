@@ -33,6 +33,8 @@ def process_all_jobs(
 	for env in environemnts:
 		for step in env.pipeline:
 			try:
+				step.is_running = True
+				onupdate()
 				step.progress()
 				if (isinstance(step, GitUnmerge) or (
 						isinstance(step, CachingStep) and isinstance(step.step, GitUnmerge))) and len(
@@ -51,8 +53,8 @@ def process_all_jobs(
 			except BaseException as e:
 				error_msg = f"Error processing release {env.id}, job {step.name}: {str(e)}"
 				logger.error(error_msg)
-				onupdate()
 				has_error = True
 			finally:
+				step.is_running = False
 				onupdate()
 	return has_error
