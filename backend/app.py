@@ -7,7 +7,7 @@ import sys
 import threading
 import traceback
 from dataclasses import asdict, replace
-from typing import Any, Dict, List, Optional, Set, Tuple, TypeVar
+from typing import Any, Dict, List, Optional, Set, TypeVar
 
 import websockets
 from dotenv import load_dotenv
@@ -64,7 +64,7 @@ environments_slaves: Dict[str, Any] = {}
 branches_slaves: Dict[str, Dict[str, Any]] = {}
 state_lock = threading.Lock()
 
-# Single set of WebSocket connections
+# Active WebSocket connections
 ws_connections: Set[WebSocket] = set()
 
 # Event loop reference for thread-safe async calls
@@ -206,13 +206,16 @@ def _schedule_async(coro: Any) -> None:
 # --- WebSocket Broadcasting Functions ---
 
 async def broadcast(event: str, data: Any) -> None:
-	"""Broadcast a message to all connected WebSocket clients."""
+	"""Broadcast a message to all connected WebSocket clients that have not seen this data yet."""
 	disconnected = set()
 	message = custom_json_dumps({event: data})
 
 	for websocket in list(ws_connections):
+		if websocket.state.last_payloads.get(event) == message:
+			continue
 		try:
 			await websocket.send_text(message)
+			websocket.state.last_payloads[event] = message
 		except Exception as e:
 			logger.error(f"Error sending to websocket: {e}")
 			disconnected.add(websocket)
@@ -238,16 +241,17 @@ async def broadcast_error(data: Any) -> None:
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
 	await websocket.accept()
+	websocket.state.last_payloads: Dict[str, str] = {}
 	ws_connections.add(websocket)
 
 	try:
-		# Send initial state on connect
-		await websocket.send_text(custom_json_dumps({
-			"branches": get_global_branches_to_emit(),
-		}))
-		await websocket.send_text(custom_json_dumps({
-			"environments": get_global_envs_to_emit(),
-		}))
+		# Send initial state on connect and record it so duplicate broadcasts are suppressed
+		branches_payload = custom_json_dumps({"branches": get_global_branches_to_emit()})
+		envs_payload = custom_json_dumps({"environments": get_global_envs_to_emit()})
+		await websocket.send_text(branches_payload)
+		websocket.state.last_payloads["branches"] = branches_payload
+		await websocket.send_text(envs_payload)
+		websocket.state.last_payloads["environments"] = envs_payload
 
 		while True:
 			data = await websocket.receive_text()
