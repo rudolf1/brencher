@@ -15,7 +15,7 @@ from steps.git import GitClone, HasVersion
 logger = logging.getLogger(__name__)
 
 
-class DockerComposeBuild(AbstractStep[List[str]]):
+class DockerComposeBuild(AbstractStep[Dict[str, str]]):
 	def __init__(self,
 	             wd: GitClone,  # TODO should be CheckoutMerged
 	             docker_repo_username: str,
@@ -36,11 +36,12 @@ class DockerComposeBuild(AbstractStep[List[str]]):
 		self.publish = publish
 		self.build_cache = build_cache
 
-	def progress(self) -> List[str]:
+	def progress(self) -> Dict[str, str]:
 		"""
 		Build and push Docker images defined in a docker-compose file.
+		Returns a dict mapping image name to its SHA digest.
 		"""
-		images_built = []
+		image_shas: Dict[str, str] = {}
 		try:
 			# Authenticate to docker repo
 			client = docker.DockerClient(base_url='unix://var/run/docker.sock')
@@ -79,29 +80,31 @@ class DockerComposeBuild(AbstractStep[List[str]]):
 				if self.publish:
 					# Check if image exists in remote repo
 					try:
-						client.images.pull(image)
+						img = client.images.pull(image)
 						logger.info(f"Image {image} already exists in repo, skipping build.")
+						image_shas[image] = img.id
 						continue
 					except Exception:
 						pass
 				else:
 					# Check if image exists locally
 					try:
-						client.images.get(image)
+						img = client.images.get(image)
 						logger.info(f"Image {image} already exists locally, skipping build.")
+						image_shas[image] = img.id
 						continue
 					except docker_errors.ImageNotFound:
 						pass
 
 				logger.info(f"Building image {image} from {build_ctx}, {build_dockerfile}")
-				client.images.build(path=build_ctx, dockerfile=build_dockerfile, tag=image, nocache=not self.build_cache, rm=True)
+				img, _ = client.images.build(path=build_ctx, dockerfile=build_dockerfile, tag=image, nocache=not self.build_cache, rm=True)
 
 				if self.publish:
 					logger.info(f"Pushing image {image}")
 					for line in client.images.push(image, stream=True, decode=True):
 						logger.debug(line)
-				images_built.append(image)
-			return images_built
+				image_shas[image] = img.id
+			return image_shas
 		except Exception as e:
 			raise e
 
@@ -280,4 +283,26 @@ class DockerSwarmDeploy(AbstractStep[str]):
 			logger.error(f"Stack deploy failed: {result.stderr}")
 			raise RuntimeError(f"Stack deploy failed: {result.stderr}")
 		logger.info(f"Stack deployed successfully: {result.stdout}")
+
+		# Check health of all deployed services
+		client = docker.DockerClient(base_url='unix://var/run/docker.sock')
+		not_running = []
+		for svc_name in expected_services:
+			full_svc_name = f"{self.stack_name}_{svc_name}"
+			services_list = client.services.list(filters={"name": full_svc_name})
+			if not services_list:
+				not_running.append(f"{full_svc_name} (not found)")
+				continue
+			svc = services_list[0]
+			spec_mode = svc.attrs.get("Spec", {}).get("Mode", {})
+			desired_replicas = spec_mode.get("Replicated", {}).get("Replicas", 1)
+			running_tasks = [
+				t for t in svc.tasks()
+				if t.get("Status", {}).get("State") == "running" and t.get("DesiredState") == "running"
+			]
+			if len(running_tasks) < desired_replicas:
+				not_running.append(f"{full_svc_name} ({len(running_tasks)}/{desired_replicas} replicas running)")
+		if not_running:
+			raise BaseException(f"Services not started yet: {', '.join(not_running)}")
+
 		return f"Stack deployed successfully: {result.stdout}"
