@@ -7,7 +7,7 @@ import sys
 import threading
 import traceback
 from dataclasses import asdict, replace
-from typing import Any, Dict, List, Optional, Set, Tuple, TypeVar
+from typing import Any, Dict, List, Optional, TypeVar
 
 import websockets
 from dotenv import load_dotenv
@@ -64,8 +64,8 @@ environments_slaves: Dict[str, Any] = {}
 branches_slaves: Dict[str, Dict[str, Any]] = {}
 state_lock = threading.Lock()
 
-# Single set of WebSocket connections
-ws_connections: Set[WebSocket] = set()
+# Per-client WebSocket state: maps each connection to its last-emitted payload per event type
+ws_client_states: Dict[WebSocket, Dict[str, str]] = {}
 
 # Event loop reference for thread-safe async calls
 _event_loop: Optional[asyncio.AbstractEventLoop] = None
@@ -206,19 +206,22 @@ def _schedule_async(coro: Any) -> None:
 # --- WebSocket Broadcasting Functions ---
 
 async def broadcast(event: str, data: Any) -> None:
-	"""Broadcast a message to all connected WebSocket clients."""
+	"""Broadcast a message to all connected WebSocket clients that have not seen this data yet."""
 	disconnected = set()
 	message = custom_json_dumps({event: data})
 
-	for websocket in list(ws_connections):
+	for websocket in list(ws_client_states):
+		if ws_client_states[websocket].get(event) == message:
+			continue
 		try:
 			await websocket.send_text(message)
+			ws_client_states[websocket][event] = message
 		except Exception as e:
 			logger.error(f"Error sending to websocket: {e}")
 			disconnected.add(websocket)
 
 	for ws in disconnected:
-		ws_connections.discard(ws)
+		ws_client_states.pop(ws, None)
 
 
 async def broadcast_branches(data: Any) -> None:
@@ -238,16 +241,16 @@ async def broadcast_error(data: Any) -> None:
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket) -> None:
 	await websocket.accept()
-	ws_connections.add(websocket)
+	ws_client_states[websocket] = {}
 
 	try:
-		# Send initial state on connect
-		await websocket.send_text(custom_json_dumps({
-			"branches": get_global_branches_to_emit(),
-		}))
-		await websocket.send_text(custom_json_dumps({
-			"environments": get_global_envs_to_emit(),
-		}))
+		# Send initial state on connect and record it so duplicate broadcasts are suppressed
+		branches_payload = custom_json_dumps({"branches": get_global_branches_to_emit()})
+		envs_payload = custom_json_dumps({"environments": get_global_envs_to_emit()})
+		await websocket.send_text(branches_payload)
+		ws_client_states[websocket]["branches"] = branches_payload
+		await websocket.send_text(envs_payload)
+		ws_client_states[websocket]["environments"] = envs_payload
 
 		while True:
 			data = await websocket.receive_text()
@@ -275,11 +278,11 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 				await broadcast_environments(get_global_envs_to_emit())
 
 	except WebSocketDisconnect as e:
-		ws_connections.discard(websocket)
+		ws_client_states.pop(websocket, None)
 	except Exception as e:
 		logger.error(f"WebSocket error: {e}")
 		await broadcast_error({'message': 'WebSocket exception'})
-		ws_connections.discard(websocket)
+		ws_client_states.pop(websocket, None)
 
 
 # --- Slave Connection ---
