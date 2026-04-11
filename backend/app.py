@@ -272,7 +272,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 							if 'dry' in update_data:
 								env.dry = bool(update_data['dry'])
 							logger.info(f"Updated environment {env.id} branches to {env.branches}, dry={env.dry}")
-
+							reset_caches([env])
 				environment_update_event.set()
 
 				if slave_ws_task is not None:
