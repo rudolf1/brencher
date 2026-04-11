@@ -48,6 +48,7 @@ jobs:
             fi
             echo "=== Processing branch: $br ==="
             # Create/update a local branch from remote
+            git reset --hard HEAD
             git checkout -B "$br" "origin/$br"
             # Merge origin/main into branch (non-interactive)
             if git merge --no-edit --squash "origin/$MAIN"; then
