@@ -1,52 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Brencher - Branch Merger</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-<div class="container">
-    <header>
-        <h1>Brencher - Branch Merger</h1>
-        <div id="status-bar" class="status-bar hidden">
-            <span id="status-message"></span>
-            <button id="close-status">×</button>
-        </div>
-    </header>
-
-    <main>
-        <div class="branches-section">
-            <h2 style="float: left;">Git Branches</h2>
-            <div class="filter-section" style="float: left;">
-                <input type="text" id="branch-filter"
-                       placeholder="Filter branches by name, commit ID, or commit message..." class="filter-input">
-            </div>
-            <div class="control-bar" style="float: left;">
-                <button id="toggle-show-all" class="toggle-button">Show All</button>
-            </div>
-            <div class="control-bar" style="float: right;">
-                <button id="refresh-branches" class="refresh-button">Refresh Branches</button>
-            </div>
-            <div class="apply-section" style="float: right;">
-                <button id="apply-changes" class="apply-button hidden">Apply Changes</button>
-            </div>
-            <div style="clear: both;"/>
-            <div class="branches-list" id="branches-list">
-                <p class="loading">Loading branches...</p>
-            </div>
-        </div>
-
-        <div class="jobs-section">
-            <h2>Jobs</h2>
-            <div id="jobs-list" class="jobs-list">
-                <p class="loading">Loading jobs...</p>
-            </div>
-        </div>
-    </main>
-</div>
-
-<script src="app.js"></script>
-</body>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

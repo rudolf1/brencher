@@ -1,0 +1,239 @@
+/* Base */
+body {
+  font-family: Arial, sans-serif;
+  background: #f8f9fa;
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  max-width: 960px;
+  margin: 40px auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 32px;
+}
+
+/* Header */
+header h1 {
+  margin: 0 0 12px;
+}
+
+/* Status bar */
+.status-bar {
+  background: #e9ecef;
+  padding: 8px 16px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.close-status-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #555;
+  line-height: 1;
+}
+
+.close-status-btn:hover {
+  color: #000;
+}
+
+/* Branches section header */
+.branches-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.branches-header h2 {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.branches-controls-left {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.branches-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Buttons */
+.refresh-button,
+.apply-button,
+.toggle-button {
+  background: #28a745;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.refresh-button:hover,
+.apply-button:hover,
+.toggle-button:hover {
+  background: #218838;
+}
+
+/* Filter */
+.filter-input {
+  flex: 1;
+  min-width: 220px;
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  box-sizing: border-box;
+}
+
+.filter-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+/* Branches list */
+.branches-list {
+  margin-top: 8px;
+}
+
+.loading {
+  color: #888;
+  font-style: italic;
+}
+
+/* Environment block */
+.env-block {
+  margin-bottom: 24px;
+}
+
+.env-title {
+  margin: 0 0 8px;
+  color: #495057;
+}
+
+/* Branches table */
+.branches-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+}
+
+.branches-table th {
+  background: #f8f9fa;
+  padding: 10px 8px;
+  text-align: left;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.branches-table td {
+  padding: 10px 8px;
+  vertical-align: middle;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.branch-row:hover {
+  background: #f8f9fa;
+}
+
+.branch-name {
+  font-weight: 500;
+}
+
+.desired-commit {
+  margin-right: 6px;
+  padding: 4px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.commit-input {
+  padding: 4px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9em;
+  width: 200px;
+  font-family: monospace;
+}
+
+input[type='checkbox'] {
+  margin: 0;
+  transform: scale(1.2);
+  cursor: pointer;
+}
+
+/* Jobs section */
+.jobs-section {
+  margin-top: 32px;
+}
+
+.jobs-section h2 {
+  margin: 0 0 12px;
+}
+
+.jobs-list {
+  margin-top: 8px;
+}
+
+.env-jobs {
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.env-jobs h4 {
+  margin: 0 0 8px;
+  color: #495057;
+}
+
+.job-item {
+  margin-bottom: 8px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+.job-header {
+  user-select: none;
+}
+
+.job-header:hover {
+  color: #007bff;
+}
+
+.job-spoiler pre {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.job-spoiler a {
+  color: #007bff;
+  word-break: break-all;
+}
