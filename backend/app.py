@@ -56,7 +56,7 @@ app.add_middleware(
 	allow_headers=["*"],
 )
 
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend/dist')
 
 # In-memory state
 environments: Dict[str, Environment] = {}

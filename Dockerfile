@@ -1,4 +1,16 @@
-# Use official Python image with uv pre-installed
+# Stage 1: Build React frontend
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /app/frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY openapi.yaml /app/openapi.yaml
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Python backend
 FROM python:3.12.3-alpine
 
 # Install uv (if not present)
@@ -14,9 +26,11 @@ COPY requirements.txt ./
 RUN uv venv .venv && \
     uv pip install -r requirements.txt
 
-# Copy backend and frontend
+# Copy backend
 COPY backend/ ./backend/
-COPY frontend/ ./frontend/
+
+# Copy built frontend from Stage 1
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 # Expose port for the web server
 EXPOSE 5001

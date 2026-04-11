@@ -1,0 +1,191 @@
+openapi: 3.1.0
+info:
+  title: Brencher API
+  version: 1.0.0
+  description: |
+    Brencher branch merger API.
+
+    ## WebSocket /ws
+
+    Connect to `/ws` for real-time updates.
+
+    ### Incoming messages (server → client)
+
+    **Branches update:**
+    ```json
+    { "branches": { "<envId>": { "<branchName>": [CommitInfo, ...] } } }
+    ```
+
+    **Environments update:**
+    ```json
+    { "environments": { "<envId>": EnvironmentDto } }
+    ```
+
+    **Error:**
+    ```json
+    { "error": { "message": "string" } }
+    ```
+
+    ### Outgoing messages (client → server)
+
+    **Update environment branches:**
+    ```json
+    { "update": { "id": "<envId>", "branches": [["<branchName>", "<commitHash>"], ...] } }
+    ```
+
+    **Refresh (send empty id to trigger refresh):**
+    ```json
+    { "update": { "id": "" } }
+    ```
+
+paths:
+  /state:
+    get:
+      operationId: getState
+      summary: Get current environment state
+      responses:
+        "200":
+          description: Current state of all environments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StateResponse"
+
+  /branches:
+    get:
+      operationId: getBranches
+      summary: Get branches for all environments
+      responses:
+        "200":
+          description: Branches grouped by environment and branch name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchesResponse"
+
+components:
+  schemas:
+    CommitInfo:
+      type: object
+      required:
+        - hexsha
+        - author
+        - message
+      properties:
+        hexsha:
+          type: string
+          description: Full commit SHA
+        author:
+          type: string
+          description: Commit author name
+        message:
+          type: string
+          description: Commit message
+
+    BranchCommitPair:
+      type: array
+      items:
+        type: string
+      minItems: 2
+      maxItems: 2
+      description: Tuple of [branchName, commitHash]
+
+    PipelineStep:
+      type: object
+      required:
+        - name
+        - status
+      properties:
+        name:
+          type: string
+          description: Step name
+        status:
+          description: Step status (any shape)
+        error:
+          type: boolean
+          description: Whether this step has an error
+
+    EnvironmentDto:
+      type: object
+      required:
+        - id
+        - branches
+        - dry
+        - repo
+        - pipeline
+      properties:
+        id:
+          type: string
+          description: Environment identifier
+        branches:
+          type: array
+          items:
+            $ref: "#/components/schemas/BranchCommitPair"
+          description: Array of [branchName, commitHash] pairs
+        dry:
+          type: boolean
+          description: Whether this is a dry-run environment
+        repo:
+          type: string
+          description: Repository path or URL
+        pipeline:
+          type: array
+          items:
+            $ref: "#/components/schemas/PipelineStep"
+          description: Pipeline steps with their statuses
+
+    WsIncomingMessage:
+      type: object
+      properties:
+        branches:
+          $ref: "#/components/schemas/BranchesData"
+        environments:
+          $ref: "#/components/schemas/EnvironmentsData"
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+
+    WsUpdatePayload:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+          description: Environment ID (empty string to trigger refresh)
+        branches:
+          type: array
+          items:
+            $ref: "#/components/schemas/BranchCommitPair"
+
+    WsOutgoingMessage:
+      type: object
+      required:
+        - update
+      properties:
+        update:
+          $ref: "#/components/schemas/WsUpdatePayload"
+
+    BranchesData:
+      type: object
+      additionalProperties:
+        type: object
+        additionalProperties:
+          type: array
+          items:
+            $ref: "#/components/schemas/CommitInfo"
+      description: "Dict[envId, Dict[branchName, CommitInfo[]]]"
+
+    EnvironmentsData:
+      type: object
+      additionalProperties:
+        $ref: "#/components/schemas/EnvironmentDto"
+      description: "Dict[envId, EnvironmentDto]"
+
+    StateResponse:
+      $ref: "#/components/schemas/EnvironmentsData"
+
+    BranchesResponse:
+      $ref: "#/components/schemas/BranchesData"
