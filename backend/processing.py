@@ -33,7 +33,6 @@ def process_all_jobs(
 	for env in environemnts:
 		for step in env.pipeline:
 			try:
-				step.is_running = True
 				onupdate()
 				step.progress()
 				if (isinstance(step, GitUnmerge) or (
@@ -55,6 +54,5 @@ def process_all_jobs(
 				logger.error(error_msg)
 				has_error = True
 			finally:
-				step.is_running = False
 				onupdate()
 	return has_error

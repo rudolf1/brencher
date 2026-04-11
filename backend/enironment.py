@@ -28,7 +28,6 @@ class AbstractStep[T](ABC):
 	_env: Environment | None = None
 
 	name: str
-	is_running: bool = False
 
 	def __init__(self, n: str | None = None) -> None:
 		if n is None:
