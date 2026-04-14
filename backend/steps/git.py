@@ -222,7 +222,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 		version = '-'.join([x.hexsha[0:8] for x in sorted_commits])
 
 		for ref in repo.refs:
-			if ref.is_remote() and ref.commit == repo.head.commit and ref.name != 'origin/HEAD':
+			if ref.is_remote() and ref.is_valid() and ref.commit == repo.head.commit and ref.name != 'origin/HEAD':
 				logger.info(f"Merge commit {ref.commit} corresponds to branch {ref}")
 				remote_branch_name = ref.name[len('origin/'):]
 				break
@@ -286,14 +286,14 @@ class GitUnmerge(AbstractStep[GitUnmergeResult]):
 			for v in version_parts:
 				commit = repo.commit(v)
 				# branches = [head.name for head in repo.heads if head.commit.hexsha == commit.hexsha]
-				branches = [ref.name for ref in repo.remotes.origin.refs if ref.commit.hexsha == commit.hexsha]
+				branches = [ref.name for ref in repo.remotes.origin.refs if not ref.name.startswith('origin/HEAD') and ref.commit.hexsha == commit.hexsha]
 				branches = [b[len('origin/'):] for b in branches if
-				            b.startswith('origin/') and not b.startswith('origin/HEAD')]
+				            b.startswith('origin/') ]
 
 				if len(branches) == 0 or branches[0].startswith('auto/'):
 					if childs is None:
 						childs = _commits_childs(repo)
-					commitsSet = set([commit])
+					commitsSet = {commit}
 					while len(commitsSet) > 0:
 						current = commitsSet.pop()
 						for child in childs.get(current, []):

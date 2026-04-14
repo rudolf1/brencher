@@ -10,7 +10,8 @@ import tempfile
 from typing import Dict, Tuple, List, Callable
 
 import git
-from enironment import Environment, AbstractStep
+from enironment import Environment, AbstractStep, wrap_in_cached
+from processing import reset_caches
 from steps.docker import DockerSwarmCheckResult
 from steps.git import CheckoutAndMergeResult, CheckoutMerged, GitUnmerge, GitClone, HasVersion, GitUnmergeResult
 from steps.step import CachingStep  # noqa: F401
@@ -99,6 +100,15 @@ class RemoteRepoHelper:
 		if self.local_dir:
 			shutil.rmtree(self.local_dir, ignore_errors=True)
 
+	def enable_caching(self) -> None:
+		"""Wrap environment pipeline in caching steps"""
+		self.env = wrap_in_cached(self.env)
+
+	def progress(self) -> None:
+		reset_caches([self.env])
+		for i in self.env.pipeline:
+			i.progress()
+
 	def create_commit(self, repo: git.Repo, from_branch: str, to_branch: str, filename: str, content: str,
 	                  message: str) -> git.Commit:
 		"""Create a commit in the repository
@@ -119,7 +129,16 @@ class RemoteRepoHelper:
 		with open(file_path, 'w') as f:
 			f.write(content)
 		repo.index.add([filename])
-		return repo.index.commit(message)
+		result = repo.index.commit(message)
+		repo.git.checkout(result.hexsha, detach=True)
+		return result
+
+	def remove_branch(self, repo: git.Repo, branch_name: str) -> None:
+		"""Remove a branch from the repository"""
+		if branch_name in [head.name for head in repo.heads]:
+			repo.delete_head(branch_name, force=True)
+		else:
+			raise BaseException(f"Branch doesn't exist {branch_name}.")
 
 	def verify_working_directory_files(self, expected_files: List[Tuple[str, str]]) -> None:
 		"""Verify that working directory contains exactly the expected files with correct content.
@@ -145,10 +164,12 @@ class RemoteRepoHelper:
 
 		repo = git.Repo(repo_path)
 		commits = list(repo.iter_commits("--all", max_count=30))
-		refs = [
-			f"{_as_text(it.commit)[:10]}:{_as_text(it.name)}, is_remote:{it.is_remote()}"
-			for it in repo.refs
-		]
+		refs = []
+		for it in repo.references:
+			try:
+				refs.append(f"{_as_text(it.commit)[:10]}:{_as_text(it.name)}, is_remote:{it.is_remote()}")
+			except Exception as e:
+				refs.append(f"Error reading branch {it.name}: {e}")
 		lines = [
 			f"{_as_text(commit.hexsha)[:10]} (p{[_as_text(it.hexsha)[:10] for it in commit.parents]}): {_as_text(commit.message).splitlines()[0]}"
 			for commit in commits
