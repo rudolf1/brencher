@@ -1,0 +1,44 @@
+name: Generate OpenAPI JavaScript client
+
+on:
+  push:
+    paths:
+      - 'openapi.yaml'
+      - '.github/workflows/generate-openapi-client.yml'
+  workflow_dispatch: {}
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java (required by OpenAPI Generator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Generate JavaScript client from OpenAPI
+        uses: openapitools/openapi-generator-cli@v2.5.0
+        with:
+          arguments: generate -i openapi.yaml -g javascript -o openapi-client-ts --additional-properties=useES6=true,projectName=brencher-openapi
+
+      - name: Generate Python FastAPI server from OpenAPI
+        uses: openapitools/openapi-generator-cli@v2.5.0
+        with:
+          arguments: generate -i openapi.yaml -g python-fastapi -o openapi-server-py --additional-properties=projectName=brencher-python-server,packageName=brencher_server
+
+# docker run --rm -v "$PWD":/local openapitools/openapi-generator-cli generate -i /local/openapi.yaml -g python-fastapi -o /local/openapi-server-py --additional-properties=projectName=brencher-python-server,packageName=brencher_server
+# docker run --rm -v "$PWD":/local openapitools/openapi-generator-cli generate -i /local/openapi.yaml -g javascript -o /local/openapi-client-ts --additional-properties=useES6=true,projectName=brencher-openapi
+
+      # - name: Commit generated client
+      #   uses: EndBug/add-and-commit@v9
+      #   with:
+      #     author_name: github-actions
+      #     author_email: actions@github.com
+      #     message: "chore: regenerate OpenAPI JavaScript client"
+      #     add: openapi-client-ts openapi-server-py
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

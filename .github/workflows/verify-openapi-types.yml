@@ -1,0 +1,34 @@
+name: Verify OpenAPI types
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  verify-openapi-types:
+    name: Verify generated TypeScript matches committed types
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Generate types from OpenAPI
+        run: |
+          set -euo pipefail
+          npx --yes openapi-typescript openapi.yaml --output generated-openapi-types.ts
+
+      - name: Show diff and fail if different
+        run: |
+          set -euo pipefail
+          if ! command -v diff >/dev/null 2>&1; then echo "diff not found" && exit 2; fi
+          echo "Comparing generated types to frontend/src/types/api.ts"
+          if ! diff -u frontend/src/types/api.ts generated-openapi-types.ts; then
+            echo "OpenAPI types are out of date. Regenerate with: npx openapi-typescript openapi.yaml --output frontend/src/types/api.ts";
+            exit 1;
+          fi
