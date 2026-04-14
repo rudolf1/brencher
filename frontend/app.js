@@ -91,12 +91,14 @@ function getCommitDropdownOptions(envId, branchName, desiredCommit) {
     if (commits.length) {
         const head = commits[0];
         const headShort = head.hexsha ? head.hexsha.substring(0, 8) : '';
-        options += `<option value="HEAD" ${desiredCommit === 'HEAD' ? 'selected' : ''}>HEAD (${headShort} - ${(head.author || '').substring(0, 25)} - ${head.message ? head.message.substring(0, 50) + (head.message.length > 50 ? '...' : '') : ''})</option>`;
+        const headMsg = escapeHtml(head.message || '');
+        options += `<option value="HEAD" ${desiredCommit === 'HEAD' ? 'selected' : ''}>HEAD (${headShort} - ${(head.author || '').substring(0, 25)} - ${headMsg ? headMsg.substring(0, 50) + (headMsg.length > 50 ? '...' : '') : ''})</option>`;
         commits.forEach(c => {
             const full = c.hexsha;
             const shortHash = full ? full.substring(0, 8) : '';
             const isSelected = desiredCommit === full || desiredCommit === shortHash;
-            options += `<option value="${full}" ${isSelected ? 'selected' : ''}>${shortHash} - ${(c.author || '').substring(0, 25)} - ${c.message ? c.message.substring(0, 50) + (c.message.length > 50 ? '...' : '') : ''}</option>`;
+            const cMsg = escapeHtml(c.message || '');
+            options += `<option value="${full}" ${isSelected ? 'selected' : ''}>${shortHash} - ${(c.author || '').substring(0, 25)} - ${cMsg ? cMsg.substring(0, 50) + (cMsg.length > 50 ? '...' : '') : ''}</option>`;
         });
     } else {
         options += `<option value="HEAD" ${desiredCommit === 'HEAD' ? 'selected' : ''}>HEAD (no commits)</option>`;
