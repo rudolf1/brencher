@@ -63,7 +63,7 @@ def test_resolve_initial_branches_reports_push_conflict(repo_helper: RemoteRepoH
 
 	monkeypatch.setattr(resolve_step, "_checkout_state_branch", checkout_and_modify_remote)
 
-	with pytest.raises(BaseException, match="Conflict while pushing initial branches state"):
+	with pytest.raises(Exception, match="Conflict while pushing initial branches state"):
 		resolve_step.progress()
 
 	assert repo_helper.env.branches == []

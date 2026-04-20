@@ -359,7 +359,7 @@ class ResolveInitialBranches(AbstractStep[ResolveInitialBranchesResult]):
 		default_remote_branch = "origin/master"
 		try:
 			default_remote_branch = repo.git.symbolic_ref("refs/remotes/origin/HEAD").replace("refs/remotes/", "")
-		except BaseException:
+		except Exception:
 			for ref in repo.refs:
 				if ref.name.startswith("origin/") and ref.name != "origin/HEAD":
 					default_remote_branch = ref.name
@@ -377,14 +377,14 @@ class ResolveInitialBranches(AbstractStep[ResolveInitialBranchesResult]):
 		repo_path = self.wd.progress()
 		repo = git.Repo(repo_path)
 
-		if self.state_repo_url and repo.remotes.origin.url != self.state_repo_url:
+		if self.state_repo_url and repo.remotes.origin.url.rstrip("/") != self.state_repo_url.rstrip("/"):
 			repo.remotes.origin.set_url(self.state_repo_url)
 			repo.remotes.origin.fetch(prune=True)
 
 		unmerge_result = self.unmerge.progress()
 		branches = unmerge_result.branches
 		if len(branches) == 0:
-			raise BaseException("Unable to resolve initial branches: no branches returned")
+			raise Exception("Unable to resolve initial branches: no branches returned")
 
 		self._checkout_state_branch(repo)
 
@@ -392,32 +392,40 @@ class ResolveInitialBranches(AbstractStep[ResolveInitialBranchesResult]):
 		os.makedirs(os.path.dirname(state_abs_path), exist_ok=True)
 		state: Dict[str, Any] = {}
 		if os.path.exists(state_abs_path):
-			with open(state_abs_path) as f:
-				state = json.load(f)
+			try:
+				with open(state_abs_path) as f:
+					state = json.load(f)
+			except json.JSONDecodeError as e:
+				raise Exception(f"Invalid JSON in state file {self.state_file_path}: {str(e)}") from e
 
 		state[self.env.id] = {
-			"repo": self.state_repo_url or self.env.repo,
+			"repo": repo.remotes.origin.url,
 			"branches": branches,
 		}
 
-		with open(state_abs_path, "w") as f:
-			json.dump(state, f, sort_keys=True, indent=2)
-			f.write("\n")
-
-		repo.index.add([self.state_file_path])
-		if repo.is_dirty(index=True, working_tree=True, untracked_files=True):
+		new_state_content = json.dumps(state, sort_keys=True, indent=2) + "\n"
+		old_state_content = ""
+		if os.path.exists(state_abs_path):
+			with open(state_abs_path) as f:
+				old_state_content = f.read()
+		if old_state_content != new_state_content:
+			with open(state_abs_path, "w") as f:
+				f.write(new_state_content)
+			repo.index.add([self.state_file_path])
 			repo.index.commit(f"Resolve initial branches state for {self.env.id}")
 
 		try:
 			repo.git.push("origin", f"HEAD:refs/heads/{self.state_branch}")
-		except BaseException as e:
-			msg = str(e)
+		except git.exc.GitCommandError as e:
+			msg = e.stderr or str(e)
 			if "non-fast-forward" in msg or "[rejected]" in msg:
-				raise BaseException(
+				raise Exception(
 					f"Conflict while pushing initial branches state for {self.env.id}. "
 					f"Please refresh and retry. {msg}"
 				) from e
-			raise BaseException(f"Failed to push initial branches state for {self.env.id}: {msg}") from e
+			raise Exception(f"Failed to push initial branches state for {self.env.id}: {msg}") from e
+		except Exception as e:
+			raise Exception(f"Failed to push initial branches state for {self.env.id}: {str(e)}") from e
 
 		self.env.branches = branches
 		logger.info(f"Initial branches resolved and pushed for {self.env.id}: {self.env.branches}")

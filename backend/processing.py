@@ -39,6 +39,8 @@ def process_all_jobs(
 					git_clone_step = step
 				if isinstance(step, GitUnmerge) or (isinstance(step, CachingStep) and isinstance(step.step, GitUnmerge)):
 					git_unmerge_step = step
+				if git_clone_step is not None and git_unmerge_step is not None:
+					break
 
 			if git_clone_step is not None and git_unmerge_step is not None:
 				try:
@@ -49,7 +51,7 @@ def process_all_jobs(
 					)
 					resolve_step.env = env
 					resolve_step.progress()
-				except BaseException as e:
+				except Exception as e:
 					error_msg = f"Error resolving initial branches for {env.id}: {str(e)}"
 					logger.error(error_msg)
 					has_error = True
