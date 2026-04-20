@@ -1,4 +1,5 @@
 import hashlib
+import json
 import logging
 import os
 import shutil
@@ -319,3 +320,109 @@ class GitUnmerge(AbstractStep[GitUnmergeResult]):
 			)
 		else:
 			raise BaseException(f"Version format not recognized: {version}")
+
+
+@dataclass
+class ResolveInitialBranchesResult:
+	branches: List[Tuple[str, str]]
+	state_file_path: str
+	state_branch: str
+
+
+class ResolveInitialBranches(AbstractStep[ResolveInitialBranchesResult]):
+	wd: AbstractStep[str]
+	unmerge: AbstractStep[GitUnmergeResult]
+
+	def __init__(
+			self,
+			wd: AbstractStep[str],
+			unmerge: AbstractStep[GitUnmergeResult],
+			state_file_path: str = ".brencher/branches-state.json",
+			state_branch: str = "brencher-state",
+			state_repo_url: str | None = None,
+			**kwargs: Any
+	) -> None:
+		super().__init__(**kwargs)
+		self.wd = wd
+		self.unmerge = unmerge
+		self.state_file_path = state_file_path
+		self.state_branch = state_branch
+		self.state_repo_url = state_repo_url
+
+	def _checkout_state_branch(self, repo: git.Repo) -> None:
+		remote_state_ref = f"origin/{self.state_branch}"
+		remote_refs = {ref.name for ref in repo.refs}
+		if remote_state_ref in remote_refs:
+			repo.git.checkout("-B", self.state_branch, remote_state_ref)
+			return
+
+		default_remote_branch = "origin/master"
+		try:
+			default_remote_branch = repo.git.symbolic_ref("refs/remotes/origin/HEAD").replace("refs/remotes/", "")
+		except BaseException:
+			for ref in repo.refs:
+				if ref.name.startswith("origin/") and ref.name != "origin/HEAD":
+					default_remote_branch = ref.name
+					break
+		repo.git.checkout("-B", self.state_branch, default_remote_branch)
+
+	def progress(self) -> ResolveInitialBranchesResult:
+		if len(self.env.branches) > 0:
+			return ResolveInitialBranchesResult(
+				branches=self.env.branches,
+				state_file_path=self.state_file_path,
+				state_branch=self.state_branch,
+			)
+
+		repo_path = self.wd.progress()
+		repo = git.Repo(repo_path)
+
+		if self.state_repo_url and repo.remotes.origin.url != self.state_repo_url:
+			repo.remotes.origin.set_url(self.state_repo_url)
+			repo.remotes.origin.fetch(prune=True)
+
+		unmerge_result = self.unmerge.progress()
+		branches = unmerge_result.branches
+		if len(branches) == 0:
+			raise BaseException("Unable to resolve initial branches: no branches returned")
+
+		self._checkout_state_branch(repo)
+
+		state_abs_path = os.path.join(repo_path, self.state_file_path)
+		os.makedirs(os.path.dirname(state_abs_path), exist_ok=True)
+		state: Dict[str, Any] = {}
+		if os.path.exists(state_abs_path):
+			with open(state_abs_path) as f:
+				state = json.load(f)
+
+		state[self.env.id] = {
+			"repo": self.state_repo_url or self.env.repo,
+			"branches": branches,
+		}
+
+		with open(state_abs_path, "w") as f:
+			json.dump(state, f, sort_keys=True, indent=2)
+			f.write("\n")
+
+		repo.index.add([self.state_file_path])
+		if repo.is_dirty(index=True, working_tree=True, untracked_files=True):
+			repo.index.commit(f"Resolve initial branches state for {self.env.id}")
+
+		try:
+			repo.git.push("origin", f"HEAD:refs/heads/{self.state_branch}")
+		except BaseException as e:
+			msg = str(e)
+			if "non-fast-forward" in msg or "[rejected]" in msg:
+				raise BaseException(
+					f"Conflict while pushing initial branches state for {self.env.id}. "
+					f"Please refresh and retry. {msg}"
+				) from e
+			raise BaseException(f"Failed to push initial branches state for {self.env.id}: {msg}") from e
+
+		self.env.branches = branches
+		logger.info(f"Initial branches resolved and pushed for {self.env.id}: {self.env.branches}")
+		return ResolveInitialBranchesResult(
+			branches=branches,
+			state_file_path=self.state_file_path,
+			state_branch=self.state_branch,
+		)
