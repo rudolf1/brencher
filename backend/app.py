@@ -7,7 +7,7 @@ import sys
 import threading
 import traceback
 from dataclasses import asdict, replace
-from typing import Any, Dict, List, Optional, Set, TypeVar
+from typing import Any, Dict, List, Optional, Set, TypeVar, Tuple
 
 import websockets
 from dotenv import load_dotenv
@@ -128,6 +128,7 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 	env_dtos: Dict[str, Dict[str, Any]] = {}
 	for env in environments.values():
 		pipeline_state: List[Dict[str, Any]] = []
+		resolved_branches: List[Tuple[str, str]] = []
 		for r in env.pipeline:
 			try:
 				if isinstance(r, CachingStep):
@@ -144,6 +145,8 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 						"is_running": True,
 					})
 				else:
+					if isinstance(r, ResolveInitialBranches) and hasattr(result, "branches"):
+						resolved_branches = list(result.branches)
 					pipeline_state.append({
 						"name": r.name,
 						"status": result,
@@ -158,15 +161,7 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 					"is_running": True,
 				})
 		env_dtos[env.id] = asdict(replace(env, pipeline=[]))
-		for step in env.pipeline:
-			resolve_step = step
-			if isinstance(step, CachingStep):
-				resolve_step = step.step
-			if isinstance(resolve_step, ResolveInitialBranches):
-				try:
-					env_dtos[env.id]['branches'] = resolve_step.progress().branches
-				except BaseException:
-					env_dtos[env.id]['branches'] = []
+		env_dtos[env.id]['branches'] = resolved_branches
 		env_dtos[env.id]['pipeline'] = pipeline_state
 	return env_dtos
 

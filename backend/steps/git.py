@@ -353,7 +353,7 @@ class ResolveInitialBranches(AbstractStep[ResolveInitialBranchesResult]):
 		self.state_repo_url = state_repo_url
 
 	def set_desired_branches(self, branches: List[Tuple[str, str]]) -> None:
-		self._desired_branches = [(str(b), str(c)) for b, c in branches]
+		self._desired_branches = [(str(branch_name), str(commit_ref)) for branch_name, commit_ref in branches]
 
 	def _state_entry_to_branches(self, value: Any) -> List[Tuple[str, str]]:
 		if not isinstance(value, list):
@@ -411,7 +411,10 @@ class ResolveInitialBranches(AbstractStep[ResolveInitialBranchesResult]):
 		if len(branches) == 0:
 			branches = self.initial_branches
 		if len(branches) == 0:
-			raise Exception(f"Unable to resolve initial branches for {self.env.id}: no configured or persisted branches")
+			raise Exception(
+				f"Unable to resolve initial branches for {self.env.id}: "
+				f"configure initial_branches or set branches via updates"
+			)
 
 		state[self.env.id] = {
 			"repo": repo.remotes.origin.url,
