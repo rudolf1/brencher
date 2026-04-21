@@ -15,12 +15,12 @@ class TestCachedEnv:
 
 		repo_helper.env = wrap_in_cached(repo_helper.env)
 
-		repo_helper.env.branches = []
+		repo_helper.set_desired_branches([])
 
-		with pytest.raises(BaseException, match="Empty branches set"):
+		with pytest.raises(BaseException, match="Unable to resolve initial branches"):
 			repo_helper.checkout_merged.progress()
 
-		repo_helper.env.branches = [('master', 'HEAD')]
+		repo_helper.set_desired_branches([('master', 'HEAD')])
 		result = repo_helper.checkout_merged.progress()
 
 		# Verify same auto branch is used with actual value checks

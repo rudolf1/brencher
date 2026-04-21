@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse
 from configs.gmail_mcp import gmail_mcp
 from enironment import AbstractStep, Environment, wrap_in_cached
 from processing import reset_caches
-from steps.git import GitClone
+from steps.git import GitClone, ResolveInitialBranches
 from steps.step import CachingStep
 
 # Configure logging
@@ -158,6 +158,15 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 					"is_running": True,
 				})
 		env_dtos[env.id] = asdict(replace(env, pipeline=[]))
+		for step in env.pipeline:
+			resolve_step = step
+			if isinstance(step, CachingStep):
+				resolve_step = step.step
+			if isinstance(resolve_step, ResolveInitialBranches):
+				try:
+					env_dtos[env.id]['branches'] = resolve_step.progress().branches
+				except BaseException:
+					env_dtos[env.id]['branches'] = []
 		env_dtos[env.id]['pipeline'] = pipeline_state
 	return env_dtos
 
@@ -268,10 +277,17 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 				else:
 					for env in environments.values():
 						if env.id == update_data.get('id'):
-							env.branches = update_data.get('branches', env.branches)
+							for step in env.pipeline:
+								resolve_step = step
+								if isinstance(step, CachingStep):
+									resolve_step = step.step
+								if isinstance(resolve_step, ResolveInitialBranches):
+									branches_update = update_data.get('branches')
+									if isinstance(branches_update, list):
+										resolve_step.set_desired_branches(branches_update)
 							if 'dry' in update_data:
 								env.dry = bool(update_data['dry'])
-							logger.info(f"Updated environment {env.id} branches to {env.branches}, dry={env.dry}")
+							logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={env.dry}")
 							reset_caches([env])
 				environment_update_event.set()
 
@@ -405,8 +421,13 @@ class App:
 					if v is not None:
 						if k in environments:
 							env = environments[k]
-							env.branches = [(v, 'HEAD')]
-							logger.info(f"Overriding environment {k} branches to {env.branches}")
+							for step in env.pipeline:
+								resolve_step = step
+								if isinstance(step, CachingStep):
+									resolve_step = step.step
+								if isinstance(resolve_step, ResolveInitialBranches):
+									resolve_step.set_desired_branches([(v, 'HEAD')])
+							logger.info(f"Overriding environment {k} branches to {(v, 'HEAD')}")
 						else:
 							logger.warning(f"Environment {k} not found to override branches")
 					else:

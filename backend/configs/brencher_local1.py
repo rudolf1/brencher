@@ -1,9 +1,11 @@
 from enironment import Environment
 from steps.docker_plain import DockerImageBuild, DockerContainerCheck, DockerContainerDeploy
-from steps.git import GitClone, CheckoutMerged, GitUnmerge
+from steps.git import GitClone, CheckoutMerged, GitUnmerge, ResolveInitialBranches
 
 clone = GitClone()
+resolveInitialBranches = ResolveInitialBranches(wd=clone, initial_branches=[("main", "HEAD")])
 checkoutMerged = CheckoutMerged(clone,
+                                desired_branches=resolveInitialBranches,
                                 push=False,
                                 git_user_email="rudolfss13@gmail.com",
                                 git_user_name="brencher_bot"
@@ -37,11 +39,11 @@ unmerge = GitUnmerge(wd=clone, check=container_check)
 __all__ = ["brencher_local1"]
 brencher_local1 = Environment(
 	id="brencher_local1",
-	branches=[("main", "HEAD")],
 	dry=False,
 	repo="https://github.com/rudolf1/brencher.git",
 	pipeline=[
 		clone,
+		resolveInitialBranches,
 		checkoutMerged,
 		image_build,
 		container_deploy,

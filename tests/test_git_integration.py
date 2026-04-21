@@ -25,7 +25,7 @@ class TestGitIntegration:
 		commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file3.txt", "content3",
 		                                    "Branch2 commit")  # noqa: F841
 
-		repo_helper.env.branches = [("branch1", "HEAD")]
+		repo_helper.set_desired_branches([("branch1", "HEAD")])
 		result = repo_helper.checkout_merged.progress()
 
 		assert isinstance(result, CheckoutAndMergeResult)
@@ -39,7 +39,7 @@ class TestGitIntegration:
 		])
 		assert repo_helper.git_unmerge.progress().branches == [('branch1', commit2.hexsha)], f"Invalid Unmerge result"
 
-		repo_helper.env.branches = [("branch2", "HEAD")]
+		repo_helper.set_desired_branches([("branch2", "HEAD")])
 		result = repo_helper.checkout_merged.progress()
 
 		assert isinstance(result, CheckoutAndMergeResult)
@@ -66,7 +66,7 @@ class TestGitIntegration:
 		                                    "Branch2 commit")  # noqa: F841
 
 		# Create a GitClone-like working directory
-		repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD")]
+		repo_helper.set_desired_branches([("branch1", "HEAD"), ("branch2", "HEAD")])
 		result = repo_helper.checkout_merged.progress()
 
 		# Verify result with specific field checks
@@ -99,7 +99,7 @@ class TestGitIntegration:
 		commit4 = repo_helper.create_commit(repo_helper.repo, "master", "branch3", "file4.txt", "content4",
 		                                    "Branch3 commit")  # noqa: F841
 
-		repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD"), ("branch3", "HEAD")]
+		repo_helper.set_desired_branches([("branch1", "HEAD"), ("branch2", "HEAD"), ("branch3", "HEAD")])
 
 		result = repo_helper.checkout_merged.progress()
 
@@ -139,7 +139,7 @@ class TestGitIntegration:
 		commit3 = repo_helper.create_commit(repo_helper.repo, "branch1", "branch1", "file3.txt", "content3",
 		                                    "Branch1 commit 2")  # noqa: F841
 
-		repo_helper.env.branches = [("master", "HEAD"), ("branch1", "HEAD")]
+		repo_helper.set_desired_branches([("master", "HEAD"), ("branch1", "HEAD")])
 
 		result = repo_helper.checkout_merged.progress()
 
@@ -165,7 +165,7 @@ class TestGitIntegration:
 		                                    "Branch2 change")  # noqa: F841
 
 		# Create environment
-		repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD")]
+		repo_helper.set_desired_branches([("branch1", "HEAD"), ("branch2", "HEAD")])
 
 		# Expect merge conflict to be raised as BaseException
 		with pytest.raises(BaseException, match="Merge conflict"):
@@ -184,7 +184,7 @@ class TestGitIntegration:
 		commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file3.txt", "content3",
 		                                    "Branch2 commit")  # noqa: F841
 
-		repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD")]
+		repo_helper.set_desired_branches([("branch1", "HEAD"), ("branch2", "HEAD")])
 		result1 = repo_helper.checkout_merged.progress()
 		auto_branch_name = result1.remote_branch_name
 
@@ -212,7 +212,7 @@ class TestGitIntegration:
 		commit3 = repo_helper.create_commit(repo_helper.repo, "master", "branch2", "file3.txt", "content3",
 		                                    "Branch2 commit")
 
-		repo_helper.env.branches = []
+		repo_helper.set_desired_branches([])
 
 		# Mock DockerSwarmCheck with version string
 		version_str = f"auto-{commit2.hexsha[:8]}-{commit3.hexsha[:8]}"
@@ -244,7 +244,7 @@ class TestGitIntegration:
 		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
 		                                    "Initial commit")  # noqa: F841
 
-		repo_helper.env.branches = []
+		repo_helper.set_desired_branches([])
 		version_str = "invalid-version-format"
 		repo_helper.mock_check.version = lambda: version_str  # type: ignore[attr-defined]
 
@@ -262,7 +262,7 @@ class TestGitIntegration:
 		commit3 = repo_helper.create_commit(repo_helper.repo, "branch1", "branch1", "file3.txt", "content3",
 		                                    "Branch1 commit 2")  # noqa: F841
 
-		repo_helper.env.branches = []
+		repo_helper.set_desired_branches([])
 
 		repo_helper.mock_check.version = lambda: f"auto-{commit2.hexsha[:8]}"  # type: ignore[attr-defined]
 
@@ -297,7 +297,7 @@ class TestGitIntegration:
 		commit5 = repo_helper.create_commit(repo_helper.repo, "branch2", "branch2", "file5.txt", "content5",
 		                                    "Branch2 commit 2")
 
-		repo_helper.env.branches = []
+		repo_helper.set_desired_branches([])
 
 		repo_helper.mock_check.version = lambda: f"auto-{commit2.hexsha[:8]}-{commit4.hexsha[:8]}"  # type: ignore[attr-defined]
 
@@ -333,12 +333,12 @@ class TestGitIntegration:
 		commit1 = repo_helper.create_commit(repo_helper.repo, "master", "master", "file1.txt", "content1",
 		                                    "Initial commit")  # noqa: F841
 
-		repo_helper.env.branches = []
+		repo_helper.set_desired_branches([])
 
-		with pytest.raises(BaseException, match="Empty branches set"):
+		with pytest.raises(BaseException, match="Unable to resolve initial branches"):
 			repo_helper.checkout_merged.progress()
 
-		repo_helper.env.branches = [('master', 'HEAD')]
+		repo_helper.set_desired_branches([('master', 'HEAD')])
 		result = repo_helper.checkout_merged.progress()
 
 		# Verify same auto branch is used with actual value checks

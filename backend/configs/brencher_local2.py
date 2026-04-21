@@ -1,10 +1,12 @@
 from enironment import Environment
 from steps.docker import DockerComposeBuild
 from steps.docker import DockerSwarmDeploy, DockerSwarmCheck
-from steps.git import GitClone, CheckoutMerged, GitUnmerge
+from steps.git import GitClone, CheckoutMerged, GitUnmerge, ResolveInitialBranches
 
 clone = GitClone()
+resolveInitialBranches = ResolveInitialBranches(wd=clone, initial_branches=[])
 checkoutMerged = CheckoutMerged(clone,
+                                desired_branches=resolveInitialBranches,
                                 push=False,
                                 git_user_email="rudolfss13@gmail.com",
                                 git_user_name="brencher_bot"
@@ -51,11 +53,11 @@ unmerge = GitUnmerge(clone, dockerSwarmCheck)
 __all__ = ["brencher_local2"]
 brencher_local2 = Environment(
 	id="brencher_local2",
-	branches=[],
 	dry=False,
 	repo="https://github.com/rudolf1/brencher.git",
 	pipeline=[
 		clone,
+		resolveInitialBranches,
 		checkoutMerged,
 		buildDocker,
 		dockerSwarmCheck,

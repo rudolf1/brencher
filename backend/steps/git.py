@@ -113,12 +113,14 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 	wd: GitClone
 
 	def __init__(self, wd: GitClone,
+	             desired_branches: AbstractStep["ResolveInitialBranchesResult"],
 	             git_user_email: str,
 	             git_user_name: str,
 	             push: bool = True,
 	             **kwargs: Any):
 		super().__init__(**kwargs)
 		self.wd = wd
+		self.desired_branches = desired_branches
 		self.git_user_email = git_user_email
 		self.git_user_name = git_user_name
 		self.push = push
@@ -138,10 +140,10 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 
 		return visited
 
-	def find_desired_commits(self, repo: git.Repo) -> Dict[Commit, str]:
+	def find_desired_commits(self, repo: git.Repo, branches: List[Tuple[str, str]]) -> Dict[Commit, str]:
 		# Extract commit ids for the selected branches
 		commit_ids: Dict[Commit, str] = {}
-		for branch_pair in self.env.branches:
+		for branch_pair in branches:
 			try:
 				branch_name, desired_commit = branch_pair
 				if desired_commit == 'HEAD':
@@ -165,12 +167,13 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 			cw.set_value("user", "email", self.git_user_email)
 			cw.set_value("user", "name", self.git_user_name)
 
-		if len(self.env.branches) == 0:
+		desired = self.desired_branches.progress().branches
+		if len(desired) == 0:
 			raise BaseException(f"Empty branches set")
 
-		logger.info(f"Selected branches: {self.env.branches}")
+		logger.info(f"Selected branches: {desired}")
 
-		commit_ids = self.find_desired_commits(repo)
+		commit_ids = self.find_desired_commits(repo, desired)
 		logger.info(f"Commit ids for branches: {commit_ids}")
 
 		childs = _commits_childs(repo)
@@ -331,12 +334,11 @@ class ResolveInitialBranchesResult:
 
 class ResolveInitialBranches(AbstractStep[ResolveInitialBranchesResult]):
 	wd: AbstractStep[str]
-	unmerge: AbstractStep[GitUnmergeResult]
 
 	def __init__(
 			self,
 			wd: AbstractStep[str],
-			unmerge: AbstractStep[GitUnmergeResult],
+			initial_branches: List[Tuple[str, str]] | None = None,
 			state_file_path: str = ".brencher/branches-state.json",
 			state_branch: str = "brencher-state",
 			state_repo_url: str | None = None,
@@ -344,10 +346,23 @@ class ResolveInitialBranches(AbstractStep[ResolveInitialBranchesResult]):
 	) -> None:
 		super().__init__(**kwargs)
 		self.wd = wd
-		self.unmerge = unmerge
+		self.initial_branches = initial_branches or []
+		self._desired_branches: List[Tuple[str, str]] | None = None
 		self.state_file_path = state_file_path
 		self.state_branch = state_branch
 		self.state_repo_url = state_repo_url
+
+	def set_desired_branches(self, branches: List[Tuple[str, str]]) -> None:
+		self._desired_branches = [(str(b), str(c)) for b, c in branches]
+
+	def _state_entry_to_branches(self, value: Any) -> List[Tuple[str, str]]:
+		if not isinstance(value, list):
+			return []
+		result: List[Tuple[str, str]] = []
+		for item in value:
+			if isinstance(item, (list, tuple)) and len(item) == 2:
+				result.append((str(item[0]), str(item[1])))
+		return result
 
 	def _checkout_state_branch(self, repo: git.Repo) -> None:
 		remote_state_ref = f"origin/{self.state_branch}"
@@ -367,13 +382,6 @@ class ResolveInitialBranches(AbstractStep[ResolveInitialBranchesResult]):
 		repo.git.checkout("-B", self.state_branch, default_remote_branch)
 
 	def progress(self) -> ResolveInitialBranchesResult:
-		if len(self.env.branches) > 0:
-			return ResolveInitialBranchesResult(
-				branches=self.env.branches,
-				state_file_path=self.state_file_path,
-				state_branch=self.state_branch,
-			)
-
 		repo_path = self.wd.progress()
 		repo = git.Repo(repo_path)
 
@@ -381,11 +389,7 @@ class ResolveInitialBranches(AbstractStep[ResolveInitialBranchesResult]):
 			repo.remotes.origin.set_url(self.state_repo_url)
 			repo.remotes.origin.fetch(prune=True)
 
-		unmerge_result = self.unmerge.progress()
-		branches = unmerge_result.branches
-		if len(branches) == 0:
-			raise Exception("Unable to resolve initial branches: no branches returned")
-
+		branches: List[Tuple[str, str]] = []
 		self._checkout_state_branch(repo)
 
 		state_abs_path = os.path.join(repo_path, self.state_file_path)
@@ -397,6 +401,17 @@ class ResolveInitialBranches(AbstractStep[ResolveInitialBranchesResult]):
 					state = json.load(f)
 			except json.JSONDecodeError as e:
 				raise Exception(f"Invalid JSON in state file {self.state_file_path}: {str(e)}") from e
+
+		if self._desired_branches is not None:
+			branches = self._desired_branches
+		else:
+			state_entry = state.get(self.env.id, {})
+			if isinstance(state_entry, dict):
+				branches = self._state_entry_to_branches(state_entry.get("branches"))
+		if len(branches) == 0:
+			branches = self.initial_branches
+		if len(branches) == 0:
+			raise Exception(f"Unable to resolve initial branches for {self.env.id}: no configured or persisted branches")
 
 		state[self.env.id] = {
 			"repo": repo.remotes.origin.url,
@@ -427,10 +442,10 @@ class ResolveInitialBranches(AbstractStep[ResolveInitialBranchesResult]):
 		except Exception as e:
 			raise Exception(f"Failed to push initial branches state for {self.env.id}: {str(e)}") from e
 
-		self.env.branches = branches
-		logger.info(f"Initial branches resolved and pushed for {self.env.id}: {self.env.branches}")
+		self._desired_branches = branches
+		logger.info(f"Initial branches resolved and pushed for {self.env.id}: {self._desired_branches}")
 		return ResolveInitialBranchesResult(
-			branches=branches,
+			branches=self._desired_branches,
 			state_file_path=self.state_file_path,
 			state_branch=self.state_branch,
 		)

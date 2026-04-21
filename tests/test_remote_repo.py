@@ -7,12 +7,13 @@ git operations in an isolated environment.
 import os
 import shutil
 import tempfile
-from typing import Dict, Tuple, List, Callable
+from typing import Dict, Tuple, List, Callable, cast
 
 import git
 from enironment import Environment, AbstractStep
 from steps.docker import DockerSwarmCheckResult
-from steps.git import CheckoutAndMergeResult, CheckoutMerged, GitUnmerge, GitClone, HasVersion, GitUnmergeResult
+from steps.git import CheckoutAndMergeResult, CheckoutMerged, GitUnmerge, GitClone, HasVersion, GitUnmergeResult, \
+	ResolveInitialBranches, ResolveInitialBranchesResult
 from steps.step import CachingStep  # noqa: F401
 
 
@@ -48,8 +49,13 @@ class RemoteRepoHelper:
 			cw.set_value("user", "email", "test@example.com")
 			cw.set_value("user", "name", "Test User")
 		git_clone = GitClone(repo_path=self.local_dir)
+		resolve_initial_branches = ResolveInitialBranches(
+			wd=git_clone,
+			initial_branches=[],
+		)
 		checkout_merged = CheckoutMerged(
 			wd=git_clone,
+			desired_branches=resolve_initial_branches,
 			git_user_email="test@example.com",
 			git_user_name="Test User",
 			push=False,
@@ -61,11 +67,11 @@ class RemoteRepoHelper:
 		)
 		self.env = Environment(
 			id="test1",
-			branches=[],
 			dry=False,
 			repo=self.remote_dir,
 			pipeline=[
 				git_clone,
+				resolve_initial_branches,
 				checkout_merged,
 				mock_check,
 				git_unmerge
@@ -76,6 +82,21 @@ class RemoteRepoHelper:
 	def checkout_merged(self) -> AbstractStep[CheckoutAndMergeResult]:
 		return [i for i in self.env.pipeline if
 		        isinstance(i, CheckoutMerged) or (isinstance(i, CachingStep) and isinstance(i.step, CheckoutMerged))][0]
+
+	@property
+	def resolve_initial_branches(self) -> ResolveInitialBranches:
+		step = [i for i in self.env.pipeline if
+		        isinstance(i, ResolveInitialBranches) or (
+				        isinstance(i, CachingStep) and isinstance(i.step, ResolveInitialBranches))][0]
+		if isinstance(step, CachingStep):
+			return cast(ResolveInitialBranches, step.step)
+		return step
+
+	def set_desired_branches(self, branches: List[Tuple[str, str]]) -> None:
+		self.resolve_initial_branches.set_desired_branches(branches)
+
+	def get_desired_branches(self) -> List[Tuple[str, str]]:
+		return self.resolve_initial_branches.progress().branches
 
 	@property
 	def git_clone(self) -> AbstractStep[str]:

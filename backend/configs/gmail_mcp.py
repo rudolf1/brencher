@@ -1,10 +1,12 @@
 from enironment import Environment
 from steps.checks import SimpleLog, UrlCheck
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
-from steps.git import GitClone, CheckoutMerged, GitUnmerge
+from steps.git import GitClone, CheckoutMerged, GitUnmerge, ResolveInitialBranches
 
 clone = GitClone(branchNamePrefix="immoscout")
+resolveInitialBranches = ResolveInitialBranches(wd=clone, initial_branches=[("immoscout/main", "HEAD")])
 checkoutMerged = CheckoutMerged(clone,
+                                desired_branches=resolveInitialBranches,
                                 push=False,
                                 git_user_email="rudolfss13@gmail.com",
                                 git_user_name="brencher_bot"
@@ -55,11 +57,11 @@ logUrls = SimpleLog(message={
 __all__ = ["gmail_mcp"]
 gmail_mcp = Environment(
 	id="gmail_mcp",
-	branches=[("immoscout/main", "HEAD")],
 	dry=False,
 	repo="https://github.com/rudolf1/uber_backup.git",
 	pipeline=[
 		clone,
+		resolveInitialBranches,
 		checkoutMerged,
 		buildDocker,
 		dockerSwarmCheck,

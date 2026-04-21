@@ -1,10 +1,12 @@
 from enironment import Environment
 from steps.checks import SimpleLog, UrlCheck
 from steps.docker import DockerSwarmCheck, DockerSwarmDeploy
-from steps.git import GitClone, CheckoutMerged, GitUnmerge
+from steps.git import GitClone, CheckoutMerged, GitUnmerge, ResolveInitialBranches
 
 clone = GitClone(branchNamePrefix="ansible")
+resolveInitialBranches = ResolveInitialBranches(wd=clone, initial_branches=[("ansible/master", "HEAD")])
 checkoutMerged = CheckoutMerged(clone,
+                                desired_branches=resolveInitialBranches,
                                 push=False,
                                 git_user_email="rudolfss13@gmail.com",
                                 git_user_name="brencher_bot"
@@ -39,11 +41,11 @@ logUrls = SimpleLog(message={
 __all__ = ["registry"]
 registry = Environment(
 	id="registry",
-	branches=[("ansible/master", "HEAD")],
 	dry=False,
 	repo="https://github.com/rudolf1/uber_backup.git",
 	pipeline=[
 		clone,
+		resolveInitialBranches,
 		checkoutMerged,
 		dockerSwarmCheck,
 		unmerge,

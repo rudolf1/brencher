@@ -4,7 +4,7 @@ from typing import Any
 from enironment import Environment
 from steps.checks import SimpleLog, UrlCheck
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
-from steps.git import GitClone, CheckoutMerged, GitUnmerge
+from steps.git import GitClone, CheckoutMerged, GitUnmerge, ResolveInitialBranches
 
 
 def checkPingF(obj: Any) -> None:
@@ -21,7 +21,9 @@ def checkPingF(obj: Any) -> None:
 
 
 clone = GitClone()
+resolveInitialBranches = ResolveInitialBranches(wd=clone, initial_branches=[])
 checkoutMerged = CheckoutMerged(clone,
+                                desired_branches=resolveInitialBranches,
                                 push=False,
                                 git_user_email="rudolfss13@gmail.com",
                                 git_user_name="brencher_bot"
@@ -82,11 +84,11 @@ __all__ = ["brencher2"]
 
 brencher2 = Environment(
 	id="brencher2",
-	branches=[],
 	dry=False,
 	repo="https://github.com/rudolf1/brencher.git",
 	pipeline=[
 		clone,
+		resolveInitialBranches,
 		checkoutMerged,
 		buildDocker,
 		dockerSwarmCheck,

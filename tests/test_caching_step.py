@@ -49,7 +49,7 @@ class FailingStep(AbstractStep[str]):
 
 
 def _make_env(steps: list[AbstractStep[Any]]) -> Environment:
-	return Environment(id="test", branches=[], dry=True, repo="repo", pipeline=steps)
+	return Environment(id="test", dry=True, repo="repo", pipeline=steps)
 
 
 class TestCachingStep:

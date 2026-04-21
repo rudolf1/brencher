@@ -1,9 +1,11 @@
 from enironment import Environment
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
-from steps.git import GitClone, CheckoutMerged, GitUnmerge
+from steps.git import GitClone, CheckoutMerged, GitUnmerge, ResolveInitialBranches
 
 clone = GitClone()
+resolveInitialBranches = ResolveInitialBranches(wd=clone, initial_branches=[])
 checkoutMerged = CheckoutMerged(clone,
+                                desired_branches=resolveInitialBranches,
                                 push=False,
                                 git_user_email="rudolfss13@gmail.com",
                                 git_user_name="brencher_bot"
@@ -38,11 +40,11 @@ unmerge = GitUnmerge(clone, dockerSwarmCheck)
 __all__ = ["torrserv_proxy"]
 torrserv_proxy = Environment(
 	id="torrserv_proxy",
-	branches=[],
 	dry=False,
 	repo="https://github.com/rudolf1/reverseproxy.git",
 	pipeline=[
 		clone,
+		resolveInitialBranches,
 		checkoutMerged,
 		buildDocker,
 		dockerSwarmCheck,

@@ -2,10 +2,12 @@ from configs.brencher2 import checkPingF
 from enironment import Environment
 from steps.checks import SimpleLog, UrlCheck
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
-from steps.git import GitClone, CheckoutMerged, GitUnmerge
+from steps.git import GitClone, CheckoutMerged, GitUnmerge, ResolveInitialBranches
 
 clone = GitClone()
+resolveInitialBranches = ResolveInitialBranches(wd=clone, initial_branches=[])
 checkoutMerged = CheckoutMerged(clone,
+                                desired_branches=resolveInitialBranches,
                                 push=False,
                                 git_user_email="rudolfss13@gmail.com",
                                 git_user_name="brencher_bot"
@@ -53,11 +55,11 @@ logUrls = SimpleLog(message={
 __all__ = ["brencher"]
 brencher = Environment(
 	id="brencher",
-	branches=[],
 	dry=False,
 	repo="https://github.com/rudolf1/brencher.git",
 	pipeline=[
 		clone,
+		resolveInitialBranches,
 		checkoutMerged,
 		buildDocker,
 		dockerSwarmCheck,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List
 from typing import TypeVar
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,6 @@ T = TypeVar('T')
 @dataclass
 class Environment:
 	id: str
-	branches: List[Tuple[str, str]]  # List of [branch_name, desired_commit] pairs
 	dry: bool
 	repo: str  # git repo
 	pipeline: List[AbstractStep]
