@@ -268,7 +268,22 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 				else:
 					for env in environments.values():
 						if env.id == update_data.get('id'):
-							env.branches = update_data.get('branches', env.branches)
+							if 'branches' in update_data:
+								expected_token = update_data.get('token')
+								if expected_token is not None:
+									# Compare-and-set: reject if token doesn't match current state
+									if not env.compare_and_set_branches(expected_token, update_data['branches']):
+										logger.warning(
+											f"Token mismatch for environment {env.id}: "
+											f"expected={expected_token!r}, current={env.token!r}"
+										)
+										await broadcast_error({
+											'message': f"Concurrent modification detected for environment {env.id}. "
+											           f"Please refresh and retry."
+										})
+										break
+								else:
+									env.branches = update_data['branches']
 							if 'dry' in update_data:
 								env.dry = bool(update_data['dry'])
 							logger.info(f"Updated environment {env.id} branches to {env.branches}, dry={env.dry}")
