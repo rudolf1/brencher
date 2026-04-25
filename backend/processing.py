@@ -43,11 +43,11 @@ def process_all_jobs(
 					# If branches not empty, need to find most priority branch (project specific) and add (branch, HEAD)
 					result = step.progress()
 					if isinstance(result, GitUnmergeResult):
-						env.branches = result.branches
+						env.set_branches(result.branches)
 					else:
 						# Backward compatibility: older or custom step implementations may
 						# return a plain list of (branch, commit) tuples directly.
-						env.branches = result
+						env.set_branches(result)
 					logger.info(f"Branches on startup resolved {env.id}, job {step.name}: {env.branches}")
 			except BaseException as e:
 				error_msg = f"Error processing release {env.id}, job {step.name}: {str(e)}"

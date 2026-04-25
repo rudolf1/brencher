@@ -30,6 +30,8 @@ let environmentsRaw = [];
 const selectedBranchesByEnv = {};
 // serverSelectedBranchesByEnv mirrors server's last known selection for diffing
 const serverSelectedBranchesByEnv = {};
+// tokenByEnv: envId -> last known token from server (for optimistic-locking / compare-and-set)
+const tokenByEnv = {};
 // columnsByEnv: envId -> { columnName: { branchName: value } }
 // Populated from any step result that contains a `columns` key (e.g. GitUnmerge)
 const columnsByEnv = {};
@@ -419,6 +421,8 @@ function setupWebSockets() {
                     const envId = envObj.id || envObj.name || 'unknown';
                     // Always sync dry run state from server
                     dryRunByEnv[envId] = !!envObj.dry;
+                    // Always sync the latest token from the server
+                    if (envObj.token) tokenByEnv[envId] = envObj.token;
                     if (!isChangesPending()) {
                         if (Array.isArray(envObj.branches) && envObj.branches.length > 0) {
                             if (Array.isArray(envObj.branches[0])) {
@@ -486,7 +490,10 @@ function updateEnvironment() {
         const serverSel = [...(serverSelectedBranchesByEnv[envId] || [])].sort();
         if (JSON.stringify(localSel) !== JSON.stringify(serverSel)) {
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ update: { id: envId, branches: selectedBranchesByEnv[envId] } }));
+                const payload = { id: envId, branches: selectedBranchesByEnv[envId] };
+                // Include the last-seen token for compare-and-set on the backend
+                if (tokenByEnv[envId]) payload.token = tokenByEnv[envId];
+                ws.send(JSON.stringify({ update: payload }));
             }
             // Optimistically sync server state
             serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];

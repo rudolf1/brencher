@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Tuple
 from typing import TypeVar
 
@@ -12,16 +13,41 @@ T = TypeVar('T')
 
 
 @dataclass
+class SharedState:
+	"""Holds a token used for optimistic-locking / compare-and-set operations."""
+	token: str = field(default_factory=lambda: str(uuid.uuid4()))
+
+
+@dataclass
 class Environment:
 	id: str
 	branches: List[Tuple[str, str]]  # List of [branch_name, desired_commit] pairs
 	dry: bool
 	repo: str  # git repo
 	pipeline: List[AbstractStep]
+	# Token for optimistic locking. Changes whenever `branches` is authoritative-set.
+	token: str = field(default_factory=lambda: str(uuid.uuid4()))
 
 	def __post_init__(self) -> None:
 		for p in self.pipeline:
 			p.env = self
+
+	def compare_and_set_branches(self, expected_token: str, new_branches: List[Tuple[str, str]]) -> bool:
+		"""Atomically update branches only if the current token matches expected_token.
+
+		Returns True and refreshes the token when the update is applied.
+		Returns False (no-op) when the token does not match, signalling a concurrent modification.
+		"""
+		if self.token != expected_token:
+			return False
+		self.branches = new_branches
+		self.token = str(uuid.uuid4())
+		return True
+
+	def set_branches(self, new_branches: List[Tuple[str, str]]) -> None:
+		"""Unconditionally update branches (authoritative path, e.g. from the processing thread) and refresh token."""
+		self.branches = new_branches
+		self.token = str(uuid.uuid4())
 
 
 class AbstractStep[T](ABC):
