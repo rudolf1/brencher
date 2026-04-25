@@ -8,10 +8,9 @@ import traceback
 from typing import List, Tuple, Set, Dict, Any, Mapping, runtime_checkable
 
 import git
-from enironment import AbstractStep
+from enironment import AbstractStep, SharedState
 from git.objects import Commit
 
-from steps.shared_state import SharedState
 
 logger = logging.getLogger(__name__)
 

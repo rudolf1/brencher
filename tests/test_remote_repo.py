@@ -11,10 +11,10 @@ from typing import Dict, Tuple, List, Callable
 
 import git
 
-from enironment import Environment, AbstractStep
+from enironment import Environment, AbstractStep, SharedStateHolder
 from steps.docker import DockerSwarmCheckResult
 from steps.git import CheckoutAndMergeResult, CheckoutMerged, GitUnmerge, GitClone, HasVersion, GitUnmergeResult
-from steps.shared_state import SharedStateHolder, SharedStateHolderInMemory
+from steps.shared_state import SharedStateHolderInMemory
 from steps.step import CachingStep  # noqa: F401
 
 

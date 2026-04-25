@@ -3,10 +3,8 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List
+from typing import List, runtime_checkable, Protocol, Tuple
 from typing import TypeVar
-
-from steps.shared_state import SharedStateHolder
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +26,23 @@ class Environment:
 	def dry(self) -> bool:
 		"""Get the dry run state from the shared state."""
 		return self.state.progress().dry
+
+@dataclass
+class SharedState:
+	branches: List[Tuple[str, str]]
+	dry: bool
+
+@runtime_checkable
+class SharedStateHolder(Protocol):
+	def set_branches(self, branches: List[Tuple[str, str]]) -> None:
+		pass
+
+	def set_dry(self, dry: bool) -> None:
+		pass
+
+	def progress(self) -> SharedState:
+		pass
+
 
 
 class AbstractStep[T](ABC):

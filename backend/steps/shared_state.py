@@ -9,28 +9,10 @@ import git
 import threading
 
 
-from enironment import AbstractStep
+from enironment import AbstractStep, SharedState, SharedStateHolder
 from steps.git import GitUnmergeResult
 
 logger = logging.getLogger(__name__)
-
-@dataclass
-class SharedState:
-    branches: List[Tuple[str, str]]
-    dry: bool
-
-
-@runtime_checkable
-class SharedStateHolder(Protocol):
-    def set_branches(self, branches: List[Tuple[str, str]]) -> None:
-        pass
-
-    def set_dry(self, dry: bool) -> None:
-        pass
-
-    def progress(self) -> SharedState:
-        pass
-
 
 class SharedStateHolderInMemory(AbstractStep[SharedState], SharedStateHolder):
 

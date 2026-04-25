@@ -15,10 +15,9 @@ from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from enironment import Environment, wrap_in_cached
+from enironment import Environment, wrap_in_cached, SharedStateHolder
 from processing import reset_caches
 from steps.git import GitClone
-from steps.shared_state import SharedStateHolder
 from steps.step import CachingStep
 
 # Configure logging
