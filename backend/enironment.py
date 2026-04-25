@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import List
 from typing import TypeVar
 
+from steps.shared_state import SharedStateHolder
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar('T')
@@ -14,13 +16,18 @@ T = TypeVar('T')
 @dataclass
 class Environment:
 	id: str
-	dry: bool
+	state: SharedStateHolder
 	repo: str  # git repo
 	pipeline: List[AbstractStep]
 
 	def __post_init__(self) -> None:
 		for p in self.pipeline:
 			p.env = self
+
+	@property
+	def dry(self) -> bool:
+		"""Get the dry run state from the shared state."""
+		return self.state.progress().dry
 
 
 class AbstractStep[T](ABC):

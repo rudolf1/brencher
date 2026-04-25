@@ -1,12 +1,20 @@
 from enironment import Environment
 from steps.checks import SimpleLog, UrlCheck
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
-from steps.git import GitClone, CheckoutMerged, GitUnmerge, ResolveInitialBranches
+from steps.git import GitClone, CheckoutMerged, GitUnmerge
+from steps.shared_state import SharedStateHolderInMemory
 
 clone = GitClone(branchNamePrefix="immoscout")
-resolveInitialBranches = ResolveInitialBranches(wd=clone, initial_branches=[("immoscout/main", "HEAD")])
+
+dockerSwarmCheck = DockerSwarmCheck(
+	stack_name="gmail_mcp",
+)
+unmerge = GitUnmerge(clone, dockerSwarmCheck)
+
+state = SharedStateHolderInMemory(unmerge=unmerge, wd=clone, initial_branches=[("immoscout/main", "HEAD")])
+
 checkoutMerged = CheckoutMerged(clone,
-                                desired_branches=resolveInitialBranches,
+                                desired_branches=state,
                                 push=False,
                                 git_user_email="rudolfss13@gmail.com",
                                 git_user_name="brencher_bot"
@@ -23,9 +31,6 @@ buildDocker = DockerComposeBuild(clone,
 								 },
                                  )
 
-dockerSwarmCheck = DockerSwarmCheck(
-	stack_name="gmail_mcp",
-)
 deployDocker = DockerSwarmDeploy(
 	wd=clone,
 	buildDocker=buildDocker,
@@ -36,7 +41,6 @@ deployDocker = DockerSwarmDeploy(
 	stack_name="gmail_mcp",
 	docker_compose_path="gmail-mcp-server/docker-compose.yml",
 )
-unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
 checkPing1 = UrlCheck(
 	url="http://100.70.193.97:3000/health",
@@ -57,11 +61,11 @@ logUrls = SimpleLog(message={
 __all__ = ["gmail_mcp"]
 gmail_mcp = Environment(
 	id="gmail_mcp",
-	dry=False,
+	state=state,
 	repo="https://github.com/rudolf1/uber_backup.git",
 	pipeline=[
 		clone,
-		resolveInitialBranches,
+		state,
 		checkoutMerged,
 		buildDocker,
 		dockerSwarmCheck,

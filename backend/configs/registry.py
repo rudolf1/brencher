@@ -1,20 +1,24 @@
 from enironment import Environment
 from steps.checks import SimpleLog, UrlCheck
 from steps.docker import DockerSwarmCheck, DockerSwarmDeploy
-from steps.git import GitClone, CheckoutMerged, GitUnmerge, ResolveInitialBranches
+from steps.git import GitClone, CheckoutMerged, GitUnmerge
+from steps.shared_state import SharedStateHolderInMemory
 
 clone = GitClone(branchNamePrefix="ansible")
-resolveInitialBranches = ResolveInitialBranches(wd=clone, initial_branches=[("ansible/master", "HEAD")])
-checkoutMerged = CheckoutMerged(clone,
-                                desired_branches=resolveInitialBranches,
-                                push=False,
-                                git_user_email="rudolfss13@gmail.com",
-                                git_user_name="brencher_bot"
-                                )
 
 dockerSwarmCheck = DockerSwarmCheck(
 	stack_name="registry",
 )
+unmerge = GitUnmerge(clone, dockerSwarmCheck)
+
+state = SharedStateHolderInMemory(unmerge=unmerge, wd=clone, initial_branches=[("ansible/master", "HEAD")])
+
+checkoutMerged = CheckoutMerged(clone,
+                                desired_branches=state,
+                                push=False,
+                                git_user_email="rudolfss13@gmail.com",
+                                git_user_name="brencher_bot"
+                                )
 
 deployDocker = DockerSwarmDeploy(
 	wd=clone,
@@ -26,7 +30,6 @@ deployDocker = DockerSwarmDeploy(
 	stack_name="registry",
 	docker_compose_path="docker-compose-registry.yaml",
 )
-unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
 checkPing = UrlCheck(
 	url="https://registry.rudolf.keenetic.link/v2/",
@@ -41,11 +44,11 @@ logUrls = SimpleLog(message={
 __all__ = ["registry"]
 registry = Environment(
 	id="registry",
-	dry=False,
+	state=state,
 	repo="https://github.com/rudolf1/uber_backup.git",
 	pipeline=[
 		clone,
-		resolveInitialBranches,
+		state,
 		checkoutMerged,
 		dockerSwarmCheck,
 		unmerge,

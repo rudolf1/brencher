@@ -1,12 +1,19 @@
 from enironment import Environment
 from steps.docker import DockerComposeBuild
 from steps.docker import DockerSwarmDeploy, DockerSwarmCheck
-from steps.git import GitClone, CheckoutMerged, GitUnmerge, ResolveInitialBranches
+from steps.git import GitClone, CheckoutMerged, GitUnmerge
+from steps.shared_state import SharedStateHolderInMemory
 
 clone = GitClone()
-resolveInitialBranches = ResolveInitialBranches(wd=clone, initial_branches=[])
+dockerSwarmCheck = DockerSwarmCheck(
+	stack_name="brencher_local2",
+)
+unmerge = GitUnmerge(clone, dockerSwarmCheck)
+
+state = SharedStateHolderInMemory(unmerge=unmerge)
+
 checkoutMerged = CheckoutMerged(clone,
-                                desired_branches=resolveInitialBranches,
+                                desired_branches=state,
                                 push=False,
                                 git_user_email="rudolfss13@gmail.com",
                                 git_user_name="brencher_bot"
@@ -24,9 +31,6 @@ buildDocker = DockerComposeBuild(clone,
 								 },
 
                                  )
-dockerSwarmCheck = DockerSwarmCheck(
-	stack_name="brencher_local2",
-)
 deployDocker = DockerSwarmDeploy(
 	wd=clone,
 	buildDocker=buildDocker,
@@ -48,16 +52,15 @@ deployDocker = DockerSwarmDeploy(
 	stack_name="brencher_local2",
 	docker_compose_path="docker-compose.yml",
 )
-unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
 __all__ = ["brencher_local2"]
 brencher_local2 = Environment(
 	id="brencher_local2",
-	dry=False,
+	state=state,
 	repo="https://github.com/rudolf1/brencher.git",
 	pipeline=[
 		clone,
-		resolveInitialBranches,
+		state,
 		checkoutMerged,
 		buildDocker,
 		dockerSwarmCheck,
