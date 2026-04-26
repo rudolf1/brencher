@@ -168,7 +168,7 @@ function renderBranches() {
             <h3 class="env-title">
                 Environment: ${envName || envId}
                 <button class="dry-run-btn ${dryRunByEnv[envId] ? 'dry-run-active' : ''}" data-env="${envId}" title="${dryRunByEnv[envId] ? 'Dry run on — click to resume' : 'Running — click to pause (dry run)'}">
-                    ${dryRunByEnv[envId] ? '⏸' : '▶'}
+                    ${dryRunByEnv[envId] ? '▶' : '⏸'}
                 </button>
             </h3>
             <table class="branches-table">
