@@ -5,14 +5,13 @@ from steps.shared_state import SharedStateHolderInMemory
 
 clone = GitClone()
 
-# Step 2: Check if container already exists
 container_check = DockerContainerCheck(
 	container_name="brencher_plain-container"
 )
 
 unmerge = GitUnmerge(wd=clone, check=container_check)
 
-state = SharedStateHolderInMemory(unmerge=unmerge, wd=clone, initial_branches=[("main", "HEAD")])
+state = SharedStateHolderInMemory(unmerge=unmerge)
 
 checkoutMerged = CheckoutMerged(clone,
                                 desired_branches=state,

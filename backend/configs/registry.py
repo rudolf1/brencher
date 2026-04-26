@@ -11,7 +11,7 @@ dockerSwarmCheck = DockerSwarmCheck(
 )
 unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
-state = SharedStateHolderInMemory(unmerge=unmerge, wd=clone, initial_branches=[("ansible/master", "HEAD")])
+state = SharedStateHolderInMemory(unmerge=unmerge)
 
 checkoutMerged = CheckoutMerged(clone,
                                 desired_branches=state,
