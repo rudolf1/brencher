@@ -85,8 +85,8 @@ class RemoteRepoHelper:
         return self.env.state
 
     def set_desired_branches(self, branches: List[Tuple[str, str]]) -> None:
-        step = get_step(self.env.pipeline, SharedStateHolder)
-        if isinstance(step, CachingStep):
+        step: SharedStateHolder = get_step(self.env.pipeline, SharedStateHolder)  # type: ignore[type-abstract]
+        if isinstance(step, CachingStep) and isinstance(step.step, SharedStateHolder):
             step.step.set_branches(branches)
             step.reset()
         else:
