@@ -335,7 +335,7 @@ class TestGitIntegration:
 
 		repo_helper.set_desired_branches([])
 
-		with pytest.raises(BaseException, match="Unable to resolve initial branches"):
+		with pytest.raises(BaseException, match="Empty branches set"):
 			repo_helper.checkout_merged.progress()
 
 		repo_helper.set_desired_branches([('master', 'HEAD')])

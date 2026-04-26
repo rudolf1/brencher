@@ -15,7 +15,7 @@ from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from enironment import Environment, wrap_in_cached, SharedStateHolder
+from enironment import Environment, wrap_in_cached, SharedStateHolder, SharedStateConflictError, SharedState
 from processing import reset_caches
 from steps.git import GitClone
 from steps.step import CachingStep
@@ -127,7 +127,7 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 	env_dtos: Dict[str, Dict[str, Any]] = {}
 	for env in environments.values():
 		pipeline_state: List[Dict[str, Any]] = []
-		resolved_branches: List[Tuple[str, str]] = []
+		shared_state: SharedState| None = None
 		for r in env.pipeline:
 			try:
 				if isinstance(r, CachingStep):
@@ -144,8 +144,8 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 						"is_running": True,
 					})
 				else:
-					if isinstance(r, SharedStateHolder) and hasattr(result, "branches"):
-						resolved_branches = list(result.branches)
+					if isinstance(result, SharedState):
+						shared_state = result
 					pipeline_state.append({
 						"name": r.name,
 						"status": result,
@@ -160,7 +160,9 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 					"is_running": True,
 				})
 		env_dtos[env.id] = asdict(replace(env, pipeline=[]))
-		env_dtos[env.id]['branches'] = resolved_branches
+		if shared_state:
+			env_dtos[env.id]['branches'] = shared_state.branches
+			env_dtos[env.id]['branches_token'] = shared_state.token
 		env_dtos[env.id]['pipeline'] = pipeline_state
 	return env_dtos
 
@@ -271,14 +273,34 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 				else:
 					for env in environments.values():
 						if env.id == update_data.get('id'):
-							for step in env.pipeline:
-								resolve_step = step
-								if isinstance(step, CachingStep):
-									resolve_step = step.step
-								if isinstance(resolve_step, SharedStateHolder):
-									branches_update = update_data.get('branches')
-									if isinstance(branches_update, list):
-										resolve_step.set_branches(branches_update)
+							try:
+								missing_branch_token = False
+								for step in env.pipeline:
+									resolve_step = step
+									if isinstance(step, CachingStep):
+										resolve_step = step.step
+									if isinstance(resolve_step, SharedStateHolder):
+										branches_update = update_data.get('branches')
+										expected_token = update_data.get('token')
+										if isinstance(branches_update, list):
+											if not isinstance(expected_token, str):
+												await broadcast_error({
+													"code": "BRANCH_TOKEN_REQUIRED",
+													"message": "Branch update requires current token",
+													"envId": env.id,
+												})
+												missing_branch_token = True
+												break
+											resolve_step.set_branches(branches_update, expected_token=expected_token)
+								if missing_branch_token:
+									continue
+							except SharedStateConflictError as conflict:
+								await broadcast_error({
+									"code": "BRANCH_STATE_CONFLICT",
+									"message": "Branch state changed, refresh and retry",
+									"envId": env.id,
+								})
+								continue
 							if 'dry' in update_data:
 								env.state.set_dry(bool(update_data['dry']))
 							logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={update_data.get('dry')}")

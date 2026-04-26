@@ -7,11 +7,11 @@ git operations in an isolated environment.
 import os
 import shutil
 import tempfile
-from typing import Dict, Tuple, List, Callable
+from typing import Dict, Tuple, List, Callable, cast
 
 import git
 
-from enironment import Environment, AbstractStep, SharedStateHolder
+from enironment import Environment, AbstractStep, SharedStateHolder, get_step
 from steps.docker import DockerSwarmCheckResult
 from steps.git import CheckoutAndMergeResult, CheckoutMerged, GitUnmerge, GitClone, HasVersion, GitUnmergeResult
 from steps.shared_state import SharedStateHolderInMemory
@@ -55,7 +55,7 @@ class RemoteRepoHelper:
             wd=git_clone,
             check=mock_check,
         )
-        state = SharedStateHolderInMemory(unmerge=git_unmerge)
+        state = SharedStateHolderInMemory(unmerge=None)
         checkout_merged = CheckoutMerged(
             wd=git_clone,
             desired_branches=state,
@@ -78,33 +78,32 @@ class RemoteRepoHelper:
 
     @property
     def checkout_merged(self) -> AbstractStep[CheckoutAndMergeResult]:
-        return [i for i in self.env.pipeline if
-                isinstance(i, CheckoutMerged) or (isinstance(i, CachingStep) and isinstance(i.step, CheckoutMerged))][0]
+        return get_step(self.env.pipeline, CheckoutMerged)
 
     @property
     def resolve_initial_branches(self) -> SharedStateHolder:
         return self.env.state
 
     def set_desired_branches(self, branches: List[Tuple[str, str]]) -> None:
-        self.resolve_initial_branches.set_branches(branches)
+        step = get_step(self.env.pipeline, SharedStateHolder)
+        step.set_branches(branches)
+        if isinstance(step, CachingStep):
+            step.reset()
 
     def get_desired_branches(self) -> List[Tuple[str, str]]:
         return self.resolve_initial_branches.progress().branches
 
     @property
     def git_clone(self) -> AbstractStep[str]:
-        return [i for i in self.env.pipeline if
-                isinstance(i, GitClone) or (isinstance(i, CachingStep) and isinstance(i.step, GitClone))][0]
+        return get_step(self.env.pipeline, GitClone)
 
     @property
     def git_unmerge(self) -> AbstractStep[GitUnmergeResult]:
-        return [i for i in self.env.pipeline if
-                isinstance(i, GitUnmerge) or (isinstance(i, CachingStep) and isinstance(i.step, GitUnmerge))][0]
+        return get_step(self.env.pipeline, GitUnmerge)
 
     @property
     def mock_check(self) -> AbstractStep[Dict[str, HasVersion]]:
-        return [i for i in self.env.pipeline if isinstance(i, MockDockerSwarmCheck) or (
-                isinstance(i, CachingStep) and isinstance(i.step, MockDockerSwarmCheck))][0]
+        return get_step(self.env.pipeline, MockDockerSwarmCheck)
 
     def teardown(self) -> None:
         """Clean up temporary directories"""
@@ -119,21 +118,29 @@ class RemoteRepoHelper:
 
         If to_branch doesn't exist, it will be created from from_branch and checked out.
         """
-        if from_branch in [head.name for head in repo.heads]:
+        if from_branch not in [head.name for head in repo.heads]:
+            # Create initial commit without parents
+            file_path = os.path.join(repo.working_dir, filename)
+            with open(file_path, 'w') as f:
+                f.write(content)
+            repo.index.add([filename])
+            repo.index.commit(message)
+            repo.create_head(from_branch)
+        else:
             repo.heads[from_branch].checkout()
-        if from_branch != to_branch:
-            if to_branch not in [head.name for head in repo.heads]:
-                new_branch = repo.create_head(to_branch)
-                new_branch.checkout()
-            else:
-                raise BaseException("Target branch already exists.")
+            if from_branch != to_branch:
+                if to_branch not in [head.name for head in repo.heads]:
+                    new_branch = repo.create_head(to_branch)
+                    new_branch.checkout()
+                else:
+                    raise BaseException("Target branch already exists.")
 
-        # Create commit
-        file_path = os.path.join(repo.working_dir, filename)
-        with open(file_path, 'w') as f:
-            f.write(content)
-        repo.index.add([filename])
-        return repo.index.commit(message)
+            # Create commit
+            file_path = os.path.join(repo.working_dir, filename)
+            with open(file_path, 'w') as f:
+                f.write(content)
+            repo.index.add([filename])
+            return repo.index.commit(message)
 
     def verify_working_directory_files(self, expected_files: List[Tuple[str, str]]) -> None:
         """Verify that working directory contains exactly the expected files with correct content.
