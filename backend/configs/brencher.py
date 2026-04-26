@@ -3,9 +3,19 @@ from enironment import Environment
 from steps.checks import SimpleLog, UrlCheck
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
+from steps.shared_state import SharedStateHolderInMemory
 
 clone = GitClone()
+
+dockerSwarmCheck = DockerSwarmCheck(
+	stack_name="brencher",
+)
+unmerge = GitUnmerge(clone, dockerSwarmCheck)
+
+state = SharedStateHolderInMemory(unmerge=unmerge)
+
 checkoutMerged = CheckoutMerged(clone,
+                                desired_branches=state,
                                 push=False,
                                 git_user_email="rudolfss13@gmail.com",
                                 git_user_name="brencher_bot"
@@ -24,9 +34,6 @@ buildDocker = DockerComposeBuild(clone,
 								 },
                                  )
 
-dockerSwarmCheck = DockerSwarmCheck(
-	stack_name="brencher",
-)
 deployDocker = DockerSwarmDeploy(
 	wd=clone,
 	buildDocker=buildDocker,
@@ -37,7 +44,6 @@ deployDocker = DockerSwarmDeploy(
 	stack_name="brencher",
 	docker_compose_path="docker-compose.yml",
 )
-unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
 checkPing = UrlCheck(
 	url="https://brencher.rudolf.keenetic.link/state",
@@ -53,11 +59,11 @@ logUrls = SimpleLog(message={
 __all__ = ["brencher"]
 brencher = Environment(
 	id="brencher",
-	branches=[],
-	dry=False,
+	state=state,
 	repo="https://github.com/rudolf1/brencher.git",
 	pipeline=[
 		clone,
+		state,
 		checkoutMerged,
 		buildDocker,
 		dockerSwarmCheck,

@@ -7,7 +7,7 @@ import sys
 import threading
 import traceback
 from dataclasses import asdict, replace
-from typing import Any, Dict, List, Optional, Set, TypeVar
+from typing import Any, Dict, List, Optional, TypeVar, Tuple
 
 import websockets
 from dotenv import load_dotenv
@@ -15,8 +15,7 @@ from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from configs.gmail_mcp import gmail_mcp
-from enironment import AbstractStep, Environment, wrap_in_cached
+from enironment import Environment, wrap_in_cached, SharedStateHolder, SharedStateConflictError, SharedState
 from processing import reset_caches
 from steps.git import GitClone
 from steps.step import CachingStep
@@ -128,6 +127,7 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 	env_dtos: Dict[str, Dict[str, Any]] = {}
 	for env in environments.values():
 		pipeline_state: List[Dict[str, Any]] = []
+		shared_state: SharedState| None = None
 		for r in env.pipeline:
 			try:
 				if isinstance(r, CachingStep):
@@ -144,6 +144,8 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 						"is_running": True,
 					})
 				else:
+					if isinstance(result, SharedState):
+						shared_state = result
 					pipeline_state.append({
 						"name": r.name,
 						"status": result,
@@ -158,6 +160,9 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 					"is_running": True,
 				})
 		env_dtos[env.id] = asdict(replace(env, pipeline=[]))
+		if shared_state:
+			env_dtos[env.id]['branches'] = shared_state.branches
+			env_dtos[env.id]['branches_token'] = shared_state.token
 		env_dtos[env.id]['pipeline'] = pipeline_state
 	return env_dtos
 
@@ -268,10 +273,37 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 				else:
 					for env in environments.values():
 						if env.id == update_data.get('id'):
-							env.branches = update_data.get('branches', env.branches)
+							try:
+								missing_branch_token = False
+								for step in env.pipeline:
+									resolve_step = step
+									if isinstance(step, CachingStep):
+										resolve_step = step.step
+									if isinstance(resolve_step, SharedStateHolder):
+										branches_update = update_data.get('branches')
+										expected_token = update_data.get('token')
+										if isinstance(branches_update, list):
+											if not isinstance(expected_token, str):
+												await broadcast_error({
+													"code": "BRANCH_TOKEN_REQUIRED",
+													"message": "Branch update requires current token",
+													"envId": env.id,
+												})
+												missing_branch_token = True
+												break
+											resolve_step.set_branches(branches_update, expected_token=expected_token)
+								if missing_branch_token:
+									continue
+							except SharedStateConflictError as conflict:
+								await broadcast_error({
+									"code": "BRANCH_STATE_CONFLICT",
+									"message": "Branch state changed, refresh and retry",
+									"envId": env.id,
+								})
+								continue
 							if 'dry' in update_data:
-								env.dry = bool(update_data['dry'])
-							logger.info(f"Updated environment {env.id} branches to {env.branches}, dry={env.dry}")
+								env.state.set_dry(bool(update_data['dry']))
+							logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={update_data.get('dry')}")
 							reset_caches([env])
 				environment_update_event.set()
 
@@ -405,15 +437,20 @@ class App:
 					if v is not None:
 						if k in environments:
 							env = environments[k]
-							env.branches = [(v, 'HEAD')]
-							logger.info(f"Overriding environment {k} branches to {env.branches}")
+							for step in env.pipeline:
+								resolve_step = step
+								if isinstance(step, CachingStep):
+									resolve_step = step.step
+								if isinstance(resolve_step, SharedStateHolder):
+									resolve_step.set_branches([(v, 'HEAD')])
+							logger.info(f"Overriding environment {k} branches to {(v, 'HEAD')}")
 						else:
 							logger.warning(f"Environment {k} not found to override branches")
 					else:
 						logger.info(f"No branch override for environment {k}")
 		if dry_run:
 			for id, e in environments.items():
-				e.dry = True
+				e.state.set_dry(True)
 
 		logger.info(f"Resulting profiles {environments.keys()}")
 

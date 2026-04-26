@@ -1,9 +1,20 @@
 from enironment import Environment
 from steps.docker_plain import DockerImageBuild, DockerContainerCheck, DockerContainerDeploy
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
+from steps.shared_state import SharedStateHolderInMemory
 
 clone = GitClone()
+
+container_check = DockerContainerCheck(
+	container_name="brencher_plain-container"
+)
+
+unmerge = GitUnmerge(wd=clone, check=container_check)
+
+state = SharedStateHolderInMemory(unmerge=unmerge)
+
 checkoutMerged = CheckoutMerged(clone,
+                                desired_branches=state,
                                 push=False,
                                 git_user_email="rudolfss13@gmail.com",
                                 git_user_name="brencher_bot"
@@ -18,11 +29,6 @@ image_build = DockerImageBuild(
 	nocache=False,
 )
 
-# Step 2: Check if container already exists
-container_check = DockerContainerCheck(
-	container_name="brencher_plain-container"
-)
-
 # Step 3: Deploy the container
 container_deploy = DockerContainerDeploy(
 	image_build=image_build,
@@ -32,16 +38,14 @@ container_deploy = DockerContainerDeploy(
 	restart_policy={"Name": "unless-stopped"},
 )
 
-unmerge = GitUnmerge(wd=clone, check=container_check)
-
 __all__ = ["brencher_local1"]
 brencher_local1 = Environment(
 	id="brencher_local1",
-	branches=[("main", "HEAD")],
-	dry=False,
+	state=state,
 	repo="https://github.com/rudolf1/brencher.git",
 	pipeline=[
 		clone,
+		state,
 		checkoutMerged,
 		image_build,
 		container_deploy,

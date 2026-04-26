@@ -2,17 +2,23 @@ from enironment import Environment
 from steps.checks import SimpleLog, UrlCheck
 from steps.docker import DockerSwarmCheck, DockerSwarmDeploy
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
+from steps.shared_state import SharedStateHolderInMemory
 
 clone = GitClone(branchNamePrefix="ansible")
-checkoutMerged = CheckoutMerged(clone,
-                                push=False,
-                                git_user_email="rudolfss13@gmail.com",
-                                git_user_name="brencher_bot"
-                                )
 
 dockerSwarmCheck = DockerSwarmCheck(
 	stack_name="immich",
 )
+unmerge = GitUnmerge(clone, dockerSwarmCheck)
+
+state = SharedStateHolderInMemory(unmerge=unmerge)
+
+checkoutMerged = CheckoutMerged(clone,
+                                desired_branches=state,
+                                push=False,
+                                git_user_email="rudolfss13@gmail.com",
+                                git_user_name="brencher_bot"
+                                )
 
 deployDocker = DockerSwarmDeploy(
 	wd=clone,
@@ -24,7 +30,6 @@ deployDocker = DockerSwarmDeploy(
 	stack_name="immich",
 	docker_compose_path="poc/immich/stack-compose.yml",
 )
-unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
 checkPing = UrlCheck(
 	url="https://immich.rudolf.keenetic.link/api/server/ping",
@@ -39,11 +44,11 @@ logUrls = SimpleLog(message={
 __all__ = ["immich"]
 immich = Environment(
 	id="immich",
-	branches=[("ansible/master", "HEAD")],
-	dry=False,
+	state=state,
 	repo="https://github.com/rudolf1/uber_backup.git",
 	pipeline=[
 		clone,
+		state,
 		checkoutMerged,
 		dockerSwarmCheck,
 		unmerge,

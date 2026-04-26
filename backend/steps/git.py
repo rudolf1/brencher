@@ -8,8 +8,9 @@ import traceback
 from typing import List, Tuple, Set, Dict, Any, Mapping, runtime_checkable
 
 import git
-from enironment import AbstractStep
+from enironment import AbstractStep, SharedState
 from git.objects import Commit
+
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,8 @@ class GitClone(AbstractStep[str]):
 			if os.path.exists(os.path.join(self.repo_path, ".git")):
 				logger.info(f"Repository already cloned at {self.repo_path}, fetching updates.")
 				repo = git.Repo(self.repo_path)
-				if repo.remotes.origin.url != self._get_auth_git_url(self.env.repo):
-					repo.remotes.origin.set_url(self._get_auth_git_url(self.env.repo))
+				if 'origin' not in repo.remotes or repo.remotes.origin.url != self._get_auth_git_url(self.env.repo):
+					repo.create_remote('origin', self._get_auth_git_url(self.env.repo))
 				result = repo.remotes.origin.fetch(prune=True)
 				if not result or any(fetch_info.flags & fetch_info.ERROR for fetch_info in result):
 					raise BaseException(f"Failed to fetch updates for {self.env.repo}")
@@ -112,12 +113,14 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 	wd: GitClone
 
 	def __init__(self, wd: GitClone,
+	             desired_branches: AbstractStep[SharedState],
 	             git_user_email: str,
 	             git_user_name: str,
 	             push: bool = True,
 	             **kwargs: Any):
 		super().__init__(**kwargs)
 		self.wd = wd
+		self.desired_branches = desired_branches
 		self.git_user_email = git_user_email
 		self.git_user_name = git_user_name
 		self.push = push
@@ -137,10 +140,10 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 
 		return visited
 
-	def find_desired_commits(self, repo: git.Repo) -> Dict[Commit, str]:
+	def find_desired_commits(self, repo: git.Repo, branches: List[Tuple[str, str]]) -> Dict[Commit, str]:
 		# Extract commit ids for the selected branches
 		commit_ids: Dict[Commit, str] = {}
-		for branch_pair in self.env.branches:
+		for branch_pair in branches:
 			try:
 				branch_name, desired_commit = branch_pair
 				if desired_commit == 'HEAD':
@@ -164,12 +167,13 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 			cw.set_value("user", "email", self.git_user_email)
 			cw.set_value("user", "name", self.git_user_name)
 
-		if len(self.env.branches) == 0:
+		desired = self.desired_branches.progress().branches
+		if len(desired) == 0:
 			raise BaseException(f"Empty branches set")
 
-		logger.info(f"Selected branches: {self.env.branches}")
+		logger.info(f"Selected branches: {desired}")
 
-		commit_ids = self.find_desired_commits(repo)
+		commit_ids = self.find_desired_commits(repo, desired)
 		logger.info(f"Commit ids for branches: {commit_ids}")
 
 		childs = _commits_childs(repo)
@@ -293,7 +297,7 @@ class GitUnmerge(AbstractStep[GitUnmergeResult]):
 				if len(branches) == 0 or branches[0].startswith('auto/'):
 					if childs is None:
 						childs = _commits_childs(repo)
-					commitsSet = set([commit])
+					commitsSet = {commit}
 					while len(commitsSet) > 0:
 						current = commitsSet.pop()
 						for child in childs.get(current, []):

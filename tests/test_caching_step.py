@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from enironment import AbstractStep, Environment
+from steps.shared_state import SharedStateHolderInMemory
 from steps.step import CachingStep, NotReadyException
 
 
@@ -49,7 +50,7 @@ class FailingStep(AbstractStep[str]):
 
 
 def _make_env(steps: list[AbstractStep[Any]]) -> Environment:
-	return Environment(id="test", branches=[], dry=True, repo="repo", pipeline=steps)
+	return Environment(id="test", state=SharedStateHolderInMemory(unmerge=None), repo="repo", pipeline=steps)
 
 
 class TestCachingStep:

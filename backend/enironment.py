@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, runtime_checkable, Protocol, Tuple, TypeAlias, Any
 from typing import TypeVar
 
 logger = logging.getLogger(__name__)
@@ -14,14 +14,43 @@ T = TypeVar('T')
 @dataclass
 class Environment:
 	id: str
-	branches: List[Tuple[str, str]]  # List of [branch_name, desired_commit] pairs
-	dry: bool
+	state: SharedStateHolder
 	repo: str  # git repo
 	pipeline: List[AbstractStep]
 
 	def __post_init__(self) -> None:
 		for p in self.pipeline:
 			p.env = self
+
+	@property
+	def dry(self) -> bool:
+		"""Get the dry run state from the shared state."""
+		return self.state.progress().dry
+
+
+
+@dataclass
+class SharedState:
+	branches: List[Tuple[str, str]]
+	dry: bool
+	token: str | None = None
+
+
+class SharedStateConflictError(BaseException):
+	def __init__(self, message: str) -> None:
+		super().__init__(message)
+
+@runtime_checkable
+class SharedStateHolder(Protocol):
+	def set_branches(self, branches: List[Tuple[str, str]], expected_token: str | None = None) -> SharedState:
+		pass
+
+	def set_dry(self, dry: bool) -> SharedState:
+		pass
+
+	def progress(self) -> SharedState:
+		pass
+
 
 
 class AbstractStep[T](ABC):
@@ -68,3 +97,11 @@ def wrap_in_cached(e: Environment) -> Environment:
 							setattr(step.step, attr_name, cached_step)
 
 	return result
+
+
+def get_step(env: List[AbstractStep[Any]], class_or_tuple: type[T]) -> T:
+	from steps.step import CachingStep
+	for step in env:
+		if isinstance(step, class_or_tuple) or (isinstance(step, CachingStep) and isinstance(step.step, class_or_tuple)):
+			return step  # type: ignore[return-value]
+	raise BaseException(f"Not step found {class_or_tuple}")
