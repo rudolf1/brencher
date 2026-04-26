@@ -86,9 +86,11 @@ class RemoteRepoHelper:
 
     def set_desired_branches(self, branches: List[Tuple[str, str]]) -> None:
         step = get_step(self.env.pipeline, SharedStateHolder)
-        step.set_branches(branches)
         if isinstance(step, CachingStep):
+            step.step.set_branches(branches)
             step.reset()
+        else:
+            step.set_branches(branches)
 
     def get_desired_branches(self) -> List[Tuple[str, str]]:
         return self.resolve_initial_branches.progress().branches
@@ -126,6 +128,7 @@ class RemoteRepoHelper:
             repo.index.add([filename])
             repo.index.commit(message)
             repo.create_head(from_branch)
+            return repo.head.commit
         else:
             repo.heads[from_branch].checkout()
             if from_branch != to_branch:
