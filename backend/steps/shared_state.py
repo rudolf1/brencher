@@ -24,7 +24,7 @@ class SharedStateHolderInMemory(AbstractStep[SharedState], SharedStateHolder):
 
     def __init__(self, unmerge: AbstractStep[GitUnmergeResult] | None, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self.state = SharedState([], True, token=uuid.uuid4().hex)
+        self.state = SharedState([], False, token=uuid.uuid4().hex)
         self.unmerge = unmerge
 
     def set_branches(self, branches: List[Tuple[str, str]], expected_token: str | None = None) -> SharedState:
