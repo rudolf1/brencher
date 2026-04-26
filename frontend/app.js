@@ -39,6 +39,9 @@ const columnsByEnv = {};
 // Per-environment dry run state: envId -> bool
 const dryRunByEnv = {};
 
+// Track environments with a pending dry-run toggle (not yet confirmed by server)
+const dryRunPending = {};
+
 // Single WebSocket connection
 let ws = null;
 
@@ -247,6 +250,7 @@ function renderBranches() {
         btn.onclick = e => {
             const envId = e.currentTarget.dataset.env;
             dryRunByEnv[envId] = !dryRunByEnv[envId];
+            dryRunPending[envId] = true;
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ update: { id: envId, dry: dryRunByEnv[envId] } }));
             }
@@ -419,8 +423,13 @@ function setupWebSockets() {
                 environmentsRaw.forEach((envObj) => {
                     if (!envObj) return;
                     const envId = envObj.id || envObj.name || 'unknown';
-                    // Always sync dry run state from server
-                    dryRunByEnv[envId] = !!envObj.dry;
+                    // Always sync dry run state from server, unless a local toggle is pending
+                    if (!dryRunPending[envId]) {
+                        dryRunByEnv[envId] = !!envObj.dry;
+                    } else if (dryRunByEnv[envId] === !!envObj.dry) {
+                        // Server confirmed our change
+                        delete dryRunPending[envId];
+                    }
                     if (typeof envObj.branches_token === 'string') {
                         serverTokenByEnv[envId] = envObj.branches_token;
                     }
