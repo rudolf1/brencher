@@ -33,7 +33,9 @@ class SharedStateHolderInMemory(AbstractStep[SharedState], SharedStateHolder):
         self.state = replace(self.state, branches=_normalize_branches(branches), token=uuid.uuid4().hex)
         return self.state
 
-    def set_dry(self, dry: bool) -> SharedState:
+    def set_dry(self, dry: bool, expected_token: str | None = None) -> SharedState:
+        if expected_token is not None and expected_token != self.state.token:
+            raise SharedStateConflictError("State token mismatch")
         self.state = replace(self.state, dry=dry, token=uuid.uuid4().hex)
         return self.state
 
@@ -50,12 +52,14 @@ class SharedStateHolderInGit(AbstractStep[SharedState], SharedStateHolder):
     def __init__(
             self,
             wd: GitClone,
+            state_repo: GitClone,
             state_branch: str = "state",
             **kwargs: Any
     ) -> None:
         super().__init__(**kwargs)
         self.state_branch = state_branch
         self.wd = wd
+        self.state_repo = state_repo
         self._lock = threading.RLock()
 
     def set_branches(self, branches: List[Tuple[str, str]], expected_token: str | None = None) -> SharedState:
@@ -86,7 +90,7 @@ class SharedStateHolderInGit(AbstractStep[SharedState], SharedStateHolder):
         return f"{repo.working_dir}/{self.env.id}.json"
 
     def _ensure_repo(self, token: str | None = None) -> git.Repo:
-        repo_path = self.wd.progress()
+        repo_path = self.state_repo.progress()
         repo = git.Repo(repo_path)
         if token is None:
             # Checkout state branch in detached HEAD state

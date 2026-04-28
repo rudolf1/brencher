@@ -1,4 +1,4 @@
-# import asyncio
+import asyncio
 import json
 import logging
 import threading
@@ -8,7 +8,7 @@ import docker
 import pytest
 import requests
 from app import App
-from conftest import EventuallyFn  # type: ignore[import-not-found]
+from .conftest import EventuallyFn
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class TestDockerContainer:
 		logger.info("Container brencher_plain-container stopped and removed")
 
 	@pytest.mark.asyncio
-	async def test_start(self, eventually: EventuallyFn) -> None:  # type: ignore[no-any-unimported]
+	async def test_start(self, eventually: EventuallyFn) -> None:
 		logger.info(f"Starting")
 
 		app = App(cli_env_ids_str="brencher_local1")
@@ -38,13 +38,14 @@ class TestDockerContainer:
 		processing = threading.Thread(target=lambda: app.runWeb(5001), daemon=True)
 		processing.start()
 
+		await asyncio.sleep(5000)
+
 		eventually(
 			lambda: requests.get("http://localhost:5001/state", timeout=5000).status_code == 200,
 			20.0,
 			1.0,
 		)
 
-		# await asyncio.sleep(5000)
 
 		state_data = requests.get("http://localhost:5001/state", timeout=5000).json()
 		logger.info(f"Application state: {json.dumps(state_data, indent=2)}")

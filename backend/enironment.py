@@ -45,7 +45,7 @@ class SharedStateHolder(Protocol):
 	def set_branches(self, branches: List[Tuple[str, str]], expected_token: str | None = None) -> SharedState:
 		pass
 
-	def set_dry(self, dry: bool) -> SharedState:
+	def set_dry(self, dry: bool, expected_token: str | None = None) -> SharedState:
 		pass
 
 	def progress(self) -> SharedState:

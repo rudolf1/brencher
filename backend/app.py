@@ -127,7 +127,6 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 	env_dtos: Dict[str, Dict[str, Any]] = {}
 	for env in environments.values():
 		pipeline_state: List[Dict[str, Any]] = []
-		shared_state: SharedState| None = None
 		for r in env.pipeline:
 			try:
 				if isinstance(r, CachingStep):
@@ -144,8 +143,6 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 						"is_running": True,
 					})
 				else:
-					if isinstance(result, SharedState):
-						shared_state = result
 					pipeline_state.append({
 						"name": r.name,
 						"status": result,
@@ -159,11 +156,15 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 					"error": True,
 					"is_running": True,
 				})
-		env_dtos[env.id] = asdict(replace(env, pipeline=[]))
-		if shared_state:
+		env_dtos[env.id] = {'id': env.id }
+		env_dtos[env.id]['pipeline'] = pipeline_state
+		try:
+			shared_state = env.state.progress()
 			env_dtos[env.id]['branches'] = shared_state.branches
 			env_dtos[env.id]['branches_token'] = shared_state.token
-		env_dtos[env.id]['pipeline'] = pipeline_state
+			env_dtos[env.id]['dry'] = shared_state.dry
+		except BaseException:
+			pass
 	return env_dtos
 
 
@@ -270,10 +271,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 				else:
 					env = environments[update_data.get('id', '')]
 					branches_update: List[Tuple[str, str]] | None = update_data.get('branches')
+					expected_token = update_data.get('token', '')
 					if branches_update:
 						if not env:
 							raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
-						expected_token = update_data.get('token', '')
 						try:
 							env.state.set_branches(branches_update, expected_token=expected_token)
 						except SharedStateConflictError as conflict:
@@ -286,7 +287,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 					if 'dry' in update_data:
 						if not env:
 							raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
-						env.state.set_dry(bool(update_data['dry']))
+						env.state.set_dry(bool(update_data['dry']), expected_token)
 					p = get_step(env.pipeline, type(env.state))
 					if isinstance(p, CachingStep):
 						p.reset()
