@@ -251,7 +251,7 @@ function renderBranches() {
             const envId = e.currentTarget.dataset.env;
             dryRunPending[envId] = true;
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ update: { id: envId, dry: !dryRunByEnv[envId] } }));
+                ws.send(JSON.stringify({ update: { id: envId, dry: !dryRunByEnv[envId], token: serverTokenByEnv[envId] } }));
             }
             filterBranches();
         };
