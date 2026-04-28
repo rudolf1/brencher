@@ -249,10 +249,9 @@ function renderBranches() {
     branchesList.querySelectorAll('.dry-run-btn').forEach(btn => {
         btn.onclick = e => {
             const envId = e.currentTarget.dataset.env;
-            dryRunByEnv[envId] = !dryRunByEnv[envId];
             dryRunPending[envId] = true;
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ update: { id: envId, dry: dryRunByEnv[envId] } }));
+                ws.send(JSON.stringify({ update: { id: envId, dry: !dryRunByEnv[envId] } }));
             }
             filterBranches();
         };
