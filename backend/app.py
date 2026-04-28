@@ -426,7 +426,7 @@ class App:
 							for step in env.pipeline:
 								resolve_step = step
 								if isinstance(step, CachingStep):
-									resolve_step = step.step
+									resolve_step = step._step
 								if isinstance(resolve_step, SharedStateHolder):
 									resolve_step.set_branches([(v, 'HEAD')])
 							logger.info(f"Overriding environment {k} branches to {(v, 'HEAD')}")

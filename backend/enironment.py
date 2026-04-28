@@ -84,17 +84,17 @@ def wrap_in_cached(e: Environment) -> Environment:
 	from dataclasses import replace
 	from steps.step import CachingStep
 	result = replace(e, pipeline=[CachingStep(step) for step in e.pipeline])
-	cached = {it.step: it for it in result.pipeline if isinstance(it, CachingStep)}
+	cached = {it._step: it for it in result.pipeline if isinstance(it, CachingStep)}
 	for step in result.pipeline:
 		if isinstance(step, CachingStep):
-			step.step.env = result
-			for attr_name in dir(step.step):
+			step._step.env = result
+			for attr_name in dir(step._step):
 				if not attr_name.startswith('_'):
-					attr_value = getattr(step.step, attr_name)
+					attr_value = getattr(step._step, attr_name)
 					if isinstance(attr_value, AbstractStep):
 						cached_step = cached.get(attr_value)
 						if cached_step:
-							setattr(step.step, attr_name, cached_step)
+							setattr(step._step, attr_name, cached_step)
 
 	return result
 
@@ -102,6 +102,6 @@ def wrap_in_cached(e: Environment) -> Environment:
 def get_step(env: List[AbstractStep[Any]], class_or_tuple: type[T]) -> T:
 	from steps.step import CachingStep
 	for step in env:
-		if isinstance(step, class_or_tuple) or (isinstance(step, CachingStep) and isinstance(step.step, class_or_tuple)):
+		if isinstance(step, class_or_tuple) or (isinstance(step, CachingStep) and isinstance(step._step, class_or_tuple)):
 			return step  # type: ignore[return-value]
 	raise BaseException(f"Not step found {class_or_tuple}")
