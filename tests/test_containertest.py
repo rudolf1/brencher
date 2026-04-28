@@ -38,7 +38,7 @@ class TestDockerContainer:
 		processing = threading.Thread(target=lambda: app.runWeb(5001), daemon=True)
 		processing.start()
 
-		await asyncio.sleep(5000)
+		# await asyncio.sleep(5000)
 
 		eventually(
 			lambda: requests.get("http://localhost:5001/state", timeout=5000).status_code == 200,
