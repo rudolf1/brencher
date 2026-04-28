@@ -56,3 +56,7 @@ class CachingStep(AbstractStep[T], Generic[T]):
 
 	def reset(self) -> None:
 		self._input_hash = None
+
+	def __getattr__(self, name: str) -> Any:
+		"""Delegate unknown attributes to the wrapped step."""
+		return getattr(self.step, name)

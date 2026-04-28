@@ -15,7 +15,7 @@ from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from enironment import Environment, wrap_in_cached, SharedStateHolder, SharedStateConflictError, SharedState
+from enironment import Environment, wrap_in_cached, SharedStateHolder, SharedStateConflictError, SharedState, get_step
 from processing import reset_caches
 from steps.git import GitClone
 from steps.step import CachingStep
@@ -184,11 +184,8 @@ def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 	for k, env in environments.items():
 		branches[k] = {}
 		try:
-			for step in env.pipeline:
-				if isinstance(step, GitClone):
-					branches[k] = {**step.get_branches()}
-				if isinstance(step, CachingStep) and isinstance(step.step, GitClone):
-					branches[k] = {**step.step.get_branches()}
+			step = get_step(env.pipeline, GitClone)
+			branches[k] = {**step.get_branches()}
 		except BaseException as e:
 			stack = traceback.format_exception(type(e), e, e.__traceback__)
 			logger.error(f"Error fetching branches for environment {env.id}: {str(e)}\n{''.join(stack)}")
@@ -271,40 +268,29 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 				if update_data.get('id') == '':
 					reset_caches(list(environments.values()))
 				else:
-					for env in environments.values():
-						if env.id == update_data.get('id'):
-							try:
-								missing_branch_token = False
-								for step in env.pipeline:
-									resolve_step = step
-									if isinstance(step, CachingStep):
-										resolve_step = step.step
-									if isinstance(resolve_step, SharedStateHolder):
-										branches_update = update_data.get('branches')
-										expected_token = update_data.get('token')
-										if isinstance(branches_update, list):
-											if not isinstance(expected_token, str):
-												await broadcast_error({
-													"code": "BRANCH_TOKEN_REQUIRED",
-													"message": "Branch update requires current token",
-													"envId": env.id,
-												})
-												missing_branch_token = True
-												break
-											resolve_step.set_branches(branches_update, expected_token=expected_token)
-								if missing_branch_token:
-									continue
-							except SharedStateConflictError as conflict:
-								await broadcast_error({
-									"code": "BRANCH_STATE_CONFLICT",
-									"message": "Branch state changed, refresh and retry",
-									"envId": env.id,
-								})
-								continue
-							if 'dry' in update_data:
-								env.state.set_dry(bool(update_data['dry']))
-							logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={update_data.get('dry')}")
-							reset_caches([env])
+					env = environments[update_data.get('id', '')]
+					branches_update: List[Tuple[str, str]] | None = update_data.get('branches')
+					if branches_update:
+						if not env:
+							raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
+						expected_token = update_data.get('token', '')
+						try:
+							env.state.set_branches(branches_update, expected_token=expected_token)
+						except SharedStateConflictError as conflict:
+							await broadcast_error({
+								"code": "BRANCH_STATE_CONFLICT",
+								"message": "Branch state changed, refresh and retry",
+								"envId": env.id,
+							})
+							continue
+					if 'dry' in update_data:
+						if not env:
+							raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
+						env.state.set_dry(bool(update_data['dry']))
+					p = get_step(env.pipeline, type(env.state))
+					if isinstance(p, CachingStep):
+						p.reset()
+					logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={update_data.get('dry')}")
 				environment_update_event.set()
 
 				if slave_ws_task is not None:
