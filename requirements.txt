@@ -8,6 +8,8 @@ PyYAML
 
 pytest
 pytest-asyncio
+playwright
+pytest-playwright
 mypy
 ty
 types-PyYAML
