@@ -12,7 +12,7 @@ WORKDIR /app
 # Copy requirements and install dependencies with uv
 COPY requirements.txt ./
 RUN uv venv .venv && \
-    uv pip install -r requirements.txt
+    uv pip install --no-dev -r requirements.txt
 
 # Copy backend and frontend
 COPY backend/ ./backend/
