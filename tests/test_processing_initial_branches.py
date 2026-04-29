@@ -17,9 +17,9 @@ class TestInitialBranches:
         _ = repo_helper.create_commit(repo_helper.repo, "master", "branch1", "file2.txt", "content2", "Branch1 commit")
         _ = repo_helper.create_commit(repo_helper.repo, "state", "state", "blank.txt", "", "Branch1 commit")
 
-        clone = GitClone(url=repo_helper.local_dir)
+        clone = GitClone(url=repo_helper.remote_dir)
         clone.env = repo_helper.env
-        cloneState = GitClone(url=repo_helper.local_dir, n='state')
+        cloneState = GitClone(url=repo_helper.remote_dir, n='state')
         cloneState.env = repo_helper.env
         resolve_step = SharedStateHolderInGit(clone, state_repo=cloneState, state_branch="state")
         resolve_step.env = repo_helper.env

@@ -28,7 +28,7 @@ class GitClone(AbstractStep[str]):
 	def _get_auth_git_url(self, url: str) -> str:
 		username = os.getenv(f'{self.credEnvPrefix}_USERNAME')
 		password = os.getenv(f'{self.credEnvPrefix}_PASSWORD')
-		if username and password:
+		if username and password and '://' in url:
 			# Extract protocol and the rest of the URL
 			protocol, rest = url.split('://')
 			return f"{protocol}://{username}:{password}@{rest}"
