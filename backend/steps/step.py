@@ -27,14 +27,14 @@ class CachingStep(AbstractStep[T], Generic[T]):
 
 	def __init__(self, step: AbstractStep[T]) -> None:
 		super().__init__(n=step.name)
-		self.step = step
-		self._result = NotReadyException(f"No result yet for {self.step.name}")
+		self._step = step
+		self._result = NotReadyException(f"No result yet for {self._step.name}")
 		self._input_hash = None
 
 	def _compute_input_hash(self) -> str:
 		"""Compute a stable hash of all AbstractStep dependency outputs."""
 		inputs: dict[str, Any] = {}
-		for attr_name, attr_value in vars(self.step).items():
+		for attr_name, attr_value in vars(self._step).items():
 			if isinstance(attr_value, AbstractStep):
 				try:
 					inputs[attr_name] = attr_value.progress()
@@ -46,7 +46,7 @@ class CachingStep(AbstractStep[T], Generic[T]):
 		current_hash = self._compute_input_hash()
 		if self._input_hash != current_hash or isinstance(self._result, BaseException):
 			try:
-				self._result = self.step.progress()
+				self._result = self._step.progress()
 			except BaseException as e:
 				self._result = e
 			self._input_hash = current_hash
@@ -56,3 +56,7 @@ class CachingStep(AbstractStep[T], Generic[T]):
 
 	def reset(self) -> None:
 		self._input_hash = None
+
+	def __getattr__(self, name: str) -> Any:
+		"""Delegate unknown attributes to the wrapped step."""
+		return getattr(self._step, name)

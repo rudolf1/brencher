@@ -3,7 +3,6 @@ import time
 from typing import List, Callable
 
 from enironment import Environment
-from steps.git import GitUnmerge, GitUnmergeResult
 from steps.step import CachingStep
 
 logger = logging.getLogger(__name__)
@@ -35,20 +34,6 @@ def process_all_jobs(
 			try:
 				onupdate()
 				step.progress()
-				if (isinstance(step, GitUnmerge) or (
-						isinstance(step, CachingStep) and isinstance(step.step, GitUnmerge))) and len(
-					env.branches) == 0:
-					# TODO Move to separate job.
-					# If branches list empty, need to find any brunch which includes commit and add pair (branch, commit)
-					# If branches not empty, need to find most priority branch (project specific) and add (branch, HEAD)
-					result = step.progress()
-					if isinstance(result, GitUnmergeResult):
-						env.branches = result.branches
-					else:
-						# Backward compatibility: older or custom step implementations may
-						# return a plain list of (branch, commit) tuples directly.
-						env.branches = result
-					logger.info(f"Branches on startup resolved {env.id}, job {step.name}: {env.branches}")
 			except BaseException as e:
 				error_msg = f"Error processing release {env.id}, job {step.name}: {str(e)}"
 				logger.error(error_msg)
