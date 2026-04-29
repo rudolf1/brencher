@@ -15,7 +15,6 @@ T = TypeVar('T')
 class Environment:
 	id: str
 	state: SharedStateHolder
-	repo: str  # git repo
 	pipeline: List[AbstractStep]
 
 	def __post_init__(self) -> None:

@@ -49,7 +49,7 @@ class RemoteRepoHelper:
         with self.repo.config_writer() as cw:
             cw.set_value("user", "email", "test@example.com")
             cw.set_value("user", "name", "Test User")
-        git_clone = GitClone(repo_path=self.local_dir)
+        git_clone = GitClone(url=self.remote_dir, repo_path=self.local_dir)
         mock_check = MockDockerSwarmCheck(lambda: f"auto-{self.checkout_merged.progress().version}")
         git_unmerge = GitUnmerge(
             wd=git_clone,
@@ -66,7 +66,6 @@ class RemoteRepoHelper:
         self.env = Environment(
             id="test1",
             state=state,
-            repo=self.remote_dir,
             pipeline=[
                 git_clone,
                 state,

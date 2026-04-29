@@ -21,7 +21,7 @@ def checkPingF(obj: Any) -> None:
 			raise Exception(f"brencher2 check failed for: {v}")
 
 
-clone = GitClone()
+clone = GitClone(url="https://github.com/rudolf1/brencher.git")
 
 dockerSwarmCheck = DockerSwarmCheck(
 	stack_name="brencher2",
@@ -90,7 +90,6 @@ __all__ = ["brencher2"]
 brencher2 = Environment(
 	id="brencher2",
 	state=state,
-	repo="https://github.com/rudolf1/brencher.git",
 	pipeline=[
 		clone,
 		state,

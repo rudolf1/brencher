@@ -4,7 +4,7 @@ from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.shared_state import SharedStateHolderInMemory
 
-clone = GitClone(branchNamePrefix="immoscout")
+clone = GitClone(url="https://github.com/rudolf1/uber_backup.git", branchNamePrefix="immoscout")
 
 dockerSwarmCheck = DockerSwarmCheck(
 	stack_name="gmail_mcp",
@@ -62,7 +62,6 @@ __all__ = ["gmail_mcp"]
 gmail_mcp = Environment(
 	id="gmail_mcp",
 	state=state,
-	repo="https://github.com/rudolf1/uber_backup.git",
 	pipeline=[
 		clone,
 		state,

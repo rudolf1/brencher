@@ -5,7 +5,7 @@ from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.shared_state import SharedStateHolderInMemory
 
-clone = GitClone()
+clone = GitClone(url="https://github.com/rudolf1/brencher.git")
 
 dockerSwarmCheck = DockerSwarmCheck(
 	stack_name="brencher",
@@ -60,7 +60,6 @@ __all__ = ["brencher"]
 brencher = Environment(
 	id="brencher",
 	state=state,
-	repo="https://github.com/rudolf1/brencher.git",
 	pipeline=[
 		clone,
 		state,

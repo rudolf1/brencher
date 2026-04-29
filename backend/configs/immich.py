@@ -4,7 +4,7 @@ from steps.docker import DockerSwarmCheck, DockerSwarmDeploy
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.shared_state import SharedStateHolderInMemory
 
-clone = GitClone(branchNamePrefix="ansible")
+clone = GitClone(url="https://github.com/rudolf1/uber_backup.git", branchNamePrefix="ansible")
 
 dockerSwarmCheck = DockerSwarmCheck(
 	stack_name="immich",
@@ -45,7 +45,6 @@ __all__ = ["immich"]
 immich = Environment(
 	id="immich",
 	state=state,
-	repo="https://github.com/rudolf1/uber_backup.git",
 	pipeline=[
 		clone,
 		state,

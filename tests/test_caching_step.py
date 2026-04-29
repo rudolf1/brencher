@@ -50,7 +50,7 @@ class FailingStep(AbstractStep[str]):
 
 
 def _make_env(steps: list[AbstractStep[Any]]) -> Environment:
-	return Environment(id="test", state=SharedStateHolderInMemory(unmerge=None), repo="repo", pipeline=steps)
+	return Environment(id="test", state=SharedStateHolderInMemory(unmerge=None), pipeline=steps)
 
 
 class TestCachingStep:

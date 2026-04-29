@@ -3,7 +3,7 @@ from steps.docker_plain import DockerImageBuild, DockerContainerCheck, DockerCon
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.shared_state import SharedStateHolderInMemory
 
-clone = GitClone()
+clone = GitClone(url="https://github.com/rudolf1/brencher.git")
 
 container_check = DockerContainerCheck(
 	container_name="brencher_plain-container"
@@ -42,7 +42,6 @@ __all__ = ["brencher_local1"]
 brencher_local1 = Environment(
 	id="brencher_local1",
 	state=state,
-	repo="https://github.com/rudolf1/brencher.git",
 	pipeline=[
 		clone,
 		state,

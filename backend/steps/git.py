@@ -16,9 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 class GitClone(AbstractStep[str]):
-	def __init__(self, repo_path: str | None = None, branchNamePrefix: str = "", credEnvPrefix: str = "GIT",
+	def __init__(self, url: str, repo_path: str | None = None,
+	             branchNamePrefix: str = "", credEnvPrefix: str = "GIT",
 	             **kwargs: Any):
 		super().__init__(**kwargs)
+		self.url = url
 		self.repo_path = repo_path
 		self.branchNamePrefix = branchNamePrefix
 		self.credEnvPrefix = credEnvPrefix
@@ -34,32 +36,33 @@ class GitClone(AbstractStep[str]):
 		return url
 
 	def progress(self) -> str:
+		repo_url = self.url
 
 		self.repo_path = self.repo_path or os.path.join(tempfile.gettempdir(),
-		                                                f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
-		logger.info(f"Cloning repository {self.env.repo} to {self.repo_path}")
+		                                                f"{self.env.id}_{hashlib.sha1(repo_url.encode()).hexdigest()[:5]}")
+		logger.info(f"Cloning repository {repo_url} to {self.repo_path}")
 		os.makedirs(self.repo_path, exist_ok=True)
 		try:
 			if os.path.exists(os.path.join(self.repo_path, ".git")):
 				logger.info(f"Repository already cloned at {self.repo_path}, fetching updates.")
 				repo = git.Repo(self.repo_path)
-				if 'origin' not in repo.remotes or repo.remotes.origin.url != self._get_auth_git_url(self.env.repo):
-					repo.create_remote('origin', self._get_auth_git_url(self.env.repo))
+				if 'origin' not in repo.remotes or repo.remotes.origin.url != self._get_auth_git_url(repo_url):
+					repo.create_remote('origin', self._get_auth_git_url(repo_url))
 				result = repo.remotes.origin.fetch(prune=True)
 				if not result or any(fetch_info.flags & fetch_info.ERROR for fetch_info in result):
-					raise BaseException(f"Failed to fetch updates for {self.env.repo}")
+					raise BaseException(f"Failed to fetch updates for {repo_url}")
 			else:
 				repo = git.Repo.init(self.repo_path)
 				repo.remotes.append(repo.create_remote(
 					'origin',
-					self._get_auth_git_url(self.env.repo)
+					self._get_auth_git_url(repo_url)
 				))
 				if self.branchNamePrefix != "":
 					repo.config_writer().set_value('remote "origin"', "fetch",
 					                               f"+refs/heads/{self.branchNamePrefix}/*:refs/remotes/origin/{self.branchNamePrefix}/*").release()
 				repo.remotes.origin.fetch(prune=True)
 				if not os.path.exists(os.path.join(self.repo_path, ".git")):
-					raise BaseException(f"Failed to clone repository {self.env.repo} to {self.repo_path}")
+					raise BaseException(f"Failed to clone repository {repo_url} to {self.repo_path}")
 		except BaseException as e:
 			logger.error(f"Error during git clone/fetch, removing directory {self.repo_path}: {str(e)}")
 			shutil.rmtree(self.repo_path)

@@ -3,7 +3,7 @@ from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.shared_state import SharedStateHolderInMemory
 
-clone = GitClone()
+clone = GitClone(url="https://github.com/rudolf1/reverseproxy.git")
 
 dockerSwarmCheck = DockerSwarmCheck(
 	stack_name="torrserv_proxy",
@@ -45,7 +45,6 @@ __all__ = ["torrserv_proxy"]
 torrserv_proxy = Environment(
 	id="torrserv_proxy",
 	state=state,
-	repo="https://github.com/rudolf1/reverseproxy.git",
 	pipeline=[
 		clone,
 		state,
