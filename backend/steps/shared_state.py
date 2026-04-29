@@ -141,6 +141,9 @@ class SharedStateHolderInGit(AbstractStep[SharedState], SharedStateHolder):
             repo.git.merge(remote_state_ref, no_edit=True)
             repo.git.push("origin", f"HEAD:refs/heads/{self.state_branch}")
         except git.GitCommandError as e:
-            repo.git.merge("--abort")
+            try:
+                repo.git.merge("--abort")
+            except git.GitCommandError:
+                pass
             raise SharedStateConflictError("State token mismatch")
 
