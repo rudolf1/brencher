@@ -31,7 +31,7 @@ jobs:
           "flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics",
           # "ty check backend",
           "mypy --no-incremental --config-file mypy.ini backend tests",
-          "pytest --ignore=tests/integration",
+          "pytest",
         ]
 
     steps:
@@ -45,5 +45,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install flake8 pytest ty
           pip install -r requirements.txt
+          pip install -r requirements-dev.txt
       - name: Run checker
         run: ${{ matrix.checker }}

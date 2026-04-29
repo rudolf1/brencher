@@ -23,6 +23,12 @@ services:
       replicas: 1
       restart_policy:
         condition: on-failure
+      placement:
+        max_replicas_per_node: 1
+        constraints:
+          - node.hostname==odroid
+#          - node.hostname==rudolf-T
+      mode: replicated
     networks:
       - default
       - brencher-net

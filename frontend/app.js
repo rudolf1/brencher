@@ -30,6 +30,8 @@ let environmentsRaw = [];
 const selectedBranchesByEnv = {};
 // serverSelectedBranchesByEnv mirrors server's last known selection for diffing
 const serverSelectedBranchesByEnv = {};
+// serverTokenByEnv tracks current optimistic concurrency token per environment
+const serverTokenByEnv = {};
 // columnsByEnv: envId -> { columnName: { branchName: value } }
 // Populated from any step result that contains a `columns` key (e.g. GitUnmerge)
 const columnsByEnv = {};
@@ -163,7 +165,7 @@ function renderBranches() {
             <h3 class="env-title">
                 Environment: ${envName || envId}
                 <button class="dry-run-btn ${dryRunByEnv[envId] ? 'dry-run-active' : ''}" data-env="${envId}" title="${dryRunByEnv[envId] ? 'Dry run on — click to resume' : 'Running — click to pause (dry run)'}">
-                    ${dryRunByEnv[envId] ? '⏸' : '▶'}
+                    ${dryRunByEnv[envId] ? '▶' : '⏸'}
                 </button>
             </h3>
             <table class="branches-table">
@@ -244,9 +246,8 @@ function renderBranches() {
     branchesList.querySelectorAll('.dry-run-btn').forEach(btn => {
         btn.onclick = e => {
             const envId = e.currentTarget.dataset.env;
-            dryRunByEnv[envId] = !dryRunByEnv[envId];
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ update: { id: envId, dry: dryRunByEnv[envId] } }));
+                ws.send(JSON.stringify({ update: { id: envId, dry: !dryRunByEnv[envId], token: serverTokenByEnv[envId] } }));
             }
             filterBranches();
         };
@@ -417,8 +418,11 @@ function setupWebSockets() {
                 environmentsRaw.forEach((envObj) => {
                     if (!envObj) return;
                     const envId = envObj.id || envObj.name || 'unknown';
-                    // Always sync dry run state from server
+                    // Server state is the source of truth for dry-run rendering.
                     dryRunByEnv[envId] = !!envObj.dry;
+                    if (typeof envObj.branches_token === 'string') {
+                        serverTokenByEnv[envId] = envObj.branches_token;
+                    }
                     if (!isChangesPending()) {
                         if (Array.isArray(envObj.branches) && envObj.branches.length > 0) {
                             if (Array.isArray(envObj.branches[0])) {
@@ -463,6 +467,18 @@ function setupWebSockets() {
                 showStatus('Environments updated.');
             } else if ('error' in message) {
                 console.error('Error from server:', message.error);
+                if (message.error && message.error.code === 'BRANCH_STATE_CONFLICT' && message.error.envId) {
+                    const envId = message.error.envId;
+                    const current = message.error.current_state || {};
+                    if (Array.isArray(current.branches)) {
+                        selectedBranchesByEnv[envId] = [...current.branches];
+                        serverSelectedBranchesByEnv[envId] = [...current.branches];
+                    }
+                    if (typeof current.token === 'string') {
+                        serverTokenByEnv[envId] = current.token;
+                    }
+                    filterBranches();
+                }
                 showStatus(message.error.message || 'Unknown error', true);
             }
             checkForPendingChanges();
@@ -486,10 +502,8 @@ function updateEnvironment() {
         const serverSel = [...(serverSelectedBranchesByEnv[envId] || [])].sort();
         if (JSON.stringify(localSel) !== JSON.stringify(serverSel)) {
             if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ update: { id: envId, branches: selectedBranchesByEnv[envId] } }));
+                ws.send(JSON.stringify({ update: { id: envId, branches: selectedBranchesByEnv[envId], token: serverTokenByEnv[envId] } }));
             }
-            // Optimistically sync server state
-            serverSelectedBranchesByEnv[envId] = [...selectedBranchesByEnv[envId]];
             branchFilter.value = '';
         }
     });

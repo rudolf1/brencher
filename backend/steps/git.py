@@ -8,16 +8,19 @@ import traceback
 from typing import List, Tuple, Set, Dict, Any, Mapping, runtime_checkable
 
 import git
-from enironment import AbstractStep
+from enironment import AbstractStep, SharedState
 from git.objects import Commit
+
 
 logger = logging.getLogger(__name__)
 
 
 class GitClone(AbstractStep[str]):
-	def __init__(self, repo_path: str | None = None, branchNamePrefix: str = "", credEnvPrefix: str = "GIT",
+	def __init__(self, url: str, repo_path: str | None = None,
+	             branchNamePrefix: str = "", credEnvPrefix: str = "GIT",
 	             **kwargs: Any):
 		super().__init__(**kwargs)
+		self.url = url
 		self.repo_path = repo_path
 		self.branchNamePrefix = branchNamePrefix
 		self.credEnvPrefix = credEnvPrefix
@@ -25,7 +28,7 @@ class GitClone(AbstractStep[str]):
 	def _get_auth_git_url(self, url: str) -> str:
 		username = os.getenv(f'{self.credEnvPrefix}_USERNAME')
 		password = os.getenv(f'{self.credEnvPrefix}_PASSWORD')
-		if username and password:
+		if username and password and '://' in url:
 			# Extract protocol and the rest of the URL
 			protocol, rest = url.split('://')
 			return f"{protocol}://{username}:{password}@{rest}"
@@ -33,32 +36,33 @@ class GitClone(AbstractStep[str]):
 		return url
 
 	def progress(self) -> str:
+		repo_url = self.url
 
 		self.repo_path = self.repo_path or os.path.join(tempfile.gettempdir(),
-		                                                f"{self.env.id}_{hashlib.sha1(self.env.repo.encode()).hexdigest()[:5]}")
-		logger.info(f"Cloning repository {self.env.repo} to {self.repo_path}")
+		                                                f"{self.env.id}_{hashlib.sha1(repo_url.encode()).hexdigest()[:5]}")
+		logger.info(f"Cloning repository {repo_url} to {self.repo_path}")
 		os.makedirs(self.repo_path, exist_ok=True)
 		try:
 			if os.path.exists(os.path.join(self.repo_path, ".git")):
 				logger.info(f"Repository already cloned at {self.repo_path}, fetching updates.")
 				repo = git.Repo(self.repo_path)
-				if repo.remotes.origin.url != self._get_auth_git_url(self.env.repo):
-					repo.remotes.origin.set_url(self._get_auth_git_url(self.env.repo))
+				if 'origin' not in repo.remotes or repo.remotes.origin.url != self._get_auth_git_url(repo_url):
+					repo.create_remote('origin', self._get_auth_git_url(repo_url))
 				result = repo.remotes.origin.fetch(prune=True)
 				if not result or any(fetch_info.flags & fetch_info.ERROR for fetch_info in result):
-					raise BaseException(f"Failed to fetch updates for {self.env.repo}")
+					raise BaseException(f"Failed to fetch updates for {repo_url}")
 			else:
 				repo = git.Repo.init(self.repo_path)
 				repo.remotes.append(repo.create_remote(
 					'origin',
-					self._get_auth_git_url(self.env.repo)
+					self._get_auth_git_url(repo_url)
 				))
 				if self.branchNamePrefix != "":
 					repo.config_writer().set_value('remote "origin"', "fetch",
 					                               f"+refs/heads/{self.branchNamePrefix}/*:refs/remotes/origin/{self.branchNamePrefix}/*").release()
 				repo.remotes.origin.fetch(prune=True)
 				if not os.path.exists(os.path.join(self.repo_path, ".git")):
-					raise BaseException(f"Failed to clone repository {self.env.repo} to {self.repo_path}")
+					raise BaseException(f"Failed to clone repository {repo_url} to {self.repo_path}")
 		except BaseException as e:
 			logger.error(f"Error during git clone/fetch, removing directory {self.repo_path}: {str(e)}")
 			shutil.rmtree(self.repo_path)
@@ -112,12 +116,14 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 	wd: GitClone
 
 	def __init__(self, wd: GitClone,
+	             desired_branches: AbstractStep[SharedState],
 	             git_user_email: str,
 	             git_user_name: str,
 	             push: bool = True,
 	             **kwargs: Any):
 		super().__init__(**kwargs)
 		self.wd = wd
+		self.desired_branches = desired_branches
 		self.git_user_email = git_user_email
 		self.git_user_name = git_user_name
 		self.push = push
@@ -137,10 +143,10 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 
 		return visited
 
-	def find_desired_commits(self, repo: git.Repo) -> Dict[Commit, str]:
+	def find_desired_commits(self, repo: git.Repo, branches: List[Tuple[str, str]]) -> Dict[Commit, str]:
 		# Extract commit ids for the selected branches
 		commit_ids: Dict[Commit, str] = {}
-		for branch_pair in self.env.branches:
+		for branch_pair in branches:
 			try:
 				branch_name, desired_commit = branch_pair
 				if desired_commit == 'HEAD':
@@ -164,12 +170,13 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 			cw.set_value("user", "email", self.git_user_email)
 			cw.set_value("user", "name", self.git_user_name)
 
-		if len(self.env.branches) == 0:
+		desired = self.desired_branches.progress().branches
+		if len(desired) == 0:
 			raise BaseException(f"Empty branches set")
 
-		logger.info(f"Selected branches: {self.env.branches}")
+		logger.info(f"Selected branches: {desired}")
 
-		commit_ids = self.find_desired_commits(repo)
+		commit_ids = self.find_desired_commits(repo, desired)
 		logger.info(f"Commit ids for branches: {commit_ids}")
 
 		childs = _commits_childs(repo)

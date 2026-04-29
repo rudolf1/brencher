@@ -7,7 +7,7 @@ import sys
 import threading
 import traceback
 from dataclasses import asdict, replace
-from typing import Any, Dict, List, Optional, Set, TypeVar
+from typing import Any, Dict, List, Optional, TypeVar, Tuple
 
 import websockets
 from dotenv import load_dotenv
@@ -15,8 +15,7 @@ from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from configs.gmail_mcp import gmail_mcp
-from enironment import AbstractStep, Environment, wrap_in_cached
+from enironment import Environment, wrap_in_cached, SharedStateHolder, SharedStateConflictError, SharedState, get_step
 from processing import reset_caches
 from steps.git import GitClone
 from steps.step import CachingStep
@@ -157,8 +156,15 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 					"error": True,
 					"is_running": True,
 				})
-		env_dtos[env.id] = asdict(replace(env, pipeline=[]))
+		env_dtos[env.id] = {'id': env.id }
 		env_dtos[env.id]['pipeline'] = pipeline_state
+		try:
+			shared_state = env.state.progress()
+			env_dtos[env.id]['branches'] = shared_state.branches
+			env_dtos[env.id]['branches_token'] = shared_state.token
+			env_dtos[env.id]['dry'] = shared_state.dry
+		except BaseException:
+			pass
 	return env_dtos
 
 
@@ -179,11 +185,8 @@ def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 	for k, env in environments.items():
 		branches[k] = {}
 		try:
-			for step in env.pipeline:
-				if isinstance(step, GitClone):
-					branches[k] = {**step.get_branches()}
-				if isinstance(step, CachingStep) and isinstance(step.step, GitClone):
-					branches[k] = {**step.step.get_branches()}
+			step = get_step(env.pipeline, GitClone)
+			branches[k] = {**step.get_branches()}
 		except BaseException as e:
 			stack = traceback.format_exception(type(e), e, e.__traceback__)
 			logger.error(f"Error fetching branches for environment {env.id}: {str(e)}\n{''.join(stack)}")
@@ -266,13 +269,29 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 				if update_data.get('id') == '':
 					reset_caches(list(environments.values()))
 				else:
-					for env in environments.values():
-						if env.id == update_data.get('id'):
-							env.branches = update_data.get('branches', env.branches)
-							if 'dry' in update_data:
-								env.dry = bool(update_data['dry'])
-							logger.info(f"Updated environment {env.id} branches to {env.branches}, dry={env.dry}")
-							reset_caches([env])
+					env = environments[update_data.get('id', '')]
+					branches_update: List[Tuple[str, str]] | None = update_data.get('branches')
+					expected_token = update_data.get('token', '')
+					if branches_update:
+						if not env:
+							raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
+						try:
+							env.state.set_branches(branches_update, expected_token=expected_token)
+						except SharedStateConflictError as conflict:
+							await broadcast_error({
+								"code": "BRANCH_STATE_CONFLICT",
+								"message": "Branch state changed, refresh and retry",
+								"envId": env.id,
+							})
+							continue
+					if 'dry' in update_data:
+						if not env:
+							raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
+						env.state.set_dry(bool(update_data['dry']), expected_token)
+					p = get_step(env.pipeline, type(env.state))
+					if isinstance(p, CachingStep):
+						p.reset()
+					logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={update_data.get('dry')}")
 				environment_update_event.set()
 
 				if slave_ws_task is not None:
@@ -407,15 +426,20 @@ class App:
 					if v is not None:
 						if k in environments:
 							env = environments[k]
-							env.branches = [(v, 'HEAD')]
-							logger.info(f"Overriding environment {k} branches to {env.branches}")
+							for step in env.pipeline:
+								resolve_step = step
+								if isinstance(step, CachingStep):
+									resolve_step = step._step
+								if isinstance(resolve_step, SharedStateHolder):
+									resolve_step.set_branches([(v, 'HEAD')])
+							logger.info(f"Overriding environment {k} branches to {(v, 'HEAD')}")
 						else:
 							logger.warning(f"Environment {k} not found to override branches")
 					else:
 						logger.info(f"No branch override for environment {k}")
 		if dry_run:
 			for id, e in environments.items():
-				e.dry = True
+				e.state.set_dry(True)
 
 		logger.info(f"Resulting profiles {environments.keys()}")
 
