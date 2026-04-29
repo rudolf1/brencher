@@ -5,12 +5,3 @@ gitpython
 python-dotenv
 docker
 PyYAML
-
-pytest
-pytest-asyncio
-mypy
-ty
-types-PyYAML
-types-requests
-types-docker
-testcontainers

@@ -1,0 +1,12 @@
+-r requirements.txt
+
+pytest
+pytest-asyncio
+playwright
+pytest-playwright
+mypy
+ty
+types-PyYAML
+types-requests
+types-docker
+testcontainers
