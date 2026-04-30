@@ -392,6 +392,7 @@ class App:
 		import configs.immich
 		import configs.registry
 		import configs.gmail_mcp
+		import configs.backups_helper
 		environments_l: List[Environment] = [
 			configs.brencher.brencher,
 			configs.brencher2.brencher2,
@@ -401,6 +402,7 @@ class App:
 			configs.immich.immich,
 			configs.registry.registry,
 			configs.gmail_mcp.gmail_mcp,
+            configs.backups_helper.backups_helper,
 		]
 		environments = {e.id: e for e in environments_l}
 
