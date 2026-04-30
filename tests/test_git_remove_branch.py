@@ -17,7 +17,7 @@ class TestGitRemoveBranch:
 
         repo_helper.enable_caching()
 
-        repo_helper.env.branches = [("branch1", "HEAD"), ("branch2", "HEAD")]
+        repo_helper.set_desired_branches([("branch1", "HEAD"), ("branch2", "HEAD")])
         repo_helper.progress()
 
         repo_helper.verify_working_directory_files([
@@ -30,7 +30,7 @@ class TestGitRemoveBranch:
         with pytest.raises(BaseException, match="Ref 'origin/branch2' did not resolve to an object"):
             repo_helper.progress()
 
-        repo_helper.env.branches = [("branch1", "HEAD")]
+        repo_helper.set_desired_branches([("branch1", "HEAD")])
         repo_helper.progress()
 
         repo_helper.verify_working_directory_files([

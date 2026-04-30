@@ -2,17 +2,22 @@ from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.docker import DockerSwarmCheck, DockerSwarmDeploy
 from enironment import Environment
 from steps.checks import SimpleLog, UrlCheck
+from steps.shared_state import SharedStateHolderInMemory
 
 
 
-clone = GitClone( branchNamePrefix="photosHelper")
+clone = GitClone(url="https://github.com/rudolf1/uber_backup.git", branchNamePrefix="photosHelper")
+
+sharedState = SharedStateHolderInMemory(unmerge=None)
+
 checkoutMerged = CheckoutMerged(clone,
+                    desired_branches=sharedState,
                     push = False,
                     git_user_email="rudolfss13@gmail.com",
                     git_user_name="brencher_bot"
         )
 
-
+sharedState.set_branches([("photosHelper/master", "HEAD")])
 dockerSwarmCheck = DockerSwarmCheck(
     stack_name = "photosHelper",
 )
@@ -40,11 +45,10 @@ logUrls = SimpleLog(message = {
 
 backups_helper = Environment(
     id="backupsHelper",
-    branches=[("photosHelper/master", "HEAD")],
-    dry=False,
-    repo="https://github.com/rudolf1/uber_backup.git",
+    state=sharedState,
     pipeline=[
         clone,
+        sharedState,
         checkoutMerged,
         dockerSwarmCheck,
         unmerge,
