@@ -303,6 +303,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 	except Exception as e:
 		logger.error(f"WebSocket error: {e}")
 		await broadcast_error({'message': 'WebSocket exception'})
+		await websocket.close()
 		ws_connections.pop(websocket, None)
 
 
