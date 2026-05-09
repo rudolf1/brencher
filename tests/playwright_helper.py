@@ -46,6 +46,51 @@ class BrencherPage:
             timeout=10000,
         )
 
+    def verify_pipeline_step_status(self, step_name: str, expected_status: str, timeout_ms: int = 10000) -> None:
+        """
+        Verify that a pipeline step reaches the expected status by polling the page DOM.
+        
+        Args:
+            step_name: Name of the pipeline step (e.g., "DockerContainerDeploy")
+            expected_status: Expected status value ("running", "ok", "error", or "dry-run")
+            timeout_ms: Timeout in milliseconds (default 10000)
+        """
+        # JavaScript to check pipeline step status
+        js_check = """(stepName, expectedStatus) => {
+            const jobItems = document.querySelectorAll('.job-item');
+            for (const item of jobItems) {
+                const headerText = item.querySelector('.job-header')?.textContent || '';
+                if (headerText.includes(stepName)) {
+                    const spinner = item.querySelector('.step-spinner');
+                    const errorIndicator = item.querySelector('span[title="Error"]');
+                    
+                    if (expectedStatus === 'running') {
+                        return spinner !== null;
+                    } else if (expectedStatus === 'ok') {
+                        return spinner === null && errorIndicator === null;
+                    } else if (expectedStatus === 'error') {
+                        return errorIndicator !== null;
+                    } else if (expectedStatus === 'dry-run') {
+                        // For dry-run, check the spoiler content
+                        const spoiler = item.querySelector('.job-spoiler');
+                        if (spoiler && spoiler.style.display !== 'none') {
+                            const statusText = spoiler.textContent;
+                            return statusText.includes('dry-run') || statusText.includes('dry_run');
+                        }
+                        return false;
+                    }
+                }
+            }
+            return false;
+        }"""
+        
+        self._page.wait_for_function(
+            js_check,
+            arg=[step_name, expected_status],
+            timeout=timeout_ms,
+        )
+        self._logger.info(f"Pipeline step '{step_name}' reached status '{expected_status}'")
+
 
 @contextmanager
 def brencher_page(

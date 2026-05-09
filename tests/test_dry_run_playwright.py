@@ -46,44 +46,39 @@ class TestDryRunPlaywright:
         server_thread.start()
 
         # Wait for server to be up
-        eventually(
-            lambda: requests.get(f"{APP_URL}/state", timeout=5).status_code == 200,
-            timeout=20.0,
-            interval=1.0,
-        )
+        eventually(lambda: requests.get(f"{APP_URL}/state", timeout=5).status_code == 200)
         logger.info("Server is up")
 
         # Wait for the pipeline to stabilize with dry=True:
         # DockerContainerDeploy should return status="dry-run"
-        eventually(
-            lambda: _check_state(APP_URL, lambda s: next(
-                p for p in s[ENV_ID]["pipeline"] if p["name"] == "DockerContainerDeploy"
-            )["status"].get("status") == "dry-run"),
-            timeout=10.0,
-            interval=2.0,
-        )
-        logger.info("Pipeline is in dry-run mode")
-
-        # Verify no real container was created
-        docker_client = docker.from_env()
-        real_containers = docker_client.containers.list(filters={"name": CONTAINER_NAME}, all=True)
-        assert len(real_containers) == 0, "Container should NOT exist during dry run"
-
-        # Open browser and disable dry run from the UI.
         with brencher_page(APP_URL) as page:
+            eventually(
+                lambda: _check_state(APP_URL, lambda s: next(
+                    p for p in s[ENV_ID]["pipeline"] if p["name"] == "DockerContainerDeploy"
+                )["status"].get("status") == "dry-run"),
+            )
+
+            # page.verify_pipeline_step_status("DockerContainerDeploy", "dry-run")
+            logger.info("Pipeline is in dry-run mode")
+
+            # Verify no real container was created
+            docker_client = docker.from_env()
+            real_containers = docker_client.containers.list(filters={"name": CONTAINER_NAME}, all=True)
+            assert len(real_containers) == 0, "Container should NOT exist during dry run"
+
+            # Disable dry run from the UI.
             page.verify_dry_run_on()
             page.set_dry_run_off()
             page.verify_dry_run_off()
-            page.click_refresh()
+            page.click_refresh()  # TODO Remove it
 
-        # Wait for pipeline to re-run and actually deploy the container
-        eventually(
-            lambda: _check_state(APP_URL, lambda s: next(
-                p for p in s[ENV_ID]["pipeline"] if p["name"] == "DockerContainerDeploy"
-            )["status"].get("status") == "running"),
-            timeout=10.0,
-            interval=2.0,
-        )
+            # Wait for pipeline to re-run and actually deploy the container
+            eventually(
+                lambda: _check_state(APP_URL, lambda s: next(
+                    p for p in s[ENV_ID]["pipeline"] if p["name"] == "DockerContainerDeploy"
+                )["status"].get("status") == "running"),
+            )
+            # page.verify_pipeline_step_status("DockerContainerDeploy", "running")
         logger.info("Container deployed and running after dry run disabled")
 
         # Final sanity: real container must exist and be running

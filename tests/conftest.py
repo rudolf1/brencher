@@ -27,14 +27,14 @@ class EventuallyFn(Protocol):
 	def __call__(
 			self,
 			assert_fn: Callable[[], bool],
-			timeout: float = 2.0,
-			interval: float = 0.05,
+			timeout: float = 5.0,
+			interval: float = 0.5,
 	) -> None: ...
 
 
 @pytest.fixture
 def eventually() -> EventuallyFn:
-	def _eventually(assert_fn: Callable[[], bool], timeout: float = 2.0, interval: float = 0.05) -> None:
+	def _eventually(assert_fn: Callable[[], bool], timeout: float = 5.0, interval: float = 0.5) -> None:
 		deadline = time.monotonic() + timeout
 		last_error: BaseException | None = None
 		while time.monotonic() < deadline:
