@@ -5,6 +5,7 @@ pytest-asyncio
 playwright
 pytest-playwright
 mypy
+flake8
 ty
 types-PyYAML
 types-requests
