@@ -100,5 +100,6 @@ brencher2 = Environment(
 		deployDocker,
 		checkPing,
 		logUrls
-	]
+	],
+	slave_urls=["http://host.docker.internal:5002"],
 )
