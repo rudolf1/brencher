@@ -32,6 +32,7 @@ class TestDryRunPlaywright:
                 logger.info(f"Container {CONTAINER_NAME} not found, no need to stop/remove")
         stop_and_remove_container()
         yield None
+        stop_and_remove_container()
 
 
     def test_dry_run_prevents_deploy_until_disabled(self, eventually: EventuallyFn) -> None:
