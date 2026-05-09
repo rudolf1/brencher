@@ -8,35 +8,38 @@ import requests
 from app import App
 from .conftest import EventuallyFn, assert_equal, check_state
 from .playwright_helper import brencher_page
-from configs import brencher_local1
+from tests.configs import nginx
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 APP_PORT = 5003
 APP_URL = f"http://localhost:{APP_PORT}"
-ENV_ID = "brencher_local1"
-CONTAINER_NAME = "brencher_plain-container"
+CONTAINER_NAME = "test_plain-container"
 
 class TestDryRunPlaywright:
 
     @pytest.fixture(autouse=True)
     def setup_teardown(self) -> Generator[None, Any, None]:
+        def stop_and_remove_container() -> None:
+            client = docker.from_env()
+            try:
+                container = client.containers.get(CONTAINER_NAME)
+                container.stop(timeout=10)
+                container.remove(force=True)
+                logger.info(f"Container {CONTAINER_NAME} stopped and removed")
+            except Exception:
+                logger.info(f"Container {CONTAINER_NAME} not found, no need to stop/remove")
+        stop_and_remove_container()
         yield None
 
-        client = docker.from_env()
-        containers = client.containers.list(filters={"name": CONTAINER_NAME}, all=True)
-        for container in containers:
-            container.stop(timeout=10)
-            container.remove(force=True)
-            logger.info(f"Container {CONTAINER_NAME} stopped and removed")
 
     def test_dry_run_prevents_deploy_until_disabled(self, eventually: EventuallyFn) -> None:
-        # Start app with brencher_local1 with main branch pre-selected and dry mode on.
-        env = brencher_local1.brencher_local1
-        env.state.set_branches([("main", "HEAD")])
+        # Start app with nginx_local1 with main branch pre-selected and dry mode on.
+        env = nginx.test_local1
+        env.state.set_branches([("test/main", "HEAD")])
         env.state.set_dry(True)
-        app = App({"brencher_local1": env})
+        app = App({env.id: env})
         server_thread = threading.Thread(target=lambda: app.runWeb(APP_PORT), daemon=True)
         server_thread.start()
 
@@ -46,10 +49,10 @@ class TestDryRunPlaywright:
 
         # Wait for the pipeline to stabilize with dry=True:
         # DockerContainerDeploy should return status="dry-run"
-        with brencher_page(APP_URL) as page:
+        with brencher_page(APP_URL, env.id) as page:
             eventually(
                 lambda: check_state(APP_URL, lambda s: assert_equal(next(
-                    p for p in s[ENV_ID]["pipeline"] if p["name"] == "SharedStateHolderInMemory"
+                    p for p in s[env.id]["pipeline"] if p["name"] == "SharedStateHolderInMemory"
                 )["status"]['dry'], True, "Pipeline step status is not 'running'")),
             )
 
@@ -70,12 +73,12 @@ class TestDryRunPlaywright:
             # Wait for pipeline to re-run and actually deploy the container
             eventually(
                 lambda: check_state(APP_URL, lambda s: assert_equal(next(
-                    p for p in s[ENV_ID]["pipeline"] if p["name"] =="SharedStateHolderInMemory"
+                    p for p in s[env.id]["pipeline"] if p["name"] =="SharedStateHolderInMemory"
                 )["status"]['dry'], False, "Pipeline step status is not 'running'")),
             )
             # Wait for pipeline to re-run and actually deploy the container
             eventually(
-                lambda: check_state(APP_URL, lambda s: assert_equal({p["name"] for p in s[ENV_ID]["pipeline"] if bool(p['is_running'])}, set(), "Pipeline still running")),
+                lambda: check_state(APP_URL, lambda s: assert_equal({p["name"] for p in s[env.id]["pipeline"] if bool(p['is_running'])}, set(), "Pipeline still running")),
                 timeout=60,
                 interval=1.0,
             )

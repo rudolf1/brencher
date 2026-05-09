@@ -95,7 +95,7 @@ class BrencherPage:
 @contextmanager
 def brencher_page(
     app_link: str,
-    env_id: str = "brencher_local1",
+    env_id: str,
     action_logger: logging.Logger | None = None,
 ) -> Generator[BrencherPage, None, None]:
     active_logger = action_logger or logger
