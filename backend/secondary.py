@@ -1,8 +1,7 @@
 import asyncio
 import json
 import logging
-import os
-from typing import Any, Awaitable, Callable, Dict, Optional, Iterator
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Iterator
 
 import websockets
 
@@ -14,18 +13,14 @@ class SecondaryConnector:
 	def __init__(
 		self,
 		url: str,
-		on_branches: Callable[[], Awaitable[None]],
-		on_environments: Callable[[], Awaitable[None]],
-		on_error: Callable[[Any], Awaitable[None]],
+		on_update: Callable[[], Awaitable[None]],
 	) -> None:
 		self._url = url
 		self.branches: Dict[str, Any] = {}
 		self.environments: Dict[str, Any] = {}
-		self._send_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
 		self._task: Optional[asyncio.Task[None]] = None
-		self._on_branches = on_branches
-		self._on_environments = on_environments
-		self._on_error = on_error
+		self._on_update = on_update
+		self._ws: Optional[Any] = None
 
 	def start(self) -> None:
 		self._task = asyncio.create_task(self._connect())
@@ -35,10 +30,27 @@ class SecondaryConnector:
 		return self._task is not None and not self._task.done()
 
 	async def send(self, msg: Dict[str, Any]) -> None:
-		await self._send_queue.put(msg)
+
+		payload = json.dumps(msg)
+		max_attempts = 3
+		timeout_seconds = 10.0
+
+		for attempt in range(1, max_attempts + 1):
+			if self._ws:
+				try:
+					await asyncio.wait_for(self._ws.send(payload), timeout=timeout_seconds)
+					return
+				except Exception as e:
+					logger.warning(f"Send attempt {attempt}/{max_attempts} failed for {self._url}: {e}")
+
+			if attempt < max_attempts:
+				await asyncio.sleep(timeout_seconds * attempt)
+
+		logger.error(f"Dropping message for secondary {self._url} after {max_attempts} attempts")
 
 	async def _connect(self) -> None:
 		logger.info(f"Connecting to secondary at {self._url}")
+		reconnect_delay_seconds = 5
 
 		while True:
 			try:
@@ -49,51 +61,53 @@ class SecondaryConnector:
 					+ '/ws'
 				)
 
-				async with websockets.connect(ws_url) as ws:
+				async with websockets.connect(
+					ws_url,
+					ping_interval=20,
+					ping_timeout=20,
+					close_timeout=5,
+				) as ws:
+					self._ws = ws
 					logger.info(f"Connected to secondary WebSocket at {self._url}")
+					reconnect_delay_seconds = 5
 
-					async def handle_messages() -> None:
-						async for msg in ws:
-							parsed = json.loads(msg)
-							if "branches" in parsed:
-								self.branches = parsed["branches"]
-								await self._on_branches()
-							elif "environments" in parsed:
-								self.environments = parsed["environments"]
-								await self._on_environments()
-							elif "error" in parsed:
-								await self._on_error(parsed["error"])
+					async for msg in ws:
+						parsed = json.loads(msg)
+						if "branches" in parsed:
+							self.branches = parsed["branches"]
+							await self._on_update()
+						elif "environments" in parsed:
+							self.environments = parsed["environments"]
+							await self._on_update()
+						elif "error" in parsed:
+							await self._on_update()
 
-					async def handle_sends() -> None:
-						while True:
-							msg = await self._send_queue.get()
-							await ws.send(json.dumps(msg))
 
-					await asyncio.gather(
-						handle_messages(),
-						handle_sends(),
-					)
+			except asyncio.CancelledError:
+				raise
+			except Exception:
+				logger.exception(
+					f"Unexpected secondary connector error for {self._url}. "
+					f"Retrying in {reconnect_delay_seconds}s"
+				)
+			finally:
+				self._ws = None
 
-			except Exception as e:
-				logger.error(f"Could not connect to secondary {self._url}: {e}")
-				await asyncio.sleep(60)
+			await asyncio.sleep(reconnect_delay_seconds)
+			reconnect_delay_seconds = min(reconnect_delay_seconds * 2, 60)
 
 class SecondaryManager():
 	def __init__(self,
 		urls: str,
-		on_branches: Callable[[], Awaitable[None]],
-		on_environments: Callable[[], Awaitable[None]],
-		on_error: Callable[[Any], Awaitable[None]],
+		on_update: Callable[[], Awaitable[None]],
 	) -> None:
-		self.lst = []
+		self.lst: List[SecondaryConnector] = []
 		urls_list = [it.strip() for it in urls.split(",") if it.strip()]
 		logger.info(f"SECONDARY_BRENCHER is {urls_list}")
 		for url in urls_list:
 			connector = SecondaryConnector(
 				url,
-				on_branches=on_branches,
-				on_environments=on_environments,
-				on_error=on_error,
+				on_update=on_update,
 			)
 			connector.start()
 			self.lst.append(connector)
@@ -102,5 +116,4 @@ class SecondaryManager():
 		return iter(self.lst)
 
 	async def send(self, msg: Dict[str, Any]) -> None:
-		for connector in self.lst:
-			await connector.send(msg)
+		await asyncio.gather(*(connector.send(msg) for connector in self.lst), return_exceptions=True)
