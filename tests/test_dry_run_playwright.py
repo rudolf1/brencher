@@ -6,7 +6,7 @@ import docker
 import pytest
 import requests
 from app import App
-from .conftest import EventuallyFn, _check_state, assert_equal
+from .conftest import EventuallyFn, assert_equal, check_state
 from .playwright_helper import brencher_page
 from configs import brencher_local1
 
@@ -48,11 +48,9 @@ class TestDryRunPlaywright:
         # DockerContainerDeploy should return status="dry-run"
         with brencher_page(APP_URL) as page:
             eventually(
-                lambda: _check_state(APP_URL, lambda s: assert_equal(
-                    next(p for p in s[ENV_ID]["pipeline"] if p["name"] == "DockerContainerDeploy")["status"].get('status'), 
-                    "dry-run", 
-                    "Pipeline step status is not 'dry-run'"
-                    )),
+                lambda: check_state(APP_URL, lambda s: assert_equal(next(
+                    p for p in s[ENV_ID]["pipeline"] if p["name"] == "SharedStateHolderInMemory"
+                )["status"]['dry'], True, "Pipeline step status is not 'running'")),
             )
 
             # page.verify_pipeline_step_status("DockerContainerDeploy", "dry-run")
@@ -71,9 +69,15 @@ class TestDryRunPlaywright:
 
             # Wait for pipeline to re-run and actually deploy the container
             eventually(
-                lambda: _check_state(APP_URL, lambda s: assert_equal(next(
-                    p for p in s[ENV_ID]["pipeline"] if p["name"] == "DockerContainerDeploy"
-                )["status"].get('status'), "running", "Pipeline step status is not 'running'")),
+                lambda: check_state(APP_URL, lambda s: assert_equal(next(
+                    p for p in s[ENV_ID]["pipeline"] if p["name"] =="SharedStateHolderInMemory"
+                )["status"]['dry'], False, "Pipeline step status is not 'running'")),
+            )
+            # Wait for pipeline to re-run and actually deploy the container
+            eventually(
+                lambda: check_state(APP_URL, lambda s: assert_equal({p["name"] for p in s[ENV_ID]["pipeline"] if bool(p['is_running'])}, set(), "Pipeline still running")),
+                timeout=60,
+                interval=1.0,
             )
             # page.verify_pipeline_step_status("DockerContainerDeploy", "running")
         logger.info("Container deployed and running after dry run disabled")

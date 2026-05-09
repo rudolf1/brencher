@@ -38,7 +38,7 @@ def assert_equal(a: T, b:T, message: str) -> None:
     if a != b:
         raise AssertionError(f"{message}: {a} != {b}")
     
-def _check_state(url: str, predicate: Callable[[Any], None]) -> None:
+def check_state(url: str, predicate: Callable[[Any], None]) -> None:
     response = requests.get(f"{url}/state", timeout=5)
     assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
     state_data = response.json()
