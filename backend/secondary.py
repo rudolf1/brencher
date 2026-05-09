@@ -86,9 +86,9 @@ class SecondaryManager():
 		on_error: Callable[[Any], Awaitable[None]],
 	) -> None:
 		self.lst = []
-		SECONDARY_BRENCHER = urls.split(",")
-		logger.info(f"SECONDARY_BRENCHER is {SECONDARY_BRENCHER}")
-		for url in SECONDARY_BRENCHER:
+		urls_list = [it.strip() for it in urls.split(",") if it.strip()]
+		logger.info(f"SECONDARY_BRENCHER is {urls_list}")
+		for url in urls_list:
 			connector = SecondaryConnector(
 				url,
 				on_branches=on_branches,
