@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse
 
 from enironment import Environment, wrap_in_cached, SharedStateHolder, SharedStateConflictError, SharedState, get_step
 from processing import reset_caches
-from slave import SlaveConnector
+from secondary import SecondaryManager
 from steps.git import GitClone
 from steps.step import CachingStep
 
@@ -67,8 +67,6 @@ ws_connections: Dict[WebSocket, Dict[str, Any]] = {}
 # Event loop reference for thread-safe async calls
 _event_loop: Optional[asyncio.AbstractEventLoop] = None
 
-# Slave connection
-slave_connectors: List[SlaveConnector] = []
 
 environment_update_event = threading.Event()
 
@@ -168,12 +166,12 @@ def get_global_envs_to_emit() -> Any:
 	global environments
 	local_envs = get_local_envs_to_emit()
 	merged: Dict[str, Any] = local_envs
-	for connector in slave_connectors:
-		slave_envs = connector.environments
-		common_keys = set(merged.keys()) & set(slave_envs.keys())
+	for connector in secondaryManager or []:
+		v = connector.environments
+		common_keys = set(merged.keys()) & set(v.keys())
 		if len(common_keys) > 0:
-			_schedule_async(broadcast_error({'message': f"Conflict: both master and slave have environment with id {common_keys}"}))
-		merged = merge_dicts(merged, slave_envs)
+			_schedule_async(broadcast_error({'message': f"Conflict: both master and secondary have environment with id {common_keys}"}))
+		merged = merge_dicts(merged, v)
 	return merged
 
 
@@ -197,7 +195,7 @@ def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 def get_global_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 	local_branches: Dict[str, Dict[str, List[Any]]] = get_local_branches_to_emit()
 	merged: Dict[str, Dict[str, List[Any]]] = local_branches
-	for connector in slave_connectors:
+	for connector in secondaryManager or []:
 		merged = merge_dicts(merged, connector.branches)
 	return merged
 
@@ -229,6 +227,10 @@ async def broadcast(event: str, data: Any) -> None:
 
 	for ws in disconnected:
 		ws_connections.pop(ws, None)
+
+async def broadcast_all() -> None:
+	await broadcast("branches", get_global_branches_to_emit())
+	await broadcast("environments", get_global_envs_to_emit())
 
 
 async def broadcast_branches(data: Any) -> None:
@@ -266,47 +268,42 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 			if "update" in message:
 				update_data = message.get("update") or {}
 				logger.info(f"Received environment update: {update_data}")
-
-				if update_data.get('id') == '':
+				if secondaryManager:
+					await secondaryManager.send({"update": update_data})
+				id = update_data.get('id', '')
+				if id == '':
 					reset_caches(list(environments.values()))
-				else:
-					env = environments[update_data.get('id', '')]
-					branches_update: List[Tuple[str, str]] | None = update_data.get('branches')
+				elif id not in environments.keys() and id not in { j for it in secondaryManager or [] for j in it.environments.keys()}:
+					logger.warning(f"Received update for unknown environment id {id}")
+					continue
+				elif id in environments.keys():
+					env = environments.get(id, None)
 					expected_token = update_data.get('token', '')
-					if branches_update:
+					if 'branches' in update_data:
 						if not env:
 							raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
-						try:
-							env.state.set_branches(branches_update, expected_token=expected_token)
-						except SharedStateConflictError as conflict:
-							await broadcast_error({
-								"code": "BRANCH_STATE_CONFLICT",
-								"message": "Branch state changed, refresh and retry",
-								"envId": env.id,
-							})
-							continue
+						env.state.set_branches(update_data.get('branches', []), expected_token=expected_token)
 					if 'dry' in update_data:
 						if not env:
 							raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
 						env.state.set_dry(bool(update_data['dry']), expected_token)
-					p = get_step(env.pipeline, type(env.state))
-					if isinstance(p, CachingStep):
-						p.reset()
-					logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={update_data.get('dry')}")
-				environment_update_event.set()
 
-				if slave_connectors:
-					for connector in slave_connectors:
-						await connector.send({"update": update_data})
+					if env:
+						p = get_step(env.pipeline, type(env.state))
+						if isinstance(p, CachingStep):
+							p.reset()
+						logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={update_data.get('dry')}")
+				environment_update_event.set()
 
 				await broadcast_environments(get_global_envs_to_emit())
 
 	except WebSocketDisconnect as e:
 		ws_connections.pop(websocket, None)
 	except Exception as e:
-		logger.error(f"WebSocket error: {e}")
-		await broadcast_error({'message': 'WebSocket exception'})
-		ws_connections.pop(websocket, None)
+		logger.error(f"WebSocket error: {e}:{traceback.format_exc()}")
+		await broadcast_error({'message': f'{e}:{traceback.format_exc()}'})
+		# await websocket.close()
+		# ws_connections.pop(websocket, None)
 
 
 # --- SIGCHLD Handler ---
@@ -324,24 +321,16 @@ def sigchld_handler(signum: int, frame: Any) -> None:
 
 # --- Startup Event ---
 
+secondaryManager: Optional[SecondaryManager] = None
+
 @app.on_event("startup")
 async def startup_event() -> None:
-	global _event_loop, slave_connectors
+	global _event_loop, secondaryManager
 	_event_loop = asyncio.get_event_loop()
-	seen_urls: set[str] = set()
-	for env in environments.values():
-		for url in env.slave_urls:
-			if url in seen_urls:
-				continue
-			seen_urls.add(url)
-			connector = SlaveConnector(
-				url,
-				on_branches=lambda: broadcast_branches(get_global_branches_to_emit()),
-				on_environments=lambda: broadcast_environments(get_global_envs_to_emit()),
-				on_error=broadcast_error,
-			)
-			connector.start()
-			slave_connectors.append(connector)
+	secondaryManager = SecondaryManager(
+		urls = os.getenv("SECONDARY_BRENCHER", ""),
+		on_update=lambda: broadcast_all(),
+	)
 
 
 # --- App Class (used by CLI and integration tests) ---

@@ -65,6 +65,5 @@ brencher_local2 = Environment(
 		dockerSwarmCheck,
 		deployDocker,
 		unmerge
-	],
-	slave_urls=["http://host.docker.internal:5002"],
+	]
 )
