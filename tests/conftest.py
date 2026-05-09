@@ -36,15 +36,15 @@ class EventuallyFn(Protocol):
 def eventually() -> EventuallyFn:
 	def _eventually(assert_fn: Callable[[], bool], timeout: float = 2.0, interval: float = 0.05) -> None:
 		deadline = time.monotonic() + timeout
-		last_error = None
+		last_error: BaseException | None = None
 		while time.monotonic() < deadline:
 			try:
-				res = assert_fn()
-				if res:
+				if assert_fn():
 					return
-			except AssertionError as err:
+				last_error = None
+			except Exception as err:
 				last_error = err
-				time.sleep(interval)
+			time.sleep(interval)
 
 		raise AssertionError(f"Condition not met within {timeout:.2f}s") from last_error
 
