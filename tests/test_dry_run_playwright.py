@@ -59,7 +59,7 @@ class TestDryRunPlaywright:
             lambda: _check_state(APP_URL, lambda s: next(
                 p for p in s[ENV_ID]["pipeline"] if p["name"] == "DockerContainerDeploy"
             )["status"].get("status") == "dry-run"),
-            timeout=120.0,
+            timeout=10.0,
             interval=2.0,
         )
         logger.info("Pipeline is in dry-run mode")
@@ -81,8 +81,8 @@ class TestDryRunPlaywright:
             lambda: _check_state(APP_URL, lambda s: next(
                 p for p in s[ENV_ID]["pipeline"] if p["name"] == "DockerContainerDeploy"
             )["status"].get("status") == "running"),
-            timeout=300.0,
-            interval=5.0,
+            timeout=10.0,
+            interval=2.0,
         )
         logger.info("Container deployed and running after dry run disabled")
 
