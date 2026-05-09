@@ -272,7 +272,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 				elif id not in environments.keys() and id not in { j for it in secondaryManager or [] for j in it.environments.keys()}:
 					logger.warning(f"Received update for unknown environment id {id}")
 					continue
-				elif id not in environments.keys():
+				elif id in environments.keys():
 					env = environments.get(id, None)
 					expected_token = update_data.get('token', '')
 					if 'branches' in update_data:
