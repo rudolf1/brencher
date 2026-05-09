@@ -76,8 +76,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
           playwright install --with-deps chromium
-      - name: Show Docker version
-        run: docker --version
       - name: Run checker
         run: "pytest"
 

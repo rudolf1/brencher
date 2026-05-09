@@ -9,7 +9,7 @@ import pytest
 import requests
 from app import App
 from configs import brencher_local1
-from .conftest import EventuallyFn
+from .conftest import EventuallyFn, assert_equal
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ class TestDockerContainer:
 		# await asyncio.sleep(5000)
 
 		eventually(
-			lambda: requests.get("http://localhost:5001/state", timeout=5000).status_code == 200,
+			lambda: assert_equal(requests.get("http://localhost:5001/state", timeout=5000).status_code, 200, "Server did not respond with 200 OK within timeout"),
 			20.0,
 			1.0,
 		)

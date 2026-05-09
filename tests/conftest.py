@@ -4,9 +4,10 @@ Pytest configuration and shared fixtures for integration tests.
 This file configures the Python path to allow importing backend modules
 and provides shared fixtures for all tests.
 """
-from typing import Generator, Callable, Protocol
+from typing import Any, Generator, Callable, Protocol, TypeVar
 
 import pytest
+import requests
 
 from tests.test_remote_repo import RemoteRepoHelper
 
@@ -26,22 +27,35 @@ import pytest
 class EventuallyFn(Protocol):
 	def __call__(
 			self,
-			assert_fn: Callable[[], bool],
+			assert_fn: Callable[[], None],
 			timeout: float = 5.0,
 			interval: float = 0.5,
 	) -> None: ...
 
+T = TypeVar('T')
+
+def assert_equal(a: T, b:T, message: str) -> None:
+    if a != b:
+        raise AssertionError(f"{message}: {a} != {b}")
+    
+def _check_state(url: str, predicate: Callable[[Any], None]) -> None:
+    response = requests.get(f"{url}/state", timeout=5)
+    assert response.status_code == 200, f"Expected status code 200, got {response.status_code}"
+    state_data = response.json()
+    try:
+        predicate(state_data)
+    except Exception as e:
+        raise AssertionError(f"Predicate check failed with error: {e}\nState data: {state_data}") from e
 
 @pytest.fixture
 def eventually() -> EventuallyFn:
-	def _eventually(assert_fn: Callable[[], bool], timeout: float = 5.0, interval: float = 0.5) -> None:
+	def _eventually(assert_fn: Callable[[], None], timeout: float = 5.0, interval: float = 0.5) -> None:
 		deadline = time.monotonic() + timeout
 		last_error: BaseException | None = None
 		while time.monotonic() < deadline:
 			try:
-				if assert_fn():
-					return
-				last_error = None
+				assert_fn()
+				return
 			except Exception as err:
 				last_error = err
 			time.sleep(interval)
