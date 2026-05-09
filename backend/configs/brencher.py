@@ -43,7 +43,11 @@ deployDocker = DockerSwarmDeploy(
 		"services": {
 			"brencher-backend": {
 				"environment": {
-					"SECONDARY_BRENCHER": "http://host.docker.internal:5002"
+					"PYTHONUNBUFFERED": "1",
+					"VIRTUAL_HOST": "brencher.rudolf.keenetic.link",
+					"LETSENCRYPT_HOST": "brencher.rudolf.keenetic.link",
+					"PROFILES": "brencher2,torrserv_proxy,immich,registry,gmail_mcp",
+					"SECONDARY_BRENCHER": "http://host.docker.internal:5002",
 				},
 			}
 		}
