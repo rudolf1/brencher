@@ -1,24 +1,24 @@
 import asyncio
 import json
 import logging
-from typing import Any, Awaitable, Callable, Dict, Optional
+import os
+from typing import Any, Awaitable, Callable, Dict, Optional, Iterator
 
 import websockets
 
 logger = logging.getLogger(__name__)
 
 
-class SlaveConnector:
-	"""Manages the WebSocket connection to a slave brencher instance."""
+class SecondaryConnector:
 
 	def __init__(
 		self,
-		slave_url: str,
+		url: str,
 		on_branches: Callable[[], Awaitable[None]],
 		on_environments: Callable[[], Awaitable[None]],
 		on_error: Callable[[Any], Awaitable[None]],
 	) -> None:
-		self._slave_url = slave_url
+		self._url = url
 		self.branches: Dict[str, Any] = {}
 		self.environments: Dict[str, Any] = {}
 		self._send_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
@@ -28,7 +28,6 @@ class SlaveConnector:
 		self._on_error = on_error
 
 	def start(self) -> None:
-		"""Start the background task that maintains the slave WebSocket connection."""
 		self._task = asyncio.create_task(self._connect())
 
 	@property
@@ -36,24 +35,22 @@ class SlaveConnector:
 		return self._task is not None and not self._task.done()
 
 	async def send(self, msg: Dict[str, Any]) -> None:
-		"""Enqueue a message to be forwarded to the slave."""
 		await self._send_queue.put(msg)
 
 	async def _connect(self) -> None:
-		"""Continuously connect (and reconnect) to the slave WebSocket."""
-		logger.info(f"SLAVE_BRENCHER set, will connect to slave at {self._slave_url}")
+		logger.info(f"Connecting to secondary at {self._url}")
 
 		while True:
 			try:
 				ws_url = (
-					self._slave_url
+					self._url
 					.replace('http://', 'ws://')
 					.replace('https://', 'wss://')
 					+ '/ws'
 				)
 
 				async with websockets.connect(ws_url) as ws:
-					logger.info("Connected to slave WebSocket")
+					logger.info(f"Connected to secondary WebSocket at {self._url}")
 
 					async def handle_messages() -> None:
 						async for msg in ws:
@@ -78,5 +75,28 @@ class SlaveConnector:
 					)
 
 			except Exception as e:
-				logger.error(f"Could not connect to SLAVE_BRENCHER {self._slave_url}: {e}")
+				logger.error(f"Could not connect to secondary {self._url}: {e}")
 				await asyncio.sleep(60)
+
+class SecondaryManager():
+	def __init__(self,
+		urls: str,
+		on_branches: Callable[[], Awaitable[None]],
+		on_environments: Callable[[], Awaitable[None]],
+		on_error: Callable[[Any], Awaitable[None]],
+	) -> None:
+		self.lst = []
+		SECONDARY_BRENCHER = urls.split(",")
+		logger.info(f"SECONDARY_BRENCHER is {SECONDARY_BRENCHER}")
+		for url in SECONDARY_BRENCHER:
+			connector = SecondaryConnector(
+				url,
+				on_branches=on_branches,
+				on_environments=on_environments,
+				on_error=on_error,
+			)
+			connector.start()
+			self.lst.append(connector)
+	
+	def __iter__(self) -> Iterator[SecondaryConnector]:
+		return iter(self.lst)

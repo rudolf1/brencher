@@ -40,6 +40,13 @@ deployDocker = DockerSwarmDeploy(
 	stackChecker=dockerSwarmCheck,
 	envs=lambda: {
 		"version": "auto-" + checkoutMerged.progress().version,
+		"services": {
+			"brencher-backend": {
+				"environment": {
+					"SECONDARY_BRENCHER": "http://host.docker.internal:5002"
+				},
+			}
+		}
 	},
 	stack_name="brencher",
 	docker_compose_path="docker-compose.yml",
