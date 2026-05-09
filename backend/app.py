@@ -9,7 +9,6 @@ import traceback
 from dataclasses import asdict, replace
 from typing import Any, Dict, List, Optional, TypeVar, Tuple
 
-import websockets
 from dotenv import load_dotenv
 from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +16,7 @@ from fastapi.responses import FileResponse
 
 from enironment import Environment, wrap_in_cached, SharedStateHolder, SharedStateConflictError, SharedState, get_step
 from processing import reset_caches
+from slave import SlaveConnector
 from steps.git import GitClone
 from steps.step import CachingStep
 
@@ -59,8 +59,6 @@ FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
 
 # In-memory state
 environments: Dict[str, Environment] = {}
-environments_slaves: Dict[str, Any] = {}
-branches_slaves: Dict[str, Dict[str, Any]] = {}
 state_lock = threading.Lock()
 
 # Active WebSocket connections
@@ -69,10 +67,9 @@ ws_connections: Dict[WebSocket, Dict[str, Any]] = {}
 # Event loop reference for thread-safe async calls
 _event_loop: Optional[asyncio.AbstractEventLoop] = None
 
-# Slave connection state
-slave_ws_task: Optional[asyncio.Task[None]] = None
-slave_send_queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+# Slave connection
 slave_url = os.getenv('SLAVE_BRENCHER')
+slave_connector: Optional[SlaveConnector] = None
 
 environment_update_event = threading.Event()
 
@@ -169,10 +166,11 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 
 
 def get_global_envs_to_emit() -> Any:
-	global environments, environments_slaves
+	global environments
 	local_envs = get_local_envs_to_emit()
-	merge_result = merge_dicts(local_envs, environments_slaves)
-	common_keys = set(local_envs.keys()) & set(environments_slaves.keys())
+	slave_envs = slave_connector.environments if slave_connector is not None else {}
+	merge_result = merge_dicts(local_envs, slave_envs)
+	common_keys = set(local_envs.keys()) & set(slave_envs.keys())
 	if len(common_keys) > 0:
 		_schedule_async(broadcast_error({'message': f"Conflict: both master and slave have environment with id {common_keys}"}))
 	return merge_result
@@ -196,9 +194,9 @@ def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 
 
 def get_global_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
-	global branches_slaves
 	local_branches: Dict[str, Dict[str, List[Any]]] = get_local_branches_to_emit()
-	return merge_dicts(local_branches, branches_slaves)
+	slave_branches = slave_connector.branches if slave_connector is not None else {}
+	return merge_dicts(local_branches, slave_branches)
 
 
 # --- Async Helper for Calling from Sync Threads ---
@@ -294,8 +292,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 					logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={update_data.get('dry')}")
 				environment_update_event.set()
 
-				if slave_ws_task is not None:
-					await slave_send_queue.put({"update": update_data})
+				if slave_connector is not None:
+					await slave_connector.send({"update": update_data})
 
 				await broadcast_environments(get_global_envs_to_emit())
 
@@ -305,52 +303,6 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 		logger.error(f"WebSocket error: {e}")
 		await broadcast_error({'message': 'WebSocket exception'})
 		ws_connections.pop(websocket, None)
-
-
-# --- Slave Connection ---
-
-async def connect_to_slave() -> None:
-	"""Connect to a slave brencher instance via a single WebSocket."""
-	global branches_slaves, environments_slaves
-
-	if not slave_url:
-		return
-
-	logger.info(f"SLAVE_BRENCHER set, will connect to slave at {slave_url}")
-
-	while True:
-		try:
-			ws_url = slave_url.replace('http://', 'ws://').replace('https://', 'wss://') + '/ws'
-
-			async with websockets.connect(ws_url) as ws:
-				logger.info("Connected to slave WebSocket")
-
-				async def handle_messages() -> None:
-					global branches_slaves, environments_slaves
-					async for msg in ws:
-						parsed = json.loads(msg)
-						if "branches" in parsed:
-							branches_slaves = parsed["branches"]
-							await broadcast_branches(get_global_branches_to_emit())
-						elif "environments" in parsed:
-							environments_slaves = parsed["environments"]
-							await broadcast_environments(get_global_envs_to_emit())
-						elif "error" in parsed:
-							await broadcast_error(parsed["error"])
-
-				async def handle_sends() -> None:
-					while True:
-						msg = await slave_send_queue.get()
-						await ws.send(json.dumps(msg))
-
-				await asyncio.gather(
-					handle_messages(),
-					handle_sends(),
-				)
-
-		except Exception as e:
-			logger.error(f"Could not connect to SLAVE_BRENCHER {slave_url}: {e}")
-			await asyncio.sleep(60)
 
 
 # --- SIGCHLD Handler ---
@@ -370,10 +322,16 @@ def sigchld_handler(signum: int, frame: Any) -> None:
 
 @app.on_event("startup")
 async def startup_event() -> None:
-	global _event_loop, slave_ws_task
+	global _event_loop, slave_connector
 	_event_loop = asyncio.get_event_loop()
 	if slave_url:
-		slave_ws_task = asyncio.create_task(connect_to_slave())
+		slave_connector = SlaveConnector(
+			slave_url,
+			on_branches=lambda: broadcast_branches(get_global_branches_to_emit()),
+			on_environments=lambda: broadcast_environments(get_global_envs_to_emit()),
+			on_error=broadcast_error,
+		)
+		slave_connector.start()
 
 
 # --- App Class (used by CLI and integration tests) ---
