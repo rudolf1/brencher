@@ -268,7 +268,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 				if update_data.get('id') == '':
 					reset_caches(list(environments.values()))
 				else:
-					env = environments[update_data.get('id', '')]
+					env = environments.get(update_data.get('id', ''), None)
 					branches_update: List[Tuple[str, str]] | None = update_data.get('branches')
 					expected_token = update_data.get('token', '')
 					if branches_update:
@@ -287,10 +287,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 						if not env:
 							raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
 						env.state.set_dry(bool(update_data['dry']), expected_token)
-					p = get_step(env.pipeline, type(env.state))
-					if isinstance(p, CachingStep):
-						p.reset()
-					logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={update_data.get('dry')}")
+
+					if env:
+						p = get_step(env.pipeline, type(env.state))
+						if isinstance(p, CachingStep):
+							p.reset()
+						logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={update_data.get('dry')}")
 				environment_update_event.set()
 
 				for connector in secondaryManager or []:
