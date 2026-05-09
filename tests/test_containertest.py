@@ -8,6 +8,7 @@ import docker
 import pytest
 import requests
 from app import App
+from configs import brencher_local1
 from .conftest import EventuallyFn
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -34,7 +35,7 @@ class TestDockerContainer:
 	async def test_start(self, eventually: EventuallyFn) -> None:
 		logger.info(f"Starting")
 
-		app = App(cli_env_ids_str="brencher_local1")
+		app = App({"brencher_local1": brencher_local1.brencher_local1})
 		# app.runWeb(5001)
 		processing = threading.Thread(target=lambda: app.runWeb(5001), daemon=True)
 		processing.start()

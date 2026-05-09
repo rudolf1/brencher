@@ -8,6 +8,7 @@ import requests
 from playwright.sync_api import Page, sync_playwright
 from app import App
 from .conftest import EventuallyFn
+from configs import brencher_local1
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ class TestDryRunPlaywright:
     def test_dry_run_prevents_deploy_until_disabled(self, eventually: EventuallyFn) -> None:
         # Start app with brencher_local1 with main branch pre-selected.
         # App starts with dry=True by default (SharedStateHolderInMemory default).
-        app = App(cli_env_ids_str=f"{ENV_ID}:main")
+        app = App({"brencher_local1": brencher_local1.brencher_local1})
         server_thread = threading.Thread(target=lambda: app.runWeb(APP_PORT), daemon=True)
         server_thread.start()
 
