@@ -301,10 +301,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 	except WebSocketDisconnect as e:
 		ws_connections.pop(websocket, None)
 	except Exception as e:
-		logger.error(f"WebSocket error: {e}")
-		await broadcast_error({'message': 'WebSocket exception'})
-		await websocket.close()
-		ws_connections.pop(websocket, None)
+		logger.error(f"WebSocket error: {e}:{traceback.format_exc()}")
+		await broadcast_error({'message': f'WebSocket exception {e}:{traceback.format_exc()}'})
+		# await websocket.close()
+		# ws_connections.pop(websocket, None)
 
 
 # --- SIGCHLD Handler ---
