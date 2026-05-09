@@ -228,6 +228,10 @@ async def broadcast(event: str, data: Any) -> None:
 	for ws in disconnected:
 		ws_connections.pop(ws, None)
 
+async def broadcast_all() -> None:
+	await broadcast("branches", get_global_branches_to_emit())
+	await broadcast("environments", get_global_envs_to_emit())
+
 
 async def broadcast_branches(data: Any) -> None:
 	await broadcast("branches", data)
@@ -325,9 +329,7 @@ async def startup_event() -> None:
 	_event_loop = asyncio.get_event_loop()
 	secondaryManager = SecondaryManager(
 		urls = os.getenv("SECONDARY_BRENCHER", ""),
-		on_branches=lambda: broadcast_branches(get_global_branches_to_emit()),
-		on_environments=lambda: broadcast_environments(get_global_envs_to_emit()),
-		on_error=broadcast_error,
+		on_update=lambda: broadcast_all(),
 	)
 
 
