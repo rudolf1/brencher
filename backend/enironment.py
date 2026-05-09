@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, runtime_checkable, Protocol, Tuple, TypeAlias, Any
 from typing import TypeVar
 
@@ -16,6 +16,7 @@ class Environment:
 	id: str
 	state: SharedStateHolder
 	pipeline: List[AbstractStep]
+	slave_urls: List[str] = field(default_factory=list)
 
 	def __post_init__(self) -> None:
 		for p in self.pipeline:

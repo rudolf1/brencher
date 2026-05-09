@@ -68,8 +68,7 @@ ws_connections: Dict[WebSocket, Dict[str, Any]] = {}
 _event_loop: Optional[asyncio.AbstractEventLoop] = None
 
 # Slave connection
-slave_url = os.getenv('SLAVE_BRENCHER')
-slave_connector: Optional[SlaveConnector] = None
+slave_connectors: List[SlaveConnector] = []
 
 environment_update_event = threading.Event()
 
@@ -168,12 +167,14 @@ def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
 def get_global_envs_to_emit() -> Any:
 	global environments
 	local_envs = get_local_envs_to_emit()
-	slave_envs = slave_connector.environments if slave_connector is not None else {}
-	merge_result = merge_dicts(local_envs, slave_envs)
-	common_keys = set(local_envs.keys()) & set(slave_envs.keys())
-	if len(common_keys) > 0:
-		_schedule_async(broadcast_error({'message': f"Conflict: both master and slave have environment with id {common_keys}"}))
-	return merge_result
+	merged: Dict[str, Any] = local_envs
+	for connector in slave_connectors:
+		slave_envs = connector.environments
+		common_keys = set(merged.keys()) & set(slave_envs.keys())
+		if len(common_keys) > 0:
+			_schedule_async(broadcast_error({'message': f"Conflict: both master and slave have environment with id {common_keys}"}))
+		merged = merge_dicts(merged, slave_envs)
+	return merged
 
 
 
@@ -195,8 +196,10 @@ def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 
 def get_global_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
 	local_branches: Dict[str, Dict[str, List[Any]]] = get_local_branches_to_emit()
-	slave_branches = slave_connector.branches if slave_connector is not None else {}
-	return merge_dicts(local_branches, slave_branches)
+	merged: Dict[str, Dict[str, List[Any]]] = local_branches
+	for connector in slave_connectors:
+		merged = merge_dicts(merged, connector.branches)
+	return merged
 
 
 # --- Async Helper for Calling from Sync Threads ---
@@ -292,8 +295,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 					logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={update_data.get('dry')}")
 				environment_update_event.set()
 
-				if slave_connector is not None:
-					await slave_connector.send({"update": update_data})
+				if slave_connectors:
+					for connector in slave_connectors:
+						await connector.send({"update": update_data})
 
 				await broadcast_environments(get_global_envs_to_emit())
 
@@ -322,16 +326,22 @@ def sigchld_handler(signum: int, frame: Any) -> None:
 
 @app.on_event("startup")
 async def startup_event() -> None:
-	global _event_loop, slave_connector
+	global _event_loop, slave_connectors
 	_event_loop = asyncio.get_event_loop()
-	if slave_url:
-		slave_connector = SlaveConnector(
-			slave_url,
-			on_branches=lambda: broadcast_branches(get_global_branches_to_emit()),
-			on_environments=lambda: broadcast_environments(get_global_envs_to_emit()),
-			on_error=broadcast_error,
-		)
-		slave_connector.start()
+	seen_urls: set[str] = set()
+	for env in environments.values():
+		for url in env.slave_urls:
+			if url in seen_urls:
+				continue
+			seen_urls.add(url)
+			connector = SlaveConnector(
+				url,
+				on_branches=lambda: broadcast_branches(get_global_branches_to_emit()),
+				on_environments=lambda: broadcast_environments(get_global_envs_to_emit()),
+				on_error=broadcast_error,
+			)
+			connector.start()
+			slave_connectors.append(connector)
 
 
 # --- App Class (used by CLI and integration tests) ---
