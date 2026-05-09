@@ -264,6 +264,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 			if "update" in message:
 				update_data = message.get("update") or {}
 				logger.info(f"Received environment update: {update_data}")
+				if secondaryManager:
+					await secondaryManager.send({"update": update_data})
 				id = update_data.get('id', '')
 				if id == '':
 					reset_caches(list(environments.values()))
@@ -288,9 +290,6 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 							p.reset()
 						logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={update_data.get('dry')}")
 				environment_update_event.set()
-
-				for connector in secondaryManager or []:
-					await connector.send({"update": update_data})
 
 				await broadcast_environments(get_global_envs_to_emit())
 
