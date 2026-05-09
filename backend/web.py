@@ -48,7 +48,8 @@ class WebApp:
 
 		self.ws_connections: Dict[WebSocket, Dict[str, Any]] = {}
 		self._event_loop: Optional[asyncio.AbstractEventLoop] = None
-
+		self.secondaryManager: Optional[SecondaryManager] = None
+		
 		@asynccontextmanager
 		async def lifespan(fastapi_app: FastAPI) -> AsyncIterator[None]:
 			self._event_loop = asyncio.get_event_loop()
