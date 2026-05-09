@@ -264,25 +264,19 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 			if "update" in message:
 				update_data = message.get("update") or {}
 				logger.info(f"Received environment update: {update_data}")
-
-				if update_data.get('id') == '':
+				id = update_data.get('id', '')
+				if id == '':
 					reset_caches(list(environments.values()))
+				elif id not in environments.keys() and id not in { j for it in secondaryManager or [] for j in it.environments.keys()}:
+					logger.warning(f"Received update for unknown environment id {id}")
+					continue
 				else:
-					env = environments.get(update_data.get('id', ''), None)
-					branches_update: List[Tuple[str, str]] | None = update_data.get('branches')
+					env = environments.get(id, None)
 					expected_token = update_data.get('token', '')
-					if branches_update:
+					if 'branches' in update_data:
 						if not env:
 							raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
-						try:
-							env.state.set_branches(branches_update, expected_token=expected_token)
-						except SharedStateConflictError as conflict:
-							await broadcast_error({
-								"code": "BRANCH_STATE_CONFLICT",
-								"message": "Branch state changed, refresh and retry",
-								"envId": env.id,
-							})
-							continue
+						env.state.set_branches(update_data.get('branches', []), expected_token=expected_token)
 					if 'dry' in update_data:
 						if not env:
 							raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
@@ -304,7 +298,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 		ws_connections.pop(websocket, None)
 	except Exception as e:
 		logger.error(f"WebSocket error: {e}:{traceback.format_exc()}")
-		await broadcast_error({'message': f'WebSocket exception {e}:{traceback.format_exc()}'})
+		await broadcast_error({'message': f'{e}:{traceback.format_exc()}'})
 		# await websocket.close()
 		# ws_connections.pop(websocket, None)
 

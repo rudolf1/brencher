@@ -100,3 +100,7 @@ class SecondaryManager():
 	
 	def __iter__(self) -> Iterator[SecondaryConnector]:
 		return iter(self.lst)
+
+	async def send(self, msg: Dict[str, Any]) -> None:
+		for connector in self.lst:
+			await connector.send(msg)
