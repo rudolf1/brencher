@@ -1,5 +1,7 @@
 import logging
 import threading
+import time
+import socket
 from typing import Any, Callable, Generator, TypeVar
 
 import docker
@@ -17,10 +19,32 @@ APP_PORT = 5003
 APP_URL = f"http://localhost:{APP_PORT}"
 CONTAINER_NAME = "test_plain-container"
 
+# Module-level reference to server thread to ensure proper cleanup
+_server_thread: threading.Thread | None = None
+
+
+def _is_port_free(port: int, timeout: float = 5.0) -> bool:
+    """Check if a port is available for binding."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            result = sock.connect_ex(('127.0.0.1', port))
+            sock.close()
+            if result != 0:
+                return True
+        except Exception:
+            return True
+        time.sleep(0.1)
+    return False
+
 class TestDryRunPlaywright:
 
     @pytest.fixture(autouse=True)
     def setup_teardown(self) -> Generator[None, Any, None]:
+        global _server_thread
+        
         def stop_and_remove_container() -> None:
             client = docker.from_env()
             try:
@@ -30,19 +54,35 @@ class TestDryRunPlaywright:
                 logger.info(f"Container {CONTAINER_NAME} stopped and removed")
             except Exception:
                 logger.info(f"Container {CONTAINER_NAME} not found, no need to stop/remove")
+        
+        # Ensure port is free before starting
+        _is_port_free(APP_PORT, timeout=5.0)
+        
         stop_and_remove_container()
         yield None
+        
+        # Clean up server thread
+        if _server_thread and _server_thread.is_alive():
+            _server_thread.join(timeout=2.0)
+            logger.info("Waited for server thread to finish")
+        
+        # Ensure port is free after test
+        _is_port_free(APP_PORT, timeout=5.0)
+        
         stop_and_remove_container()
+        _server_thread = None
 
 
     def test_dry_run_prevents_deploy_until_disabled(self, eventually: EventuallyFn) -> None:
+        global _server_thread
+        
         # Start app with nginx_local1 with main branch pre-selected and dry mode on.
         env = nginx.test_local1
         env.state.set_branches([("test/main", "HEAD")])
         env.state.set_dry(True)
         app = App({env.id: env})
-        server_thread = threading.Thread(target=lambda: app.runWeb(APP_PORT), daemon=True)
-        server_thread.start()
+        _server_thread = threading.Thread(target=lambda: app.runWeb(APP_PORT), daemon=True)
+        _server_thread.start()
 
         # Wait for server to be up
         eventually(lambda: assert_equal(requests.get(f"{APP_URL}/state", timeout=5).status_code, 200, "Server did not respond with 200 OK within timeout"))
