@@ -71,6 +71,10 @@ class DockerImageBuild(AbstractStep[DockerImageBuildResult]):
 		if len(existing_image) > 0 and not self.nocache:
 			logger.info(f"Image {full_image} already exists locally with ID: {existing_image}")
 			build_logs: List[str] = []
+		elif self.env.dry:
+			logger.info(f"DRY RUN: Would build image {full_image}")
+			raise BaseException(f"Dry run - skipping actual build for {full_image}")
+
 		else:
 			# Build the image
 			build_logs = []

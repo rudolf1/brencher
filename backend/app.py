@@ -1,22 +1,16 @@
-import asyncio
-import json
 import logging
 import os
 import signal
 import sys
 import threading
 import traceback
-from dataclasses import asdict, replace
-from typing import Any, Dict, List, Optional, TypeVar, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
+from discover_envs import build_environments, parse_arguments
+from utils import sigchld_handler
 from dotenv import load_dotenv
-from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 
-from enironment import Environment, wrap_in_cached, SharedStateHolder, SharedStateConflictError, SharedState, get_step
-from processing import reset_caches
-from secondary import SecondaryManager
+from enironment import Environment, wrap_in_cached, SharedStateHolder, get_step
 from steps.git import GitClone
 from steps.step import CachingStep
 
@@ -29,403 +23,100 @@ load_dotenv("local.env")
 load_dotenv('/run/secrets/brencher-secrets')
 
 
-class DataclassJSONEncoder(json.JSONEncoder):
-	def default(self, o: Any) -> Any:
-		if hasattr(o, '__dataclass_fields__'):
-			return asdict(o)
-		if isinstance(o, BaseException):
-			return str(o)
-		try:
-			return super().default(o)
-		except TypeError:
-			return str(o)
+class App:
 
+	def __init__(self, environments: Dict[str, Environment]) -> None:
+		self.environments: Dict[str, Environment] = {id: wrap_in_cached(e) for id, e in environments.items()}
+		self.state_lock = threading.Lock()
+		self.environment_update_event = threading.Event()
+		self.emit_callback: Optional[Callable[[], None]] = None
 
-def custom_json_dumps(obj: Any) -> str:
-	return json.dumps(obj, cls=DataclassJSONEncoder)
+	def get_local_envs_to_emit(self) -> Dict[str, Dict[str, Any]]:
+		env_dtos: Dict[str, Dict[str, Any]] = {}
+		for env in self.environments.values():
+			pipeline_state: List[Dict[str, Any]] = []
+			for r in env.pipeline:
+				try:
+					if isinstance(r, CachingStep):
+						result = r._result
+					else:
+						result = r.progress()
 
-
-app = FastAPI()
-
-app.add_middleware(
-	CORSMiddleware,
-	allow_origins=["*"],
-	allow_credentials=True,
-	allow_methods=["*"],
-	allow_headers=["*"],
-)
-
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '../frontend')
-
-# In-memory state
-environments: Dict[str, Environment] = {}
-state_lock = threading.Lock()
-
-# Active WebSocket connections
-ws_connections: Dict[WebSocket, Dict[str, Any]] = {}
-
-# Event loop reference for thread-safe async calls
-_event_loop: Optional[asyncio.AbstractEventLoop] = None
-
-
-environment_update_event = threading.Event()
-
-
-# --- Static File Serving ---
-
-@app.get("/")
-async def serve_index() -> FileResponse:
-	return FileResponse(os.path.join(FRONTEND_DIR, 'index.html'))
-
-
-@app.get("/state")
-async def serve_state() -> Response:
-	return Response(content=custom_json_dumps(get_global_envs_to_emit()), media_type="application/json")
-
-
-@app.get("/branches")
-async def serve_branches_route() -> Response:
-	return Response(content=custom_json_dumps(get_global_branches_to_emit()), media_type="application/json")
-
-
-@app.get("/{path:path}")
-async def serve_static(path: str) -> FileResponse:
-	file_path = os.path.join(FRONTEND_DIR, path)
-	if os.path.exists(file_path) and os.path.isfile(file_path):
-		return FileResponse(file_path)
-	return FileResponse(os.path.join(FRONTEND_DIR, 'index.html'))
-
-
-# --- Utility Functions ---
-
-T = TypeVar('T')
-
-
-def merge_dicts(a: Dict[str, T], b: Dict[str, T]) -> Dict[str, T]:
-	result: Dict[str, T] = {}
-	for k in (a.keys() | b.keys()):
-		if k not in a or k not in b:
-			result[k] = a.get(k, b.get(k))  # type: ignore[assignment]
-			continue
-		if (
-				isinstance(a[k], dict)
-				and isinstance(b[k], dict)
-		):
-			result[k] = merge_dicts(a[k], b[k])  # type: ignore[arg-type,assignment]
-		else:
-			result[k] = b[k]
-	return result
-
-
-def get_local_envs_to_emit() -> Dict[str, Dict[str, Any]]:
-	env_dtos: Dict[str, Dict[str, Any]] = {}
-	for env in environments.values():
-		pipeline_state: List[Dict[str, Any]] = []
-		for r in env.pipeline:
-			try:
-				if isinstance(r, CachingStep):
-					result = r._result
-				else:
-					result = r.progress()
-
-				if isinstance(result, BaseException):
-					stack = traceback.format_exception(type(result), result, result.__traceback__)
+					if isinstance(result, BaseException):
+						stack = traceback.format_exception(type(result), result, result.__traceback__)
+						pipeline_state.append({
+							"name": r.name,
+							"status": [str(result), stack],
+							"error": True,
+							"is_running": True,
+						})
+					else:
+						pipeline_state.append({
+							"name": r.name,
+							"status": result,
+							"is_running": False,
+						})
+				except BaseException as e:
+					stack = traceback.format_exception(type(e), e, e.__traceback__)
 					pipeline_state.append({
 						"name": r.name,
-						"status": [str(result), stack],
+						"status": [str(e), stack],
 						"error": True,
 						"is_running": True,
 					})
-				else:
-					pipeline_state.append({
-						"name": r.name,
-						"status": result,
-						"is_running": False,
-					})
+			env_dtos[env.id] = {'id': env.id }
+			env_dtos[env.id]['pipeline'] = pipeline_state
+			try:
+				shared_state = env.state.progress()
+				env_dtos[env.id]['branches'] = shared_state.branches
+				env_dtos[env.id]['branches_token'] = shared_state.token
+				env_dtos[env.id]['dry'] = shared_state.dry
+			except BaseException:
+				pass
+		return env_dtos
+
+	def get_local_branches_to_emit(self) -> Dict[str, Dict[str, List[Any]]]:
+		branches: Dict[str, Dict[str, List[Any]]] = {}
+		for k, env in self.environments.items():
+			branches[k] = {}
+			try:
+				step = get_step(env.pipeline, GitClone)
+				branches[k] = {**step.get_branches()}
 			except BaseException as e:
 				stack = traceback.format_exception(type(e), e, e.__traceback__)
-				pipeline_state.append({
-					"name": r.name,
-					"status": [str(e), stack],
-					"error": True,
-					"is_running": True,
-				})
-		env_dtos[env.id] = {'id': env.id }
-		env_dtos[env.id]['pipeline'] = pipeline_state
-		try:
-			shared_state = env.state.progress()
-			env_dtos[env.id]['branches'] = shared_state.branches
-			env_dtos[env.id]['branches_token'] = shared_state.token
-			env_dtos[env.id]['dry'] = shared_state.dry
-		except BaseException:
-			pass
-	return env_dtos
+				logger.error(f"Error fetching branches for environment {env.id}: {str(e)}\n{''.join(stack)}")
 
-
-def get_global_envs_to_emit() -> Any:
-	global environments
-	local_envs = get_local_envs_to_emit()
-	merged: Dict[str, Any] = local_envs
-	for connector in secondaryManager or []:
-		v = connector.environments
-		common_keys = set(merged.keys()) & set(v.keys())
-		if len(common_keys) > 0:
-			_schedule_async(broadcast_error({'message': f"Conflict: both master and secondary have environment with id {common_keys}"}))
-		merged = merge_dicts(merged, v)
-	return merged
-
-
-
-def get_local_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
-	global environments
-	branches: Dict[str, Dict[str, List[Any]]] = {}
-	for k, env in environments.items():
-		branches[k] = {}
-		try:
-			step = get_step(env.pipeline, GitClone)
-			branches[k] = {**step.get_branches()}
-		except BaseException as e:
-			stack = traceback.format_exception(type(e), e, e.__traceback__)
-			logger.error(f"Error fetching branches for environment {env.id}: {str(e)}\n{''.join(stack)}")
-
-	return branches
-
-
-
-def get_global_branches_to_emit() -> Dict[str, Dict[str, List[Any]]]:
-	local_branches: Dict[str, Dict[str, List[Any]]] = get_local_branches_to_emit()
-	merged: Dict[str, Dict[str, List[Any]]] = local_branches
-	for connector in secondaryManager or []:
-		merged = merge_dicts(merged, connector.branches)
-	return merged
-
-
-# --- Async Helper for Calling from Sync Threads ---
-
-def _schedule_async(coro: Any) -> None:
-	"""Schedule a coroutine from a sync thread using the saved event loop."""
-	if _event_loop is not None and _event_loop.is_running():
-		asyncio.run_coroutine_threadsafe(coro, _event_loop)
-
-
-# --- WebSocket Broadcasting Functions ---
-
-async def broadcast(event: str, data: Any) -> None:
-	"""Broadcast a message to all connected WebSocket clients that have not seen this data yet."""
-	disconnected = set()
-	message = custom_json_dumps({event: data})
-
-	for websocket in ws_connections.keys():
-		if ws_connections[websocket].get(event) == message:
-			continue
-		try:
-			await websocket.send_text(message)
-			ws_connections[websocket][event] = message
-		except Exception as e:
-			logger.error(f"Error sending to websocket: {e}")
-			disconnected.add(websocket)
-
-	for ws in disconnected:
-		ws_connections.pop(ws, None)
-
-async def broadcast_all() -> None:
-	await broadcast("branches", get_global_branches_to_emit())
-	await broadcast("environments", get_global_envs_to_emit())
-
-
-async def broadcast_branches(data: Any) -> None:
-	await broadcast("branches", data)
-
-
-async def broadcast_environments(data: Any) -> None:
-	await broadcast("environments", data)
-
-
-async def broadcast_error(data: Any) -> None:
-	await broadcast("error", data)
-
-
-# --- Single WebSocket Endpoint ---
-
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket) -> None:
-	await websocket.accept()
-	ws_connections[websocket] = {}
-
-	try:
-		# Send initial state on connect and record it so duplicate broadcasts are suppressed
-		branches_payload = custom_json_dumps({"branches": get_global_branches_to_emit()})
-		envs_payload = custom_json_dumps({"environments": get_global_envs_to_emit()})
-		await websocket.send_text(branches_payload)
-		ws_connections[websocket]["branches"] = branches_payload
-		await websocket.send_text(envs_payload)
-		ws_connections[websocket]["environments"] = envs_payload
-
-		while True:
-			data = await websocket.receive_text()
-			message = json.loads(data)
-
-			if "update" in message:
-				update_data = message.get("update") or {}
-				logger.info(f"Received environment update: {update_data}")
-				if secondaryManager:
-					await secondaryManager.send({"update": update_data})
-				id = update_data.get('id', '')
-				if id == '':
-					reset_caches(list(environments.values()))
-				elif id not in environments.keys() and id not in { j for it in secondaryManager or [] for j in it.environments.keys()}:
-					logger.warning(f"Received update for unknown environment id {id}")
-					continue
-				elif id in environments.keys():
-					env = environments.get(id, None)
-					expected_token = update_data.get('token', '')
-					if 'branches' in update_data:
-						if not env:
-							raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
-						env.state.set_branches(update_data.get('branches', []), expected_token=expected_token)
-					if 'dry' in update_data:
-						if not env:
-							raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
-						env.state.set_dry(bool(update_data['dry']), expected_token)
-
-					if env:
-						p = get_step(env.pipeline, type(env.state))
-						if isinstance(p, CachingStep):
-							p.reset()
-						logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={update_data.get('dry')}")
-				environment_update_event.set()
-
-				await broadcast_environments(get_global_envs_to_emit())
-
-	except WebSocketDisconnect as e:
-		ws_connections.pop(websocket, None)
-	except Exception as e:
-		logger.error(f"WebSocket error: {e}:{traceback.format_exc()}")
-		await broadcast_error({'message': f'{e}:{traceback.format_exc()}'})
-		# await websocket.close()
-		# ws_connections.pop(websocket, None)
-
-
-# --- SIGCHLD Handler ---
-
-def sigchld_handler(signum: int, frame: Any) -> None:
-	"""Reap zombie processes."""
-	while True:
-		try:
-			pid, status = os.waitpid(-1, os.WNOHANG)
-			if pid == 0:
-				break
-		except ChildProcessError:
-			break
-
-
-# --- Startup Event ---
-
-secondaryManager: Optional[SecondaryManager] = None
-
-@app.on_event("startup")
-async def startup_event() -> None:
-	global _event_loop, secondaryManager
-	_event_loop = asyncio.get_event_loop()
-	secondaryManager = SecondaryManager(
-		urls = os.getenv("SECONDARY_BRENCHER", ""),
-		on_update=lambda: broadcast_all(),
-	)
-
-
-# --- App Class (used by CLI and integration tests) ---
-
-class App:
-
-	def __init__(self, cli_env_ids_str: str, dry_run: bool = False) -> None:
-		global environments
-		signal.signal(signal.SIGCHLD, sigchld_handler)
-
-		import configs.brencher
-		import configs.brencher2
-		import configs.brencher_local2
-		import configs.brencher_local1
-		import configs.torrserv_proxy
-		import configs.immich
-		import configs.registry
-		import configs.gmail_mcp
-		environments_l: List[Environment] = [
-			configs.brencher.brencher,
-			configs.brencher2.brencher2,
-			configs.brencher_local2.brencher_local2,
-			configs.brencher_local1.brencher_local1,
-			configs.torrserv_proxy.torrserv_proxy,
-			configs.immich.immich,
-			configs.registry.registry,
-			configs.gmail_mcp.gmail_mcp,
-		]
-		environments = {e.id: e for e in environments_l}
-
-		logger.info(f"cli_env_ids {cli_env_ids_str}")
-		if len(cli_env_ids_str) > 0 and cli_env_ids_str[0] == '-':
-			cli_env_ids = cli_env_ids_str[1:].split(',')
-			cli_env_ids = [x for x in cli_env_ids if len(x) > 0]
-			logger.info(f"cli_env_ids (minus) {cli_env_ids}")
-			if cli_env_ids and len(cli_env_ids) > 0:
-				environments = {k: e for k, e in environments.items() if k not in cli_env_ids}
-		else:
-			cli_env_pairs = {x[0]: x[1] if len(x) > 1 else None for x in [x.split(":")
-			                                                              for x in cli_env_ids_str.split(',')
-			                                                              if len(x) > 0
-			                                                              ]
-			                 }
-			logger.info(f"cli_env_ids {cli_env_pairs}")
-			if cli_env_pairs and len(cli_env_pairs) > 0:
-				environments = {k: e for k, e in environments.items() if k in cli_env_pairs.keys()}
-				for k, v in cli_env_pairs.items():
-					if v is not None:
-						if k in environments:
-							env = environments[k]
-							for step in env.pipeline:
-								resolve_step = step
-								if isinstance(step, CachingStep):
-									resolve_step = step._step
-								if isinstance(resolve_step, SharedStateHolder):
-									resolve_step.set_branches([(v, 'HEAD')])
-							logger.info(f"Overriding environment {k} branches to {(v, 'HEAD')}")
-						else:
-							logger.warning(f"Environment {k} not found to override branches")
-					else:
-						logger.info(f"No branch override for environment {k}")
-		if dry_run:
-			for id, e in environments.items():
-				e.state.set_dry(True)
-
-		logger.info(f"Resulting profiles {environments.keys()}")
-
-		environments = {id: wrap_in_cached(e) for id, e in environments.items()}
+		return branches
 
 	def processing_thread(self) -> None:
 		while True:
 			import processing
 
-			def emit_envs() -> None:
-				_schedule_async(broadcast_branches(get_global_branches_to_emit()))
-				_schedule_async(broadcast_environments(get_global_envs_to_emit()))
+			emit = self.emit_callback or (lambda: None)
 
-			with state_lock:
+			with self.state_lock:
 				logger.info(f"Processing")
-				if processing.process_all_jobs(list(environments.values()), lambda: emit_envs()):
-					environment_update_event.wait(timeout=1 * 5)
+				if processing.process_all_jobs(list(self.environments.values()), emit):
+					self.environment_update_event.wait(timeout=1 * 5)
 				else:
-					environment_update_event.wait(timeout=1 * 60)
-				environment_update_event.clear()
+					self.environment_update_event.wait(timeout=1 * 60)
+				self.environment_update_event.clear()
 
 	def run(self) -> None:
 		processing = threading.Thread(target=self.processing_thread)
 		processing.daemon = True
 		processing.start()
 
-	def runWeb(self, port: int) -> None:
-		self.run()
-		import uvicorn
-		uvicorn.run(app, host='0.0.0.0', port=port, log_level='info')
+	def runHeadless(self) -> None:
+		"""Run the processing loop on the current thread; blocks forever."""
+		self.processing_thread()
 
+	def runWeb(self, port: int) -> None:
+		import web
+		web_app = web.WebApp(core=self, port=port)
+		self.emit_callback = web_app.emit_envs
+		self.run()
+		web_app.start()
 
 if __name__ == '__main__':
 	cli_env_ids_list = sys.argv[1:]
@@ -435,5 +126,15 @@ if __name__ == '__main__':
 	else:
 		cli_env_ids_str = cli_env_ids_list[0]
 
-	app1 = App(cli_env_ids_str, 'dry' in sys.argv[1:])
-	app1.runWeb(port=(5007 if 'noweb' in sys.argv[1:] else 5001))
+	signal.signal(signal.SIGCHLD, sigchld_handler)
+	environments = build_environments(cli_env_ids_str)
+	if 'dry' in sys.argv[1:]:
+		for e in environments.values():
+			e.state.set_dry(True)
+
+	app1 = App(environments)
+
+	if 'noweb' in sys.argv[1:]:
+		app1.runHeadless()
+	else:
+		app1.runWeb(5001)
