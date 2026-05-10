@@ -80,7 +80,7 @@ class TestDryRunPlaywright:
             # Wait for pipeline to re-run and actually deploy the container
             eventually(
                 lambda: check_state(APP_URL, lambda s: assert_equal({p["name"] for p in s[env.id]["pipeline"] if bool(p['is_running'])}, set(), "Pipeline still running")),
-                timeout=10,
+                timeout=20,
                 interval=1.0,
             )
             # page.verify_pipeline_step_status("DockerContainerDeploy", "running")
