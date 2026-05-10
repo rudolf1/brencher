@@ -137,9 +137,20 @@ function escapeHtml(str) {
 }
 
 let renderedBranches = []
+let renderedDryRunState = {}
+let renderedColumnsSignature = ''
+
+function getColumnsSignature() {
+    return JSON.stringify(columnsByEnv);
+}
 
 function renderBranches() {
-    if (JSON.stringify(filteredBranches) === JSON.stringify(renderedBranches) && JSON.stringify(dryRunByEnv) === JSON.stringify(renderedDryRunState)) {
+    const columnsSignature = getColumnsSignature();
+    if (
+        JSON.stringify(filteredBranches) === JSON.stringify(renderedBranches) &&
+        JSON.stringify(dryRunByEnv) === JSON.stringify(renderedDryRunState) &&
+        columnsSignature === renderedColumnsSignature
+    ) {
         return
     }
     checkForPendingChanges();
@@ -252,8 +263,9 @@ function renderBranches() {
             filterBranches();
         };
     });
-    renderedBranches = filteredBranches;
+    renderedBranches = [...filteredBranches];
     renderedDryRunState = {...dryRunByEnv};
+    renderedColumnsSignature = columnsSignature;
 }
 
 function updateBranchCommit(envId, branch, commit) {
@@ -470,9 +482,13 @@ function setupWebSockets() {
                 if (message.error && message.error.code === 'BRANCH_STATE_CONFLICT' && message.error.envId) {
                     const envId = message.error.envId;
                     const current = message.error.current_state || {};
+                    const hadLocalSelection = Object.prototype.hasOwnProperty.call(selectedBranchesByEnv, envId);
                     if (Array.isArray(current.branches)) {
-                        selectedBranchesByEnv[envId] = [...current.branches];
                         serverSelectedBranchesByEnv[envId] = [...current.branches];
+                        // Preserve the user's pending edits if they already changed selection locally.
+                        if (!hadLocalSelection) {
+                            selectedBranchesByEnv[envId] = [...current.branches];
+                        }
                     }
                     if (typeof current.token === 'string') {
                         serverTokenByEnv[envId] = current.token;
@@ -503,6 +519,8 @@ function updateEnvironment() {
         if (JSON.stringify(localSel) !== JSON.stringify(serverSel)) {
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ update: { id: envId, branches: selectedBranchesByEnv[envId], token: serverTokenByEnv[envId] } }));
+                // Keep pending-state tracking aligned with what we just submitted.
+                serverSelectedBranchesByEnv[envId] = [...(selectedBranchesByEnv[envId] || [])];
             }
             branchFilter.value = '';
         }
