@@ -79,11 +79,8 @@ class TestDryRunPlaywright:
 
                 # Wait for the real container to be created and started.
                 eventually(
-                    lambda: assert_equal(
-                        {container.status for container in docker_client.containers.list(filters={"name": CONTAINER_NAME}, all=True)},
-                        {"running"},
-                        "Container should exist and be running after deploy",
-                    ),
+                    lambda: _assert_container_running(docker_client),
+                    # Allow time for a cold image build and first container start on CI runners.
                     timeout=180,
                     interval=5.0,
                 )
@@ -99,3 +96,9 @@ class TestDryRunPlaywright:
             server_thread.join(timeout=30)
             if server_thread.is_alive():
                 logger.warning("App server thread did not stop within 30 seconds")
+
+
+def _assert_container_running(docker_client: docker.DockerClient) -> None:
+    containers = docker_client.containers.list(filters={"name": CONTAINER_NAME}, all=True)
+    assert len(containers) > 0, "Container should exist after deploy"
+    assert_equal({container.status for container in containers}, {"running"}, "Container should be running after deploy")

@@ -7,14 +7,21 @@ from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.shared_state import SharedStateHolderInMemory
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CURRENT_BRANCH = subprocess.check_output(
-	["git", "-C", str(REPO_ROOT), "rev-parse", "--abbrev-ref", "HEAD"],
-	text=True,
-).strip()
-CURRENT_COMMIT = subprocess.check_output(
-	["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
-	text=True,
-).strip()
+
+
+def _git_output(*args: str) -> str:
+	try:
+		return subprocess.check_output(
+			["git", "-C", str(REPO_ROOT), *args],
+			text=True,
+			stderr=subprocess.STDOUT,
+		).strip()
+	except subprocess.CalledProcessError as exc:
+		raise RuntimeError(f"Unable to read git metadata for nginx test config: {' '.join(args)}\n{exc.output}") from exc
+
+
+CURRENT_BRANCH = _git_output("rev-parse", "--abbrev-ref", "HEAD")
+CURRENT_COMMIT = _git_output("rev-parse", "HEAD")
 
 clone = GitClone(url="https://github.com/rudolf1/brencher.git")
 
