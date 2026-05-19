@@ -235,6 +235,6 @@ class WebApp:
 		if self._server is None:
 			return
 		if self._event_loop is not None and self._event_loop.is_running():
-			self._event_loop.call_soon_threadsafe(setattr, self._server, "should_exit", True)
+			self._event_loop.call_soon_threadsafe(lambda: setattr(self._server, "should_exit", True))
 		else:
 			self._server.should_exit = True

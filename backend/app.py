@@ -111,7 +111,7 @@ class App:
 			timeout = 5 if has_error else 60
 			try:
 				await asyncio.wait_for(self.environment_update_event.wait(), timeout=timeout)
-			except TimeoutError:
+			except asyncio.TimeoutError:
 				pass
 			self.environment_update_event.clear()
 
@@ -149,6 +149,7 @@ class App:
 		self.web_app = web_app
 		self.emit_callback = web_app.emit_envs
 		try:
+			# Keep processing and web serving coupled so shutdown or fatal failure tears down the whole app.
 			async with asyncio.TaskGroup() as task_group:
 				task_group.create_task(self.processing_loop())
 				task_group.create_task(self._run_web_server(web_app))
