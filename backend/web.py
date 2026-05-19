@@ -11,11 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app import App
-from enironment import get_step
 from utils import custom_json_dumps
-from processing import reset_caches
 from secondary import SecondaryManager
-from steps.step import CachingStep
 
 logger = logging.getLogger(__name__)
 
@@ -48,11 +45,12 @@ class WebApp:
 
 		self.ws_connections: Dict[WebSocket, Dict[str, Any]] = {}
 		self._event_loop: Optional[asyncio.AbstractEventLoop] = None
+		self._server: Any = None
 		self.secondaryManager: Optional[SecondaryManager] = None
 		
 		@asynccontextmanager
 		async def lifespan(fastapi_app: FastAPI) -> AsyncIterator[None]:
-			self._event_loop = asyncio.get_event_loop()
+			self._event_loop = asyncio.get_running_loop()
 			self.secondaryManager = SecondaryManager(
 				urls=os.getenv("SECONDARY_BRENCHER", ""),
 				on_update=lambda: self.broadcast_all(),
@@ -94,10 +92,19 @@ class WebApp:
 			merged = _merge_dicts(merged, connector.branches)
 		return merged
 
-	# --- Async scheduling from sync threads ---
+	# --- Async scheduling from sync callbacks ---
 
 	def _schedule_async(self, coro: Any) -> None:
-		if self._event_loop is not None and self._event_loop.is_running():
+		if self._event_loop is None or not self._event_loop.is_running():
+			coro.close()
+			return
+		try:
+			running_loop = asyncio.get_running_loop()
+		except RuntimeError:
+			running_loop = None
+		if running_loop is self._event_loop:
+			self._event_loop.create_task(coro)
+		else:
 			asyncio.run_coroutine_threadsafe(coro, self._event_loop)
 
 	# --- Broadcasting ---
@@ -134,7 +141,7 @@ class WebApp:
 		await self.broadcast("error", data)
 
 	def emit_envs(self) -> None:
-		"""Sync callback used by App's processing thread to push updates to clients."""
+		"""Sync callback used by App's processing loop to push updates to clients."""
 		self._schedule_async(self.broadcast_branches(self.get_global_branches_to_emit()))
 		self._schedule_async(self.broadcast_environments(self.get_global_envs_to_emit()))
 
@@ -179,7 +186,7 @@ class WebApp:
 						await self.secondaryManager.send({"update": update_data})
 					id = update_data.get('id', '')
 					if id == '':
-						reset_caches(list(self.core.environments.values()))
+						self.core.request_reset()
 					elif id not in self.core.environments.keys() and id not in {j for it in self.secondaryManager or [] for j in it.environments.keys()}:
 						logger.warning(f"Received update for unknown environment id {id}")
 						continue
@@ -196,11 +203,9 @@ class WebApp:
 							env.state.set_dry(bool(update_data['dry']), expected_token)
 
 						if env:
-							p = get_step(env.pipeline, type(env.state))
-							if isinstance(p, CachingStep):
-								p.reset()
+							self.core.request_reset()
 							logger.info(f"Updated environment {env.id} branches to {update_data.get('branches')}, dry={update_data.get('dry')}")
-					self.core.environment_update_event.set()
+					self.core.notify_environment_update()
 
 					await self.broadcast_environments(self.get_global_envs_to_emit())
 
@@ -212,6 +217,23 @@ class WebApp:
 
 	# --- Run ---
 
-	def start(self) -> None:
+	async def start_async(self) -> None:
 		import uvicorn
-		uvicorn.run(self.app, host='0.0.0.0', port=self.port, log_level='info')
+		config = uvicorn.Config(self.app, host='0.0.0.0', port=self.port, log_level='info')
+		self._server = uvicorn.Server(config)
+		try:
+			await self._server.serve()
+		except asyncio.CancelledError:
+			self._server.should_exit = True
+			raise
+
+	def start(self) -> None:
+		asyncio.run(self.start_async())
+
+	def stop(self) -> None:
+		if self._server is None:
+			return
+		if self._event_loop is not None and self._event_loop.is_running():
+			self._event_loop.call_soon_threadsafe(setattr, self._server, "should_exit", True)
+		else:
+			self._server.should_exit = True
