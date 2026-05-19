@@ -105,6 +105,7 @@ class App:
 			has_error = await asyncio.to_thread(processing.process_all_jobs, list(self.environments.values()), emit)
 			if self.shutdown_event.is_set():
 				return
+			# Skip the wait when a newer update arrived while the current processing pass was running.
 			if self.environment_update_version != update_version:
 				continue
 			timeout = 5 if has_error else 60
@@ -138,6 +139,7 @@ class App:
 		asyncio.run(self.runHeadlessAsync())
 
 	async def _run_web_server(self, web_app: Any) -> None:
+		"""Raise a sentinel exception when the server stops so TaskGroup cancels processing."""
 		await web_app.start_async()
 		raise _WebServerStopped()
 

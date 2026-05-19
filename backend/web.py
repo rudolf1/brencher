@@ -96,6 +96,7 @@ class WebApp:
 
 	def _schedule_async(self, coro: Any) -> None:
 		if self._event_loop is None or not self._event_loop.is_running():
+			logger.warning("Dropping scheduled coroutine because the web event loop is not running")
 			coro.close()
 			return
 		try:

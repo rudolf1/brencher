@@ -1,9 +1,11 @@
 import asyncio
 import sys
 import types
+from typing import Callable
 
 import pytest
 
+from enironment import Environment
 import processing
 from app import App
 
@@ -17,10 +19,10 @@ class TestAppAsyncio:
 		loop = asyncio.get_running_loop()
 		web_app_args: dict[str, object] = {}
 
-		def fake_process_all_jobs(environments: object, onupdate: object) -> bool:
+		def fake_process_all_jobs(environments: list[Environment], onupdate: Callable[[], None]) -> bool:
 			nonlocal process_calls
 			process_calls += 1
-			assert callable(onupdate)
+			assert environments == []
 			onupdate()
 			loop.call_soon_threadsafe(processing_started.set)
 			return False

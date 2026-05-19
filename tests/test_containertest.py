@@ -59,6 +59,7 @@ class TestDockerContainer:
 			processing.cancel()
 			with suppress(asyncio.CancelledError):
 				await processing
+			assert processing.cancelled()
 
 # TODO Verify DockerContainerDeploy step status is running and has correct image and ports
 # {
