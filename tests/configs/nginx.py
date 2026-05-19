@@ -1,7 +1,20 @@
+import subprocess
+from pathlib import Path
+
 from enironment import Environment
 from steps.docker_plain import DockerImageBuild, DockerContainerCheck, DockerContainerDeploy
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.shared_state import SharedStateHolderInMemory
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CURRENT_BRANCH = subprocess.check_output(
+	["git", "-C", str(REPO_ROOT), "rev-parse", "--abbrev-ref", "HEAD"],
+	text=True,
+).strip()
+CURRENT_COMMIT = subprocess.check_output(
+	["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
+	text=True,
+).strip()
 
 clone = GitClone(url="https://github.com/rudolf1/brencher.git")
 

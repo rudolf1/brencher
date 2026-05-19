@@ -38,7 +38,7 @@ class TestDryRunPlaywright:
     def test_dry_run_prevents_deploy_until_disabled(self, eventually: EventuallyFn) -> None:
         # Start app with nginx_local1 with main branch pre-selected and dry mode on.
         env = nginx.test_local1
-        env.state.set_branches([("test/main", "HEAD")])
+        env.state.set_branches([(nginx.CURRENT_BRANCH, nginx.CURRENT_COMMIT)])
         env.state.set_dry(True)
         app = App({env.id: env})
         server_thread = threading.Thread(target=lambda: app.runWeb(APP_PORT), daemon=True)
@@ -69,7 +69,6 @@ class TestDryRunPlaywright:
                 page.verify_dry_run_on()
                 page.set_dry_run_off()
                 page.verify_dry_run_off()
-                page.click_refresh()  # TODO Remove it
 
                 # Wait for pipeline to re-run and actually deploy the container
                 eventually(
@@ -77,11 +76,16 @@ class TestDryRunPlaywright:
                         p for p in s[env.id]["pipeline"] if p["name"] =="SharedStateHolderInMemory"
                     )["status"]['dry'], False, "Pipeline step status is not 'running'")),
                 )
-                # Wait for pipeline to re-run and actually deploy the container
+
+                # Wait for the real container to be created and started.
                 eventually(
-                    lambda: check_state(APP_URL, lambda s: assert_equal({p["name"] for p in s[env.id]["pipeline"] if bool(p['is_running'])}, set(), "Pipeline still running")),
-                    timeout=20,
-                    interval=1.0,
+                    lambda: assert_equal(
+                        {container.status for container in docker_client.containers.list(filters={"name": CONTAINER_NAME}, all=True)},
+                        {"running"},
+                        "Container should exist and be running after deploy",
+                    ),
+                    timeout=180,
+                    interval=5.0,
                 )
                 # page.verify_pipeline_step_status("DockerContainerDeploy", "running")
             logger.info("Container deployed and running after dry run disabled")
@@ -92,4 +96,6 @@ class TestDryRunPlaywright:
             assert containers[0].status == "running"
         finally:
             app.stop()
-            server_thread.join(timeout=10)
+            server_thread.join(timeout=30)
+            if server_thread.is_alive():
+                logger.warning("App server thread did not stop within 30 seconds")
