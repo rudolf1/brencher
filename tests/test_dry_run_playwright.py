@@ -38,55 +38,67 @@ class TestDryRunPlaywright:
     def test_dry_run_prevents_deploy_until_disabled(self, eventually: EventuallyFn) -> None:
         # Start app with nginx_local1 with main branch pre-selected and dry mode on.
         env = nginx.test_local1
-        env.state.set_branches([("test/main", "HEAD")])
+        env.state.set_branches([(nginx.CURRENT_BRANCH, nginx.CURRENT_COMMIT)])
         env.state.set_dry(True)
         app = App({env.id: env})
         server_thread = threading.Thread(target=lambda: app.runWeb(APP_PORT), daemon=True)
         server_thread.start()
+        try:
+            # Wait for server to be up
+            eventually(lambda: assert_equal(requests.get(f"{APP_URL}/state", timeout=5).status_code, 200, "Server did not respond with 200 OK within timeout"))
+            logger.info("Server is up")
 
-        # Wait for server to be up
-        eventually(lambda: assert_equal(requests.get(f"{APP_URL}/state", timeout=5).status_code, 200, "Server did not respond with 200 OK within timeout"))
-        logger.info("Server is up")
+            # Wait for the pipeline to stabilize with dry=True:
+            # DockerContainerDeploy should return status="dry-run"
+            with brencher_page(APP_URL, env.id) as page:
+                eventually(
+                    lambda: check_state(APP_URL, lambda s: assert_equal(next(
+                        p for p in s[env.id]["pipeline"] if p["name"] == "SharedStateHolderInMemory"
+                    )["status"]['dry'], True, "Pipeline step status is not 'running'")),
+                )
 
-        # Wait for the pipeline to stabilize with dry=True:
-        # DockerContainerDeploy should return status="dry-run"
-        with brencher_page(APP_URL, env.id) as page:
-            eventually(
-                lambda: check_state(APP_URL, lambda s: assert_equal(next(
-                    p for p in s[env.id]["pipeline"] if p["name"] == "SharedStateHolderInMemory"
-                )["status"]['dry'], True, "Pipeline step status is not 'running'")),
-            )
+                # page.verify_pipeline_step_status("DockerContainerDeploy", "dry-run")
+                logger.info("Pipeline is in dry-run mode")
 
-            # page.verify_pipeline_step_status("DockerContainerDeploy", "dry-run")
-            logger.info("Pipeline is in dry-run mode")
+                # Verify no real container was created
+                docker_client = docker.from_env()
+                real_containers = docker_client.containers.list(filters={"name": CONTAINER_NAME}, all=True)
+                assert len(real_containers) == 0, "Container should NOT exist during dry run"
 
-            # Verify no real container was created
-            docker_client = docker.from_env()
-            real_containers = docker_client.containers.list(filters={"name": CONTAINER_NAME}, all=True)
-            assert len(real_containers) == 0, "Container should NOT exist during dry run"
+                # Disable dry run from the UI.
+                page.verify_dry_run_on()
+                page.set_dry_run_off()
+                page.verify_dry_run_off()
 
-            # Disable dry run from the UI.
-            page.verify_dry_run_on()
-            page.set_dry_run_off()
-            page.verify_dry_run_off()
-            page.click_refresh()  # TODO Remove it
+                # Wait for pipeline to re-run and actually deploy the container
+                eventually(
+                    lambda: check_state(APP_URL, lambda s: assert_equal(next(
+                        p for p in s[env.id]["pipeline"] if p["name"] =="SharedStateHolderInMemory"
+                    )["status"]['dry'], False, "Pipeline step status is not 'running'")),
+                )
 
-            # Wait for pipeline to re-run and actually deploy the container
-            eventually(
-                lambda: check_state(APP_URL, lambda s: assert_equal(next(
-                    p for p in s[env.id]["pipeline"] if p["name"] =="SharedStateHolderInMemory"
-                )["status"]['dry'], False, "Pipeline step status is not 'running'")),
-            )
-            # Wait for pipeline to re-run and actually deploy the container
-            eventually(
-                lambda: check_state(APP_URL, lambda s: assert_equal({p["name"] for p in s[env.id]["pipeline"] if bool(p['is_running'])}, set(), "Pipeline still running")),
-                timeout=20,
-                interval=1.0,
-            )
-            # page.verify_pipeline_step_status("DockerContainerDeploy", "running")
-        logger.info("Container deployed and running after dry run disabled")
+                # Wait for the real container to be created and started.
+                eventually(
+                    lambda: _assert_container_running(docker_client),
+                    # Allow time for a cold image build and first container start on CI runners.
+                    timeout=180,
+                    interval=5.0,
+                )
+                # page.verify_pipeline_step_status("DockerContainerDeploy", "running")
+            logger.info("Container deployed and running after dry run disabled")
 
-        # Final sanity: real container must exist and be running
-        containers = docker_client.containers.list(filters={"name": CONTAINER_NAME})
-        assert len(containers) == 1, "Container should exist and be running after deploy"
-        assert containers[0].status == "running"
+            # Final sanity: real container must exist and be running
+            containers = docker_client.containers.list(filters={"name": CONTAINER_NAME})
+            assert len(containers) == 1, "Container should exist and be running after deploy"
+            assert containers[0].status == "running"
+        finally:
+            app.stop()
+            server_thread.join(timeout=30)
+            if server_thread.is_alive():
+                logger.warning("App server thread did not stop within 30 seconds")
+
+
+def _assert_container_running(docker_client: docker.DockerClient) -> None:
+    containers = docker_client.containers.list(filters={"name": CONTAINER_NAME}, all=True)
+    assert len(containers) > 0, "Container should exist after deploy"
+    assert_equal({container.status for container in containers}, {"running"}, "Container should be running after deploy")

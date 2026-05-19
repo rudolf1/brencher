@@ -1,8 +1,8 @@
+import asyncio
 import logging
 import os
 import signal
 import sys
-import threading
 import traceback
 from typing import Any, Callable, Dict, List, Optional
 
@@ -27,9 +27,12 @@ class App:
 
 	def __init__(self, environments: Dict[str, Environment]) -> None:
 		self.environments: Dict[str, Environment] = {id: wrap_in_cached(e) for id, e in environments.items()}
-		self.state_lock = threading.Lock()
-		self.environment_update_event = threading.Event()
+		self.environment_update_event = asyncio.Event()
+		self.environment_update_version = 0
 		self.emit_callback: Optional[Callable[[], None]] = None
+		self.reset_requested = False
+		self.shutdown_event = asyncio.Event()
+		self.web_app: Any = None
 
 	def get_local_envs_to_emit(self) -> Dict[str, Dict[str, Any]]:
 		env_dtos: Dict[str, Dict[str, Any]] = {}
@@ -88,35 +91,83 @@ class App:
 
 		return branches
 
-	def processing_thread(self) -> None:
-		while True:
+	async def processing_loop(self) -> None:
+		while not self.shutdown_event.is_set():
 			import processing
 
 			emit = self.emit_callback or (lambda: None)
+			update_version = self.environment_update_version
 
-			with self.state_lock:
-				logger.info(f"Processing")
-				if processing.process_all_jobs(list(self.environments.values()), emit):
-					self.environment_update_event.wait(timeout=1 * 5)
-				else:
-					self.environment_update_event.wait(timeout=1 * 60)
-				self.environment_update_event.clear()
+			logger.info("Processing")
+			if self.reset_requested:
+				await asyncio.to_thread(processing.reset_caches, list(self.environments.values()))
+				self.reset_requested = False
+			has_error = await asyncio.to_thread(processing.process_all_jobs, list(self.environments.values()), emit)
+			if self.shutdown_event.is_set():
+				return
+			# Skip the wait when a newer update arrived while the current processing pass was running.
+			if self.environment_update_version != update_version:
+				continue
+			timeout = 5 if has_error else 60
+			try:
+				await asyncio.wait_for(self.environment_update_event.wait(), timeout=timeout)
+			except asyncio.TimeoutError:
+				pass
+			self.environment_update_event.clear()
 
-	def run(self) -> None:
-		processing = threading.Thread(target=self.processing_thread)
-		processing.daemon = True
-		processing.start()
+	def notify_environment_update(self) -> None:
+		self.environment_update_version += 1
+		self.environment_update_event.set()
+
+	def request_reset(self) -> None:
+		self.reset_requested = True
+
+	def stop(self) -> None:
+		self.shutdown_event.set()
+		self.notify_environment_update()
+		if self.web_app is not None:
+			self.web_app.stop()
+
+	async def runAsync(self) -> None:
+		await self.processing_loop()
+
+	async def runHeadlessAsync(self) -> None:
+		await self.processing_loop()
 
 	def runHeadless(self) -> None:
-		"""Run the processing loop on the current thread; blocks forever."""
-		self.processing_thread()
+		"""Run the processing loop until cancelled; blocks forever."""
+		asyncio.run(self.runHeadlessAsync())
 
-	def runWeb(self, port: int) -> None:
+	async def _run_web_server(self, web_app: Any) -> None:
+		"""Raise a sentinel exception when the server stops so TaskGroup cancels processing."""
+		await web_app.start_async()
+		raise _WebServerStopped()
+
+	async def runWebAsync(self, port: int) -> None:
 		import web
 		web_app = web.WebApp(core=self, port=port)
+		self.web_app = web_app
 		self.emit_callback = web_app.emit_envs
-		self.run()
-		web_app.start()
+		try:
+			# Keep processing and web serving coupled so shutdown or fatal failure tears down the whole app.
+			async with asyncio.TaskGroup() as task_group:
+				task_group.create_task(self.processing_loop())
+				task_group.create_task(self._run_web_server(web_app))
+		except* _WebServerStopped:
+			pass
+		finally:
+			self.emit_callback = None
+			self.web_app = None
+
+	def runWeb(self, port: int) -> None:
+		asyncio.run(self.runWebAsync(port))
+
+	def run(self) -> None:
+		asyncio.run(self.runAsync())
+
+
+class _WebServerStopped(Exception):
+	pass
 
 if __name__ == '__main__':
 	cli_env_ids_list = sys.argv[1:]

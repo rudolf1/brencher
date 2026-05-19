@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-import threading
+from contextlib import suppress
 from typing import Any, Generator
 
 import docker
@@ -36,30 +36,30 @@ class TestDockerContainer:
 		logger.info(f"Starting")
 
 		app = App({"brencher_local1": brencher_local1.brencher_local1})
-		# app.runWeb(5001)
-		processing = threading.Thread(target=lambda: app.runWeb(5001), daemon=True)
-		processing.start()
+		processing = asyncio.create_task(app.runWebAsync(5001))
+		try:
+			eventually(
+				lambda: assert_equal(requests.get("http://localhost:5001/state", timeout=5000).status_code, 200, "Server did not respond with 200 OK within timeout"),
+				20.0,
+				1.0,
+			)
 
-		# await asyncio.sleep(5000)
+			state_data = requests.get("http://localhost:5001/state", timeout=5000).json()
+			logger.info(f"Application state: {json.dumps(state_data, indent=2)}")
 
-		eventually(
-			lambda: assert_equal(requests.get("http://localhost:5001/state", timeout=5000).status_code, 200, "Server did not respond with 200 OK within timeout"),
-			20.0,
-			1.0,
-		)
+			branches_data = requests.get("http://localhost:5001/branches", timeout=5000).json()
+			logger.info(f"Application branches: {json.dumps(branches_data, indent=2)}")
 
+			assert "brencher_local1" in state_data, "Missing 'brencher_local1' field in response"
+			assert len(state_data["brencher_local1"]["pipeline"]) > 0, "Steps defined for 'brencher_local1' are empty"
 
-		state_data = requests.get("http://localhost:5001/state", timeout=5000).json()
-		logger.info(f"Application state: {json.dumps(state_data, indent=2)}")
-
-		branches_data = requests.get("http://localhost:5001/branches", timeout=5000).json()
-		logger.info(f"Application branches: {json.dumps(branches_data, indent=2)}")
-
-		assert "brencher_local1" in state_data, "Missing 'brencher_local1' field in response"
-		assert len(state_data["brencher_local1"]["pipeline"]) > 0, "Steps defined for 'brencher_local1' are empty"
-
-		assert "brencher_local1" in branches_data, "Missing 'brencher_local1' field in response"
-		assert len(branches_data["brencher_local1"]) > 0, "No branches found for 'brencher_local1'"
+			assert "brencher_local1" in branches_data, "Missing 'brencher_local1' field in response"
+			assert len(branches_data["brencher_local1"]) > 0, "No branches found for 'brencher_local1'"
+		finally:
+			processing.cancel()
+			with suppress(asyncio.CancelledError):
+				await processing
+			assert processing.cancelled()
 
 # TODO Verify DockerContainerDeploy step status is running and has correct image and ports
 # {
