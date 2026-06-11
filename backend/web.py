@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from app import App
-from enironment import get_step
+from enironment import SharedStateConflictError, get_step
 from utils import custom_json_dumps
 from processing import reset_caches
 from secondary import SecondaryManager
@@ -186,14 +186,28 @@ class WebApp:
 					elif id in self.core.environments.keys():
 						env = self.core.environments.get(id, None)
 						expected_token = update_data.get('token', '')
-						if 'branches' in update_data:
-							if not env:
-								raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
-							env.state.set_branches(update_data.get('branches', []), expected_token=expected_token)
-						if 'dry' in update_data:
-							if not env:
-								raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
-							env.state.set_dry(bool(update_data['dry']), expected_token)
+						try:
+							if 'branches' in update_data:
+								if not env:
+									raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
+								env.state.set_branches(update_data.get('branches', []), expected_token=expected_token)
+							if 'dry' in update_data:
+								if not env:
+									raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
+								env.state.set_dry(bool(update_data['dry']), expected_token)
+						except SharedStateConflictError as conflict:
+							if env:
+								current_state = env.state.progress()
+								await self.broadcast_error({
+									'code': 'BRANCH_STATE_CONFLICT',
+									'envId': id,
+									'message': str(conflict),
+									'current_state': {
+										'branches': current_state.branches,
+										'token': current_state.token,
+									},
+								})
+							continue
 
 						if env:
 							p = get_step(env.pipeline, type(env.state))
