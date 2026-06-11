@@ -119,6 +119,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 	             desired_branches: AbstractStep[SharedState],
 	             git_user_email: str,
 	             git_user_name: str,
+				 ignore_missing_branches: bool = True,
 	             push: bool = True,
 	             **kwargs: Any):
 		super().__init__(**kwargs)
@@ -127,7 +128,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 		self.git_user_email = git_user_email
 		self.git_user_name = git_user_name
 		self.push = push
-
+		self.ignore_missing_branches = ignore_missing_branches
 	def _find_merge_childs(self, tree: Dict[Commit, List[Commit]], commit: Commit) -> List[Commit]:
 
 		visited = [commit]
@@ -155,6 +156,8 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 					commit = repo.commit(desired_commit)
 				commit_ids[commit] = branch_name
 			except BaseException as e:
+				if not self.ignore_missing_branches:
+					raise e
 				stack = traceback.format_exception(type(e), e, e.__traceback__)
 				logger.error(f"Error finding desired commits for branch {branch_pair}: {str(e)}\n{''.join(stack)}")
 		return commit_ids
@@ -229,7 +232,7 @@ class CheckoutMerged(AbstractStep[CheckoutAndMergeResult]):
 		version = '-'.join([x.hexsha[0:8] for x in sorted_commits])
 
 		for ref in repo.refs:
-			if ref.is_remote() and ref.commit == repo.head.commit and ref.name != 'origin/HEAD':
+			if ref.is_remote() and ref.is_valid() and ref.commit == repo.head.commit and ref.name != 'origin/HEAD':
 				logger.info(f"Merge commit {ref.commit} corresponds to branch {ref}")
 				remote_branch_name = ref.name[len('origin/'):]
 				break
@@ -293,9 +296,9 @@ class GitUnmerge(AbstractStep[GitUnmergeResult]):
 			for v in version_parts:
 				commit = repo.commit(v)
 				# branches = [head.name for head in repo.heads if head.commit.hexsha == commit.hexsha]
-				branches = [ref.name for ref in repo.remotes.origin.refs if ref.commit.hexsha == commit.hexsha]
+				branches = [ref.name for ref in repo.remotes.origin.refs if not ref.name.startswith('origin/HEAD') and ref.commit.hexsha == commit.hexsha]
 				branches = [b[len('origin/'):] for b in branches if
-				            b.startswith('origin/') and not b.startswith('origin/HEAD')]
+				            b.startswith('origin/') ]
 
 				if len(branches) == 0 or branches[0].startswith('auto/'):
 					if childs is None:

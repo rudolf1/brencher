@@ -60,3 +60,10 @@ class CachingStep(AbstractStep[T], Generic[T]):
 	def __getattr__(self, name: str) -> Any:
 		"""Delegate unknown attributes to the wrapped step."""
 		return getattr(self._step, name)
+
+	def __setattr__(self, name: str, value: Any) -> None:
+		"""Delegate unknown attributes to the wrapped step."""
+		if name in {"name", "_step", "_result", "_input_hash"}:
+			super().__setattr__(name, value)
+		else:
+			setattr(self._step, name, value)

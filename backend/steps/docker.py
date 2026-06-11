@@ -99,7 +99,7 @@ class DockerComposeBuild(AbstractStep[Dict[str, str]]):
 						pass
 
 				logger.info(f"Building image {image} from {build_ctx}, {build_dockerfile}")
-				img, _ = client.images.build(path=build_ctx, dockerfile=build_dockerfile, tag=image, nocache=not self.build_cache, rm=True)
+				img, _ = client.images.build(path=build_ctx, dockerfile=build_dockerfile, tag=image, nocache=not self.build_cache, rm=not self.build_cache)
 
 				if self.publish:
 					logger.info(f"Pushing image {image}")
