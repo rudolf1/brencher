@@ -196,17 +196,17 @@ class WebApp:
 									raise RuntimeError(f"Unknown env {update_data.get('id', '')}")
 								env.state.set_dry(bool(update_data['dry']), expected_token)
 						except SharedStateConflictError as conflict:
-							if env:
-								current_state = env.state.progress()
-								await self.broadcast_error({
-									'code': 'BRANCH_STATE_CONFLICT',
-									'envId': id,
-									'message': str(conflict),
-									'current_state': {
-										'branches': current_state.branches,
-										'token': current_state.token,
-									},
-								})
+							# if env:
+								# current_state = env.state.progress()
+								# await self.broadcast_error({
+								# 	'code': 'BRANCH_STATE_CONFLICT',
+								# 	'envId': id,
+								# 	'message': str(conflict),
+								# 	'current_state': {
+								# 		'branches': current_state.branches,
+								# 		'token': current_state.token,
+								# 	},
+								# })
 							continue
 
 						if env:
