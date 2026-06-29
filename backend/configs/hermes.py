@@ -32,8 +32,8 @@ deployDocker = DockerSwarmDeploy(
 )
 
 checkPing1 = UrlCheck(
-	url="http://100.70.193.97:8087",
-	expected={ "ok": True },
+	url="http://100.70.193.97:8087/api/status",
+	expected=lambda obj: obj['gateway_running'] == 'true' and obj['auth_required'] == 'true',
 )
 logUrls = SimpleLog(message={
 	"userLinks": {
