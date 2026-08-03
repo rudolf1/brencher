@@ -11,7 +11,7 @@ dockerSwarmCheck = DockerSwarmCheck(
 )
 unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
-state = SharedStateHolderInMemory(unmerge=unmerge)
+state = SharedStateHolderInMemory(unmerge=None)
 
 checkoutMerged = CheckoutMerged(clone,
                                 desired_branches=state,
