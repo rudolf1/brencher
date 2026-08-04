@@ -279,8 +279,7 @@ class DockerSwarmDeploy(AbstractStep[str]):
 			swarmEnv = {k: v for k, v in dotenv_values(os.path.join(os.path.dirname(tmp_compose_path), ".env")).items()
 			            if v is not None}
 		# merge_dicts(swarmEnv, env)
-		result = subprocess.run(cmd, capture_output=True, text=True)
-		# , cwd=os.path.dirname(tmp_compose_path), env=swarmEnv)
+		result = subprocess.run(cmd, capture_output=True, text=True, cwd=os.path.dirname(tmp_compose_path), env=swarmEnv)
 		os.remove(tmp_compose_path)
 		if result.returncode != 0:
 			logger.error(f"Stack deploy failed: {result.stderr}")
