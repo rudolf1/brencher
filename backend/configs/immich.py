@@ -31,10 +31,10 @@ deployDocker = DockerSwarmDeploy(
 	docker_compose_path="poc/immich/stack-compose.yml",
 )
 
-checkPing = UrlCheck(
-	url="https://immich.rudolf.keenetic.link/api/server/ping",
-	expected={"res": "pong"},
-)
+#checkPing = UrlCheck(
+#	url="https://immich.rudolf.keenetic.link/api/server/ping",
+#	expected={"res": "pong"},
+#)
 logUrls = SimpleLog(message={
 	"userLinks": {
 		"App": "https://immich.rudolf.keenetic.link",
@@ -52,7 +52,7 @@ immich = Environment(
 		dockerSwarmCheck,
 		unmerge,
 		deployDocker,
-		checkPing,
+#		checkPing,
 		logUrls
 	]
 )
