@@ -1,6 +1,6 @@
 from enironment import Environment
 from steps.checks import SimpleLog, UrlCheck
-from steps.docker import DockerSwarmCheck, DockerSwarmDeploy
+from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.shared_state import SharedStateHolderInMemory
 
@@ -20,9 +20,23 @@ checkoutMerged = CheckoutMerged(clone,
                                 git_user_name="brencher_bot"
                                 )
 
+buildDocker = DockerComposeBuild(clone,
+                                 docker_repo_username="",
+                                 docker_repo_password="",
+                                 docker_compose_path="hermes_squid/stack-compose.yml",
+                                 docker_repo_url="https://registry.rudolf.keenetic.link",
+                                 publish=False,
+                                 build_cache = True,
+                                 envs=lambda: {
+									 "version": "auto-" + checkoutMerged.progress().version,
+									#  "user_group": "1000:137"
+								 },
+                                 )
+
+
 deployDocker = DockerSwarmDeploy(
 	wd=clone,
-	buildDocker=None,
+	buildDocker=buildDocker,
 	stackChecker=dockerSwarmCheck,
 	envs=lambda: {
 		"version": "auto-" + checkoutMerged.progress().version,
