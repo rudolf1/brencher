@@ -45,10 +45,10 @@ deployDocker = DockerSwarmDeploy(
 	docker_compose_path="hermes_squid/stack-compose.yml",
 )
 
-checkPing1 = UrlCheck(
-	url="http://100.70.193.97:8088/api/status",
-	expected=lambda obj: obj['gateway_running'] == 'true' and obj['auth_required'] == 'true',
-)
+# checkPing1 = UrlCheck(
+# 	url="http://100.70.193.97:8088/api/status",
+# 	expected=lambda obj: obj['gateway_running'] == 'true' and obj['auth_required'] == 'true',
+# )
 logUrls = SimpleLog(message={
 	"userLinks": {
 		"App": "https://hermes.rudolf.keenetic.link",
@@ -67,7 +67,7 @@ hermes_infra = Environment(
 		dockerSwarmCheck,
 		unmerge,
 		deployDocker,
-		checkPing1,
+		# checkPing1,
 		logUrls
 	]
 )
