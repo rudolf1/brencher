@@ -1,18 +1,17 @@
-from configs.brencher2 import checkPingF
 from enironment import Environment
 from steps.checks import SimpleLog, UrlCheck
 from steps.docker import DockerComposeBuild, DockerSwarmCheck, DockerSwarmDeploy
 from steps.git import GitClone, CheckoutMerged, GitUnmerge
 from steps.shared_state import SharedStateHolderInMemory
 
-clone = GitClone(url="https://github.com/rudolf1/brencher.git")
+clone = GitClone(url="https://github.com/rudolf1/uber_backup.git", branchNamePrefix="ansible")
 
 dockerSwarmCheck = DockerSwarmCheck(
-	stack_name="brencher",
+	stack_name="hermes_infra",
 )
 unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
-state = SharedStateHolderInMemory(unmerge=unmerge)
+state = SharedStateHolderInMemory(unmerge=None)
 
 checkoutMerged = CheckoutMerged(clone,
                                 desired_branches=state,
@@ -24,15 +23,16 @@ checkoutMerged = CheckoutMerged(clone,
 buildDocker = DockerComposeBuild(clone,
                                  docker_repo_username="",
                                  docker_repo_password="",
-                                 docker_compose_path="docker-compose.yml",
+                                 docker_compose_path="hermes_squid/stack-compose.yml",
                                  docker_repo_url="https://registry.rudolf.keenetic.link",
                                  publish=False,
                                  build_cache = True,
                                  envs=lambda: {
 									 "version": "auto-" + checkoutMerged.progress().version,
-									 "user_group": "1000:137"
+									#  "user_group": "1000:137"
 								 },
                                  )
+
 
 deployDocker = DockerSwarmDeploy(
 	wd=clone,
@@ -41,34 +41,33 @@ deployDocker = DockerSwarmDeploy(
 	envs=lambda: {
 		"version": "auto-" + checkoutMerged.progress().version,
 	},
-	stack_name="brencher",
-	docker_compose_path="docker-compose.yml",
+	stack_name="hermes_infra",
+	docker_compose_path="hermes_squid/stack-compose.yml",
 )
 
-#checkPing = UrlCheck(
-#	url="https://brencher.rudolf.keenetic.link/state",
-#	expected=checkPingF,
-#)
+# checkPing1 = UrlCheck(
+# 	url="http://100.70.193.97:8088/api/status",
+# 	expected=lambda obj: obj['gateway_running'] == 'true' and obj['auth_required'] == 'true',
+# )
 logUrls = SimpleLog(message={
 	"userLinks": {
-		"App": "https://brencher.rudolf.keenetic.link/",
-		"Status": "https://brencher.rudolf.keenetic.link/state",
+		"App": "https://hermes.rudolf.keenetic.link",
 	}
 })
 
-__all__ = ["brencher"]
-brencher = Environment(
-	id="brencher",
+
+__all__ = ["hermes_infra"]
+hermes_infra = Environment(
+	id="hermes_infra",
 	state=state,
 	pipeline=[
 		clone,
 		state,
 		checkoutMerged,
-		buildDocker,
 		dockerSwarmCheck,
 		unmerge,
 		deployDocker,
-#		checkPing,
+		# checkPing1,
 		logUrls
 	]
 )

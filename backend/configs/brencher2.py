@@ -72,10 +72,10 @@ deployDocker = DockerSwarmDeploy(
 	docker_compose_path="docker-compose.yml",
 )
 
-checkPing = UrlCheck(
-	url="https://brencher.rudolf.keenetic.link/state",
-	expected=checkPingF,
-)
+#checkPing = UrlCheck(
+#	url="https://brencher.rudolf.keenetic.link/state",
+#	expected=checkPingF,
+#)
 logUrls = SimpleLog(message={
 	"userLinks": {
 		"App": "https://brencher.rudolf.keenetic.link/",
@@ -98,7 +98,7 @@ brencher2 = Environment(
 		dockerSwarmCheck,
 		unmerge,
 		deployDocker,
-		checkPing,
+#		checkPing,
 		logUrls
 	],
 )

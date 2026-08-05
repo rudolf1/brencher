@@ -7,7 +7,7 @@ from steps.shared_state import SharedStateHolderInMemory
 clone = GitClone(url="https://github.com/rudolf1/uber_backup.git", branchNamePrefix="ansible")
 
 dockerSwarmCheck = DockerSwarmCheck(
-	stack_name="immich",
+	stack_name="hermes",
 )
 unmerge = GitUnmerge(clone, dockerSwarmCheck)
 
@@ -25,25 +25,26 @@ deployDocker = DockerSwarmDeploy(
 	buildDocker=None,
 	stackChecker=dockerSwarmCheck,
 	envs=lambda: {
-		"version": "auto-" + checkoutMerged.progress().version
+		"version": "auto-" + checkoutMerged.progress().version,
 	},
-	stack_name="immich",
-	docker_compose_path="poc/immich/stack-compose.yml",
+	stack_name="hermes",
+	docker_compose_path="poc/hermes/stack-compose.yml",
 )
 
-#checkPing = UrlCheck(
-#	url="https://immich.rudolf.keenetic.link/api/server/ping",
-#	expected={"res": "pong"},
-#)
+checkPing1 = UrlCheck(
+	url="http://100.70.193.97:8087/api/status",
+	expected=lambda obj: obj['gateway_running'] == 'true' and obj['auth_required'] == 'true',
+)
 logUrls = SimpleLog(message={
 	"userLinks": {
-		"App": "https://immich.rudolf.keenetic.link",
+		"App": "https://hermes.rudolf.keenetic.link",
 	}
 })
 
-__all__ = ["immich"]
-immich = Environment(
-	id="immich",
+
+__all__ = ["hermes"]
+hermes = Environment(
+	id="hermes",
 	state=state,
 	pipeline=[
 		clone,
@@ -52,7 +53,7 @@ immich = Environment(
 		dockerSwarmCheck,
 		unmerge,
 		deployDocker,
-#		checkPing,
+		checkPing1,
 		logUrls
 	]
 )
