@@ -42,8 +42,11 @@ class SharedStateHolderInMemory(AbstractStep[SharedState], SharedStateHolder):
     def progress(self) -> SharedState:
         if len(self.state.branches) == 0:
             if self.unmerge:
-                unmerge = self.unmerge.progress()
-                self.state = replace(self.state, branches=unmerge.branches, token=uuid.uuid4().hex)
+                try:
+                    unmerge = self.unmerge.progress()
+                    self.state = replace(self.state, branches=unmerge.branches, token=uuid.uuid4().hex)
+                except Exception as e:
+                    logger.error("Unmerge failed: %s", e)
         return self.state
 
 
