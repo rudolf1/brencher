@@ -13,6 +13,7 @@ const closeStatus = document.getElementById('close-status');
 const refreshBranchesBtn = document.getElementById('refresh-branches');
 const applyChangesBtn = document.getElementById('apply-changes');
 const branchFilter = document.getElementById('branch-filter');
+const appVersion = document.getElementById('app-version');
 
 // Branches list (flattened) for UI rendering: [{ envId, envName, branch, commits: [] }]
 let branches = [];
@@ -477,6 +478,8 @@ function setupWebSockets() {
                 filterBranches();
                 renderJobs();
                 showStatus('Environments updated.');
+            } else if ('version' in message) {
+                appVersion.textContent = `Version: ${message.version || 'unknown'}`;
             } else if ('error' in message) {
                 console.error('Error from server:', message.error);
                 if (message.error && message.error.code === 'BRANCH_STATE_CONFLICT' && message.error.envId) {
