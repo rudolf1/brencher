@@ -129,6 +129,7 @@ class WebApp:
 
 	async def broadcast_environments(self, data: Any) -> None:
 		await self.broadcast("environments", data)
+		await self.broadcast("version", self.get_version())
 
 	async def broadcast_error(self, data: Any) -> None:
 		await self.broadcast("error", data)
@@ -140,11 +141,16 @@ class WebApp:
 
 	# --- Routes ---
 
+	def get_version(self) -> str:
+		return os.getenv('VERSION', 'unknown') or 'unknown'
+
 	async def serve_index(self) -> FileResponse:
 		return FileResponse(os.path.join(FRONTEND_DIR, 'index.html'))
 
 	async def serve_state(self) -> Response:
-		return Response(content=custom_json_dumps(self.get_global_envs_to_emit()), media_type="application/json")
+		state = self.get_global_envs_to_emit()
+		state['version'] = self.get_version()
+		return Response(content=custom_json_dumps(state), media_type="application/json")
 
 	async def serve_branches_route(self) -> Response:
 		return Response(content=custom_json_dumps(self.get_global_branches_to_emit()), media_type="application/json")
@@ -163,6 +169,8 @@ class WebApp:
 			# Send initial state on connect and record it so duplicate broadcasts are suppressed
 			branches_payload = custom_json_dumps({"branches": self.get_global_branches_to_emit()})
 			envs_payload = custom_json_dumps({"environments": self.get_global_envs_to_emit()})
+			version_payload = custom_json_dumps({"version": self.get_version()})
+			await websocket.send_text(version_payload)
 			await websocket.send_text(branches_payload)
 			self.ws_connections[websocket]["branches"] = branches_payload
 			await websocket.send_text(envs_payload)
