@@ -15,6 +15,13 @@ body {
     padding: 32px;
 }
 
+.version {
+    color: #6c757d;
+    font-family: monospace;
+    font-size: 0.85rem;
+    margin-top: -12px;
+}
+
 .primary-button {
     background: #007bff;
     color: #fff;
